@@ -1,0 +1,15 @@
+[project]
+name = "twilight"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "up1and", email = "piratecb@gmail.com"},
+]
+dependencies = ["satpy>=0.55.0", "pyspectral>=0.13.5", "dask[dataframe]>=2024.12.1", "dask[diagnostics]>=2024.12.1", "rasterio>=1.4.3", "flask>=3.1.0", "rio-tiler>=7.6.1", "rio-cogeo>=5.4.1", "mercantile>=1.2.1"]
+requires-python = "==3.12.*"
+readme = "README.md"
+license = {text = "MIT"}
+
+
+[tool.pdm]
+distribution = false
