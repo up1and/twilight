@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
-import { MapContainer, ImageOverlay, GeoJSON, useMapEvent } from 'react-leaflet'
+import { MapContainer, TileLayer, GeoJSON, useMapEvent } from 'react-leaflet'
 import { LatLngTuple, CRS } from 'leaflet'
+import ky from 'ky'
 
 import Control from './components/Control'
 import SettingModal from './components/Setting'
-import { retrieveObject, listObjects, generateCompositeName } from './utils/s3client'
-import { CompositeListType, CompositeType, ImageType } from './utils/types'
+import { CompositeListType, CompositeType, ImageType, MapConfig, TileJSON } from './utils/types'
 import lands from './natural-earth.json'
 import firs from './firs.json'
 
@@ -37,18 +37,26 @@ const MousePosition: React.FC = () => {
 function App() {
   const position: LatLngTuple = [21, 115]
   const maxBounds: [LatLngTuple, LatLngTuple] = [
-      [0, 98], // south west
-      [30, 137] // north east
+      [0, 70], // south west
+      [55, 150] // north east
     ]
 
   const [image, setImage] = useState<ImageType>()
   const [compositeName, setCompositeName] = useState<CompositeType>('ir_clouds')
-  const [composites, setComposites] = useState<CompositeListType>({ir_clouds: [], true_color: []})
+  const [composites, ] = useState<CompositeListType>({ir_clouds: [], true_color: []})
   const [playing, setPlaying] = useState<boolean>(false)
   const [, setCurrentIndex] = useState<number>(0)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const [settingVisible, setSettingVisible] = useState(false)
+
+  const [mapConfig, setMapConfig] = useState<MapConfig>({
+    bounds: null,
+    minZoom: 0,
+    maxZoom: 18,
+    tileUrl: '',
+    attribution: ''
+  })
 
   const handlePlayClick = () => {
     setPlaying(prev => !prev)
@@ -64,7 +72,7 @@ function App() {
   }
 
   const fetchImage = async (object: ImageType) => {
-    const url = await retrieveObject(object.key)
+    const url = ''
     const currentImage: ImageType = {
       datetime: object.datetime,
       key: object.key,
@@ -74,11 +82,37 @@ function App() {
   }
 
   useEffect(() => {
+    const controller = new AbortController()
+
+    const fetchTileJson = async () => {
+      const tileJson = await ky
+        .get('http://127.0.0.1:5000/tilejson.json', { signal: controller.signal })
+        .json<TileJSON>();
+      
+      setMapConfig({
+        bounds: tileJson.bounds 
+          ? [
+              [tileJson.bounds[1], tileJson.bounds[0]], // 西南角
+              [tileJson.bounds[3], tileJson.bounds[2]]  // 东北角
+            ]
+          : null,
+        minZoom: tileJson.minzoom ?? 0,
+        maxZoom: tileJson.maxzoom ?? 18,
+        tileUrl: tileJson.tiles[0],
+        attribution: tileJson.attribution ?? ''
+      });
+        
+    }
+
+    fetchTileJson()
+
+    return () => controller.abort()
+  }, [])
+
+
+  useEffect(() => {
     const fetchComposites = async () => {
-      const startAfter = generateCompositeName(24)
-      const objects = await listObjects(startAfter)
-      setComposites(objects)
-      console.log('update composite objects after', startAfter)
+      console.log('update objects')
     }
 
     fetchComposites()
@@ -120,15 +154,19 @@ function App() {
           center={position}
           maxBoundsViscosity={1.0}
           zoom={6}
-          minZoom={5}
-          maxZoom={10}
+          minZoom={mapConfig.minZoom}
+          maxZoom={mapConfig.maxZoom}
           maxBounds={maxBounds}
           crs={CRS.Simple}
         >
-          {/* <TileLayer url='https://{s}.basemaps.cartocdn.com/rastertiles/dark_nolabels/{z}/{x}/{y}.png' /> */}
-          {image &&
-            <ImageOverlay bounds={maxBounds} url={image.url as string} />
-          }
+          <TileLayer
+            tileSize={256}
+            url={mapConfig.tileUrl}
+            minZoom={mapConfig.minZoom}
+            maxZoom={mapConfig.maxZoom}
+            bounds={mapConfig.bounds ?? undefined}
+            attribution={mapConfig.attribution}
+          />
           <GeoJSON 
             data={lands as GeoJSON.GeoJsonObject}
             style={{

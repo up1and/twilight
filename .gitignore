@@ -24,5 +24,11 @@ dist-ssr
 *.sln
 *.sw?
 
+
+*.tif
+*.tiff
+__pycache__
+.pdm-python
+.python-version
 script/hsd/*
 script/images/*
