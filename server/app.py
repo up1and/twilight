@@ -9,7 +9,7 @@ from rio_tiler.errors import TileOutsideBounds
 from minio import Minio
 from config import endpoint, access_key, secret_key
 
-tiff_path = os.path.join(os.path.dirname(__file__), 'true_color.tif')
+
 TILE_SIZE = 256
 
 app = Flask(__name__)
@@ -25,6 +25,27 @@ available_composites = [
     'airmass', 'ash', 'water_vapor', 'day_convection', 'natural_color'
 ]
 
+def find_composite_object(composite, time=None):
+    name = composite
+    folder = composite
+
+    if composite == 'ir_clouds':
+        name = 'B13'
+        folder = 'bands'
+
+    if time:
+        filename = 'himawari_{}_{}.tif'.format(name, time.strftime('%Y%m%d_%H%M'))
+        object_name = '{}/{}/{}'.format(
+            folder, time.strftime('%Y/%m/%d'), filename
+        )
+        return object_name
+    else:
+        objects = client.list_objects('himawari', prefix=folder, recursive=True)
+        for object in objects:
+            if composite == 'ir_clouds' and name in object.object_name:
+                return object.object_name
+            return object.object_name
+
 @app.after_request
 def after_request(response):
     response.headers.add('Access-Control-Allow-Origin', '*')
@@ -33,25 +54,14 @@ def after_request(response):
 @app.route("/<composite>/tiles/<int:z>/<int:x>/<int:y>.png")
 def tile(composite, z, x, y):
     """
-    test url http://localhost:5000/tiles/5/25/15.png
+    test url http://localhost:5000/ash/tiles/5/25/15.png
     """
-    time = datetime.datetime(2025, 4, 20, 4, 0)
-
     if composite not in available_composites:
         abort(404, description='Composite {composite} not available. Options: {available_composites}'.format(
             composite=composite, available_composites=available_composites))
-
-    name = composite
-    folder = composite
-
-    if composite == 'ir_clouds':
-        name = 'B13'
-        folder = 'bands'
-
-    name = 'himawari_{}_{}.tif'.format(name, time.strftime('%Y%m%d_%H%M'))
-    object_name = '{}/{}/{}'.format(
-        folder, time.strftime('%Y/%m/%d'), name
-    )
+        
+    time = datetime.datetime(2025, 4, 20, 4, 0)
+    object_name = find_composite_object(composite, time)
 
     try:
         presigned_url = client.presigned_get_object(
@@ -75,16 +85,22 @@ def tile(composite, z, x, y):
         app.logger.error(f"Error generating tile {z}/{x}/{y}: {str(e)}", exc_info=True)
         return "Internal server error", 500
     
-@app.route('/tilejson.json')
-def tilejson():
+@app.route('/<composite>/tilejson.json')
+def tilejson(composite):
+    object_name = find_composite_object(composite)
     try:
-        with Reader(tiff_path) as cog:
+        presigned_url = client.presigned_get_object(
+            bucket_name='himawari',
+            object_name=object_name,
+            expires=datetime.timedelta(hours=24)
+        )
+        with Reader(presigned_url) as cog:
             return jsonify({
                 "bounds": cog.get_geographic_bounds(cog.tms.rasterio_geographic_crs),
                 "minzoom": cog.minzoom,
                 "maxzoom": cog.maxzoom,
-                "name": os.path.basename(tiff_path),
-                "tiles": [f"{request.host_url.rstrip('/')}/{'{z}'}/{'{x}'}/{'{y}'}.png"],
+                "name": presigned_url,
+                "tiles": [f"{request.host_url.rstrip('/')}/{composite}/tiles/{'{z}'}/{'{x}'}/{'{y}'}.png"],
             })
     except Exception as e:
         app.logger.error(str(e), exc_info=True)
