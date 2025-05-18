@@ -3,28 +3,27 @@
   font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
   font-size: 12px;
   line-height: 1.4;
-  color: #333;
-  max-width: 80%;
-  margin: 0 auto;
-  padding: 10px;
-  position: absolute;
-  bottom: 0;
+  color: var(--text);
   width: 100%;
-  z-index: 1000;
+  padding: 10px 0 20px; /* Increased bottom padding to move timeline up */
+  box-sizing: border-box;
 }
 
-/* Header styles */
-.time-range-header {
+/* Controls container for width control */
+.time-controls-container {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  justify-content: center;
+  width: 100%;
   margin-bottom: 10px;
 }
 
+/* Controls styles */
 .time-controls {
   display: flex;
   gap: 8px;
   align-items: center;
+  width: 70%; /* Match timeline width */
+  justify-content: flex-end;
 }
 
 /* Button styles */
@@ -32,64 +31,75 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #5cb85c;
-  color: white;
+  background-color: var(--primary);
+  color: var(--white);
   border: none;
   border-radius: 4px;
   padding: 6px 12px;
   font-size: 12px;
   cursor: pointer;
   transition: background-color 0.2s;
+  height: 28px; /* Fixed height to match other controls */
+  text-align: center;
 }
 
 .play-button:hover {
-  background-color: #4cae4c;
+  background-color: var(--primary-hover);
 }
 
 .play-button.playing {
-  background-color: #d9534f;
+  background-color: var(--secondary);
 }
 
 .play-button.playing:hover {
-  background-color: #c9302c;
+  background-color: var(--secondary-hover);
 }
 
 /* Input styles */
 .datetime-picker input {
   padding: 6px 8px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   border-radius: 4px;
   font-size: 12px;
+  height: 28px; /* Fixed height to match other controls */
+  box-sizing: border-box;
+  text-align: left;
 }
 
 .lookback-selector {
   padding: 6px 8px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   border-radius: 4px;
-  background-color: white;
+  background-color: var(--background);
   font-size: 12px;
+  height: 28px; /* Fixed height to match other controls */
+  text-align: left;
+  text-align-last: left; /* Left align text in dropdown */
+  vertical-align: middle; /* Ensure text is vertically centered */
+  line-height: 16px; /* Adjust line height for better vertical centering */
 }
 
-/* Time range info */
-.time-range-info {
+/* Timeline container for centering */
+.timeline-container {
   display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: #666;
-  margin-bottom: 6px;
+  justify-content: center;
+  width: 100%;
 }
 
-/* Timeline styles */
+/* Timeline styles - increased height to accommodate date labels */
 .timeline {
   position: relative;
-  height: 80px; /* Increased height for more padding */
-  border: 1px solid #ccc;
+  height: 48px; /* Increased height to fit date labels inside */
+  border: 1px solid var(--border);
   border-radius: 4px;
-  background-color: #f8f8f8;
+  background-color: rgba(248, 248, 248, 0.8); /* Semi-transparent background */
   cursor: pointer;
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.15);
-  padding: 15px 0; /* Added padding top and bottom */
+  box-shadow: 0 1px 5px var(--shadow);
+  padding: 5px 0; /* Reduced padding */
   box-sizing: border-box; /* Include padding in height */
+  margin: 0; /* Remove margin */
+  width: 70%; /* Set to 70% width */
+  touch-action: none; /* Prevent browser handling of touch events */
 }
 
 .timeline.dragging {
@@ -116,25 +126,40 @@
 
 .tick-mark {
   width: 1px;
-  background-color: #aaa;
+  background-color: var(--text-muted);
   flex-grow: 0;
 }
 
 .tick-mark.hour {
-  height: 32px;
+  height: 16px; /* Reduced height */
 }
 
 .tick-mark:not(.hour) {
-  height: 20px;
+  height: 10px; /* Reduced height */
 }
 
-.time-label {
+/* Date label inside the timeline for midnight */
+.date-label {
   position: absolute;
-  bottom: 5px; /* Position inside the timeline */
+  top: 2px; /* Moved closer to top edge, away from ticks */
   left: 0;
   transform: translateX(-50%); /* Center the label on the tick */
   font-size: 10px;
-  color: #666;
+  color: var(--text-muted);
+  font-weight: normal; /* Removed bold */
+  text-align: center;
+  white-space: nowrap;
+  z-index: 5;
+}
+
+/* Time label below the tick */
+.time-label {
+  position: absolute;
+  bottom: 2px; /* Moved closer to bottom edge, away from ticks */
+  left: 0;
+  transform: translateX(-50%); /* Center the label on the tick */
+  font-size: 10px;
+  color: var(--text-muted);
   text-align: center;
   white-space: nowrap;
   z-index: 5; /* Ensure labels are above other elements */
@@ -143,15 +168,16 @@
 /* Marker styles */
 .time-marker {
   position: absolute;
-  top: 15px; /* Adjusted for padding */
-  bottom: 15px; /* Adjusted for padding */
+  top: 5px; /* Adjusted for reduced padding */
+  bottom: 5px; /* Adjusted for reduced padding */
   width: 2px;
-  background-color: #1d85d0;
+  background-color: var(--secondary);
   border-radius: 4px;
   transform: translateX(-50%);
   transition: background-color 0.2s;
   cursor: grab;
   z-index: 10;
+  touch-action: none; /* Prevent browser handling of touch events */
 }
 
 .time-marker.dragging {
@@ -159,7 +185,7 @@
 }
 
 .time-marker.playing {
-  background-color: #5cb85c;
+  background-color: var(--primary);
   animation: pulse 1s infinite;
 }
 
@@ -177,22 +203,22 @@
 
 .marker-label {
   position: absolute;
-  top: -25px; /* Position above the marker */
+  top: -30px; /* Moved higher above the marker */
   left: 50%;
   transform: translateX(-50%);
   white-space: nowrap;
-  background-color: #1d85d0;
-  color: white;
+  background-color: var(--primary);
+  color: var(--white);
   padding: 2px 6px;
   border-radius: 3px;
   font-size: 11px;
   font-weight: normal;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 3px var(--shadow);
   z-index: 20; /* Ensure marker label is on top */
 }
 
 .time-marker.playing .marker-label {
-  background-color: #5cb85c;
+  background-color: var(--primary);
 }
 
 .marker-pointer {
@@ -204,9 +230,42 @@
   height: 0;
   border-left: 4px solid transparent;
   border-right: 4px solid transparent;
-  border-top: 4px solid #1d85d0;
+  border-top: 4px solid var(--secondary);
 }
 
 .time-marker.playing .marker-pointer {
-  border-top-color: #5cb85c;
+  border-top-color: var(--primary);
+}
+
+/* Mobile styles */
+@media (max-width: 768px) {
+  .time-range-selector.mobile {
+    padding: 5px 0 10px;
+    /* No background color */
+  }
+
+  .time-controls {
+    width: 90%;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 5px;
+  }
+
+  .timeline {
+    width: 90%;
+  }
+
+  .datetime-picker input {
+    width: 140px; /* Ensure it fits on small screens */
+  }
+
+  .lookback-selector {
+    width: auto;
+  }
+
+  .marker-label {
+    top: -25px;
+    font-size: 10px;
+    padding: 1px 4px;
+  }
 }

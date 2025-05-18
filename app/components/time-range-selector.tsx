@@ -1,10 +1,11 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import dayjs from "dayjs";
+import { useIsMobile } from "../hooks/use-mobile";
 import "./time-range-selector.css";
 
 interface TimeRangeSelectorProps {
-  initialTime?: Date | dayjs.Dayjs | string;
+  initialTime?: Date | string | dayjs.Dayjs;
   onTimeChange?: (time: dayjs.Dayjs) => void;
 }
 
@@ -28,7 +29,7 @@ export default function TimeRangeSelector({
   const [selectedTime, setSelectedTime] = useState<dayjs.Dayjs>(
     roundToNearestTenMinutes(initialTime)
   );
-  const [lookbackHours, setLookbackHours] = useState<number>(3); // Default to 3 hours lookback
+  const [lookbackHours, setLookbackHours] = useState<number>(6); // Default to 6 hours lookback
   const [isDraggingMarker, setIsDraggingMarker] = useState<boolean>(false);
   const [isDraggingTimeline, setIsDraggingTimeline] = useState<boolean>(false);
   const [dragStartX, setDragStartX] = useState<number>(0);
@@ -41,10 +42,16 @@ export default function TimeRangeSelector({
   const timelineRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<HTMLDivElement>(null);
   const [timeIntervals, setTimeIntervals] = useState<any[]>([]);
+  const isMobile = useIsMobile();
 
   // Format time as HH:MM
   const formatTime = (date: dayjs.Dayjs): string => {
     return date.format("HH:mm");
+  };
+
+  // Format date only as MM-DD (shorter format)
+  const formatDate = (date: dayjs.Dayjs): string => {
+    return date.format("MM-DD");
   };
 
   // Format full date and time as YYYY-MM-DD HH:MM
@@ -88,11 +95,16 @@ export default function TimeRangeSelector({
       // Don't go beyond the end time
       if (time.isAfter(endTime)) break;
 
+      // Check if this is midnight (start of a new day)
+      const isMidnight = time.hour() === 0 && time.minute() === 0;
+
       intervals.push({
         time: time,
-        label: formatTime(time),
+        label: formatTime(time), // Always show time at the bottom
+        dateLabel: isMidnight ? formatDate(time) : null, // Show date at the top for midnight
         isHour: time.minute() === 0,
         isHalfHour: time.minute() === 30,
+        isMidnight: isMidnight,
       });
     }
 
@@ -144,7 +156,9 @@ export default function TimeRangeSelector({
   };
 
   // Handle marker drag start
-  const handleMarkerDragStart = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleMarkerDragStart = (
+    e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>
+  ) => {
     e.preventDefault();
     e.stopPropagation(); // Prevent timeline drag
     setIsDraggingMarker(true);
@@ -155,13 +169,20 @@ export default function TimeRangeSelector({
   };
 
   // Handle timeline drag start
-  const handleTimelineDragStart = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleTimelineDragStart = (
+    e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>
+  ) => {
     // Only start timeline drag if we're not dragging the marker
     if (isDraggingMarker) return;
 
     e.preventDefault();
     setIsDraggingTimeline(true);
-    setDragStartX(e.clientX);
+
+    // Get the starting X position (works for both mouse and touch)
+    const startX =
+      "touches" in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+
+    setDragStartX(startX);
     setDragStartTime(currentTime);
     setDragStartSelectedTime(selectedTime);
     setHasMoved(false); // Reset movement tracking
@@ -174,7 +195,7 @@ export default function TimeRangeSelector({
 
   // Handle marker drag
   useEffect(() => {
-    const handleDrag = (e: MouseEvent) => {
+    const handleMouseMove = (e: MouseEvent) => {
       if (
         !isDraggingMarker ||
         !timelineRef.current ||
@@ -196,24 +217,50 @@ export default function TimeRangeSelector({
       updateSelectedTime(timeIntervals[index].time);
     };
 
+    const handleTouchMove = (e: TouchEvent) => {
+      if (
+        !isDraggingMarker ||
+        !timelineRef.current ||
+        timeIntervals.length === 0
+      )
+        return;
+
+      const rect = timelineRef.current.getBoundingClientRect();
+      const dragPosition = e.touches[0].clientX - rect.left;
+      const percentage = Math.max(0, Math.min(1, dragPosition / rect.width));
+
+      // Find the closest time interval
+      const index = Math.min(
+        Math.floor(percentage * timeIntervals.length),
+        timeIntervals.length - 1
+      );
+
+      // Use the exact time from the interval
+      updateSelectedTime(timeIntervals[index].time);
+    };
+
     const handleDragEnd = () => {
       setIsDraggingMarker(false);
     };
 
     if (isDraggingMarker) {
-      window.addEventListener("mousemove", handleDrag);
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("touchmove", handleTouchMove, { passive: false });
       window.addEventListener("mouseup", handleDragEnd);
+      window.addEventListener("touchend", handleDragEnd);
     }
 
     return () => {
-      window.removeEventListener("mousemove", handleDrag);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("touchmove", handleTouchMove);
       window.removeEventListener("mouseup", handleDragEnd);
+      window.removeEventListener("touchend", handleDragEnd);
     };
   }, [isDraggingMarker, timeIntervals, onTimeChange]);
 
   // Handle timeline drag
   useEffect(() => {
-    const handleDrag = (e: MouseEvent) => {
+    const handleMouseMove = (e: MouseEvent) => {
       if (
         !isDraggingTimeline ||
         !timelineRef.current ||
@@ -236,8 +283,58 @@ export default function TimeRangeSelector({
       const minutesPerPixel = (lookbackHours * 60) / timelineWidth;
       const minutesShift = dragDeltaX * minutesPerPixel;
 
-      // Shift the end time (and consequently the start time)
+      // Calculate the new end time
       const newEndTime = dragStartTime.subtract(minutesShift, "minute");
+
+      // Prevent dragging if the new end time would be greater than current time
+      const currentRealTime = dayjs();
+      if (newEndTime.isAfter(currentRealTime)) {
+        return;
+      }
+
+      // Also shift the selected time by the same amount
+      const newSelectedTime = dragStartSelectedTime.subtract(
+        minutesShift,
+        "minute"
+      );
+
+      // Update both times
+      setCurrentTime(roundToNearestTenMinutes(newEndTime));
+      updateSelectedTime(newSelectedTime);
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (
+        !isDraggingTimeline ||
+        !timelineRef.current ||
+        !dragStartTime ||
+        !dragStartSelectedTime
+      )
+        return;
+
+      e.preventDefault(); // Prevent scrolling while dragging
+
+      // Check if touch has moved significantly
+      const dragDeltaX = e.touches[0].clientX - dragStartX;
+      if (Math.abs(dragDeltaX) > 5) {
+        setHasMoved(true);
+      }
+
+      const rect = timelineRef.current.getBoundingClientRect();
+      const timelineWidth = rect.width;
+
+      // Calculate time shift based on drag distance
+      const minutesPerPixel = (lookbackHours * 60) / timelineWidth;
+      const minutesShift = dragDeltaX * minutesPerPixel;
+
+      // Calculate the new end time
+      const newEndTime = dragStartTime.subtract(minutesShift, "minute");
+
+      // Prevent dragging if the new end time would be greater than current time
+      const currentRealTime = dayjs();
+      if (newEndTime.isAfter(currentRealTime)) {
+        return;
+      }
 
       // Also shift the selected time by the same amount
       const newSelectedTime = dragStartSelectedTime.subtract(
@@ -266,13 +363,17 @@ export default function TimeRangeSelector({
     };
 
     if (isDraggingTimeline) {
-      window.addEventListener("mousemove", handleDrag);
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("touchmove", handleTouchMove, { passive: false });
       window.addEventListener("mouseup", handleDragEnd);
+      window.addEventListener("touchend", handleDragEnd);
     }
 
     return () => {
-      window.removeEventListener("mousemove", handleDrag);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("touchmove", handleTouchMove);
       window.removeEventListener("mouseup", handleDragEnd);
+      window.removeEventListener("touchend", handleDragEnd);
     };
   }, [
     isDraggingTimeline,
@@ -387,36 +488,18 @@ export default function TimeRangeSelector({
   // Handle end time change
   const handleEndTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newEndTime = parseDateTimeInput(e.target.value);
-    setCurrentTime(roundToNearestTenMinutes(newEndTime));
-  };
-
-  // Keyboard event handling, blocking bubbling and default behavior, and handling left and right keys
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-      e.preventDefault();
-
-      if (timeIntervals.length === 0) return;
-
-      // Find current index
-      const currentIndex = timeIntervals.findIndex(
-        (interval) => interval.time.format() === selectedTime.format()
-      );
-
-      if (currentIndex === -1) return;
-
-      // Calculate new index
-      let newIndex = currentIndex + (e.key === "ArrowLeft" ? -1 : 1);
-
-      // Ensure we stay within bounds
-      newIndex = Math.max(0, Math.min(newIndex, timeIntervals.length - 1));
-
-      updateSelectedTime(timeIntervals[newIndex].time);
+    // Prevent selecting future dates
+    const currentRealTime = dayjs();
+    if (newEndTime.isAfter(currentRealTime)) {
+      setCurrentTime(roundToNearestTenMinutes(currentRealTime));
+    } else {
+      setCurrentTime(roundToNearestTenMinutes(newEndTime));
     }
   };
 
   return (
-    <div tabIndex={0} onKeyDown={handleKeyDown} className="time-range-selector">
-      <div className="time-range-header">
+    <div className={`time-range-selector ${isMobile ? "mobile" : ""}`}>
+      <div className="time-controls-container">
         <div className="time-controls">
           {/* Play/Pause button */}
           <button
@@ -426,16 +509,7 @@ export default function TimeRangeSelector({
             {isPlaying ? "Pause" : "Play"}
           </button>
 
-          {/* Datetime picker */}
-          <div className="datetime-picker">
-            <input
-              type="datetime-local"
-              value={formatDateTimeInput(currentTime)}
-              onChange={handleEndTimeChange}
-            />
-          </div>
-
-          {/* Lookback hours selector */}
+          {/* Lookback hours selector - moved before datetime picker */}
           <select
             className="lookback-selector"
             value={lookbackHours}
@@ -445,73 +519,85 @@ export default function TimeRangeSelector({
             <option value={12}>Last 12 hours</option>
             <option value={24}>Last 24 hours</option>
           </select>
+
+          {/* Datetime picker - moved after lookback selector */}
+          <div className="datetime-picker">
+            <input
+              type="datetime-local"
+              value={formatDateTimeInput(currentTime)}
+              onChange={handleEndTimeChange}
+              max={formatDateTimeInput(dayjs())}
+            />
+          </div>
         </div>
       </div>
 
-      <div className="time-range-info">
-        <div className="start-time">
-          Start: {formatFullDateTime(getStartTime())}
-        </div>
-        <div className="end-time">End: {formatFullDateTime(getEndTime())}</div>
-      </div>
+      <div className="timeline-container">
+        <div
+          ref={timelineRef}
+          className={`timeline ${isDraggingTimeline ? "dragging" : ""}`}
+          onClick={handleTimelineClick}
+          onMouseDown={handleTimelineDragStart}
+          onTouchStart={handleTimelineDragStart}
+        >
+          {/* Render tick marks and labels */}
+          {timeIntervals.map((interval, index) => {
+            // Calculate position as percentage
+            const position =
+              timeIntervals.length > 1
+                ? (index / (timeIntervals.length - 1)) * 100
+                : 50;
 
-      <div
-        ref={timelineRef}
-        className={`timeline ${isDraggingTimeline ? "dragging" : ""}`}
-        onClick={handleTimelineClick}
-        onMouseDown={handleTimelineDragStart}
-      >
-        {/* Render tick marks and labels */}
-        {timeIntervals.map((interval, index) => {
-          // Calculate position as percentage
-          const position =
-            timeIntervals.length > 1
-              ? (index / (timeIntervals.length - 1)) * 100
-              : 50;
+            return (
+              <div
+                key={index}
+                className="time-interval"
+                style={{
+                  left: `${position}%`,
+                }}
+              >
+                {/* Date label for midnight (inside the timeline) */}
+                {interval.dateLabel && (
+                  <div className="date-label">{interval.dateLabel}</div>
+                )}
 
-          return (
+                {/* Tick container for vertical centering */}
+                <div className="tick-container">
+                  {/* Tick mark */}
+                  <div
+                    className={`tick-mark ${interval.isHour ? "hour" : ""}`}
+                  ></div>
+                </div>
+
+                {/* Hour label (below the tick) */}
+                {interval.isHour && (
+                  <div className="time-label">{interval.label}</div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Selected time marker with time display above */}
+          {timeIntervals.length > 0 && (
             <div
-              key={index}
-              className="time-interval"
-              style={{
-                left: `${position}%`,
-              }}
+              ref={markerRef}
+              className={`time-marker ${isPlaying ? "playing" : ""} ${
+                isDraggingMarker ? "dragging" : ""
+              }`}
+              style={{ left: `${getMarkerPosition()}%` }}
+              onMouseDown={handleMarkerDragStart}
+              onTouchStart={handleMarkerDragStart}
             >
-              {/* Tick container for vertical centering */}
-              <div className="tick-container">
-                {/* Tick mark */}
-                <div
-                  className={`tick-mark ${interval.isHour ? "hour" : ""}`}
-                ></div>
+              {/* Time display above the marker */}
+              <div className="marker-label">
+                {formatFullDateTime(selectedTime)}
               </div>
 
-              {/* Hour label */}
-              {interval.isHour && (
-                <div className="time-label">{interval.label}</div>
-              )}
+              {/* Triangle pointer */}
+              <div className="marker-pointer"></div>
             </div>
-          );
-        })}
-
-        {/* Selected time marker with time display above */}
-        {timeIntervals.length > 0 && (
-          <div
-            ref={markerRef}
-            className={`time-marker ${isPlaying ? "playing" : ""} ${
-              isDraggingMarker ? "dragging" : ""
-            }`}
-            style={{ left: `${getMarkerPosition()}%` }}
-            onMouseDown={handleMarkerDragStart}
-          >
-            {/* Time display above the marker */}
-            <div className="marker-label">
-              {formatFullDateTime(selectedTime)}
-            </div>
-
-            {/* Triangle pointer */}
-            <div className="marker-pointer"></div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

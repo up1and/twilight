@@ -1,0 +1,74 @@
+:root {
+  /* Zinc Theme Colors */
+  --zinc-50: hsl(240 5% 98%);
+  --zinc-100: hsl(240 5% 96%);
+  --zinc-200: hsl(240 5% 94%);
+  --zinc-300: hsl(240 5% 84%);
+  --zinc-400: hsl(240 5% 65%);
+  --zinc-500: hsl(240 5% 48%);
+  --zinc-600: hsl(240 5% 34%);
+  --zinc-700: hsl(240 5% 26%);
+  --zinc-800: hsl(240 5% 20%);
+  --zinc-900: hsl(240 5% 12%);
+  --zinc-950: hsl(240 5% 8%);
+
+  /* Original Blue/Green Theme Colors */
+  --blue-primary: #1d85d0;
+  --blue-hover: #1976bb;
+  --blue-light: #e6f3fb;
+  --green-primary: #5cb85c;
+  --green-hover: #4cae4c;
+  --green-light: #dff0d8;
+  --red-primary: #d9534f;
+  --red-hover: #c9302c;
+
+  /* Common Colors */
+  --white: #ffffff;
+  --black: #000000;
+  --gray-100: #f8f9fa;
+  --gray-200: #e9ecef;
+  --gray-300: #dee2e6;
+  --gray-400: #ced4da;
+  --gray-500: #adb5bd;
+  --gray-600: #6c757d;
+  --gray-700: #495057;
+  --gray-800: #343a40;
+  --gray-900: #212529;
+
+  /* Current Theme - Zinc by default */
+  --primary: var(--zinc-950);
+  --primary-hover: var(--zinc-900);
+  --primary-light: var(--zinc-100);
+  --secondary: var(--zinc-600);
+  --secondary-hover: var(--zinc-700);
+  --accent: var(--zinc-500);
+  --accent-hover: var(--zinc-600);
+  --border: var(--zinc-300);
+  --border-hover: var(--zinc-400);
+  --background: var(--white);
+  --background-hover: var(--zinc-100);
+  --text: var(--zinc-900);
+  --text-secondary: var(--zinc-700);
+  --text-muted: var(--zinc-500);
+  --divider: var(--zinc-300);
+  --shadow: rgba(0, 0, 0, 0.15);
+  --shadow-heavy: rgba(0, 0, 0, 0.3);
+
+  /* To switch to the original blue/green theme, uncomment these: */
+
+  /* --primary: var(--green-primary);
+  --primary-hover: var(--green-hover);
+  --primary-light: var(--green-light);
+  --secondary: var(--blue-primary);
+  --secondary-hover: var(--blue-hover);
+  --accent: var(--blue-primary);
+  --accent-hover: var(--blue-hover);
+  --border: #ccc;
+  --border-hover: #999;
+  --background: var(--white);
+  --background-hover: #f4f4f4;
+  --text: #333;
+  --text-secondary: #666;
+  --text-muted: #999;
+  --divider: #eee; */
+}

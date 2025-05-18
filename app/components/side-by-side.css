@@ -1,0 +1,55 @@
+.side-by-side-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.side-by-side-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 20px; /* Clickable area */
+  margin-left: -10px; /* Center the divider on the position */
+  pointer-events: all;
+  cursor: ew-resize;
+  display: flex;
+  justify-content: center;
+  z-index: 1001;
+}
+
+.side-by-side-divider.dragging {
+  cursor: grabbing;
+}
+
+/* Vertical line along the entire height */
+.divider-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: rgba(0, 0, 0, 0.4); /* Semi-transparent line */
+  z-index: 1;
+}
+
+/* Compact slider handle */
+.divider-slider {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 40px;
+  background-color: white;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.15);
+  z-index: 2;
+}
+
+/* Add a subtle animation when dragging */
+.side-by-side-divider.dragging .divider-slider {
+  background-color: #f4f4f4;
+}

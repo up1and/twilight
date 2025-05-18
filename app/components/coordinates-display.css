@@ -1,0 +1,23 @@
+.coordinates-display {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  z-index: 1000;
+  padding: 0 5px;
+  background-color: rgba(255, 255, 255, 0.7);
+  font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
+  font-size: 11px;
+  pointer-events: none; /* Allow clicks to pass through */
+  margin-left: 0; /* Removed margin to make it flush with left edge */
+}
+
+.coordinates-text {
+  color: var(--text-secondary);
+  line-height: 18px;
+}
+
+@media (max-width: 768px) {
+  .coordinates-display {
+    font-size: 10px;
+  }
+}

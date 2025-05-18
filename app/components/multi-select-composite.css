@@ -1,0 +1,70 @@
+.multi-select-composite {
+  position: relative;
+  font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
+  font-size: 12px;
+}
+
+.multi-select-button {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background-color: var(--background);
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 1px 5px var(--shadow);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 160px; /* Reduced width */
+  width: 160px; /* Fixed width */
+  height: 28px;
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.multi-select-button:hover {
+  background-color: var(--background-hover);
+}
+
+.dropdown-arrow {
+  font-size: 8px;
+  margin-left: 5px;
+  flex-shrink: 0;
+}
+
+.multi-select-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 2px;
+  background-color: var(--background);
+  width: 160px; /* Match button width */
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 2px 10px var(--shadow);
+  z-index: 1000;
+}
+
+.multi-select-option {
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.multi-select-option:hover {
+  background-color: var(--background-hover);
+}
+
+.multi-select-option.selected {
+  background-color: var(--primary-light);
+  font-weight: bold;
+}
+
+.check-mark {
+  color: var(--secondary);
+  font-weight: bold;
+}

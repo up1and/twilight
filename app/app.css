@@ -1,0 +1,91 @@
+body {
+  margin: 0;
+  padding: 0;
+  font-family: "Arial, Helvetica, sans-serif";
+}
+
+.map-container {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
+.leaflet-map {
+  height: 100%;
+  width: 100%;
+}
+
+.map-controls {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px; /* Reduced gap between controls */
+}
+
+.time-selector-container {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  z-index: 1000;
+  width: 100%;
+}
+
+/* Custom styles to match TimeRangeSelector aesthetic */
+
+/* Zoom control styling - treated as a group */
+.leaflet-control-zoom {
+  border: 1px solid var(--border) !important;
+  border-radius: 4px !important;
+  box-shadow: 0 1px 5px var(--shadow) !important;
+  background-color: var(--background) !important;
+  overflow: hidden !important;
+}
+
+.leaflet-control-zoom a {
+  width: 28px !important;
+  height: 28px !important;
+  line-height: 28px !important;
+  color: var(--text-secondary) !important;
+  font-size: 16px !important;
+  font-weight: bold !important;
+  background-color: var(--background) !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+  text-align: center !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.leaflet-control-zoom-in {
+  border-bottom: 1px solid var(--border) !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background-color: var(--background-hover) !important;
+  color: var(--secondary) !important;
+}
+
+/* Attribution styling */
+.leaflet-control-attribution {
+  background-color: rgba(255, 255, 255, 0.8) !important;
+  padding: 2px 5px !important;
+  font-size: 10px !important;
+  color: var(--text-muted) !important;
+}
+
+/* Mobile styles */
+@media (max-width: 768px) {
+  .map-controls {
+    top: 10px;
+    right: 10px;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px; /* Even smaller gap on mobile */
+  }
+}
