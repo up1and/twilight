@@ -50,6 +50,10 @@ def ahi_s3_files(time=None, cache=False):
 
 def main():
     composite_name = 'true_color'
+    bands_name = composite_name
+    if composite_name == 'ir_clouds':
+        bands_name = 'B13'
+
     test_time = datetime.datetime(2025, 4, 20, 4, 0)
     files = ahi_s3_files(time=test_time, cache=True)
 
@@ -81,7 +85,7 @@ def main():
     )
 
     scn = Scene(filenames=files, reader='ahi_hsd', reader_kwargs=reader_kwargs)
-    scn.load([composite_name])
+    scn.load([bands_name])
     scn_china = scn.resample(china_area, resampler='bilinear', chunks=512)
     name = 'himawari_{}_{}.tif'.format(composite_name, scn.start_time.strftime('%Y%m%d_%H%M'))
     filename = os.path.join(cache_dir, name)
@@ -96,13 +100,9 @@ def main():
     )
 
     print(filename)
-    if composite_name in available_composites:
-        prefix = composite_name
-    else:
-        prefix = 'bands'
 
     object_name = '{}/{}/{}'.format(
-        prefix, scn.start_time.strftime('%Y/%m/%d'), name
+        composite_name, scn.start_time.strftime('%Y/%m/%d'), name
     )
 
     upload('himawari', object_name, filename, composite_name)
