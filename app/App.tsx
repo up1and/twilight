@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -13,13 +13,7 @@ import dayjs from "dayjs";
 import Control from "./components/Control";
 import TimeRangeSelector from "./components/time-range-selector";
 import SettingModal from "./components/Setting";
-import {
-  CompositeListType,
-  CompositeType,
-  ImageType,
-  MapConfig,
-  TileJSON,
-} from "./utils/types";
+import { CompositeType, MapConfig, TileJSON } from "./utils/types";
 import lands from "./natural-earth.json";
 import firs from "./firs.json";
 
@@ -70,22 +64,10 @@ const MapConfigUpdater: React.FC<{
 
 function App() {
   const position: LatLngTuple = [0, 115];
-  const maxBounds: [LatLngTuple, LatLngTuple] = [
-    [0, 70], // south west
-    [55, 150], // north east
-  ];
 
-  const [image, setImage] = useState<ImageType>();
   const [compositeName, setCompositeName] =
     useState<CompositeType>("ir_clouds");
-  const [composites] = useState<CompositeListType>({
-    ir_clouds: [],
-    true_color: [],
-  });
-  const [playing, setPlaying] = useState<boolean>(false);
-  const [, setCurrentIndex] = useState<number>(0);
   const [selectedTime, setSelectedTime] = useState<dayjs.Dayjs>(dayjs());
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [settingVisible, setSettingVisible] = useState(false);
 
@@ -97,11 +79,6 @@ function App() {
     attribution: "",
   });
 
-  const handlePlayClick = () => {
-    setPlaying((prev) => !prev);
-    console.log("play", playing);
-  };
-
   const handleSettingClick = () => {
     setSettingVisible((prev) => !prev);
   };
@@ -112,14 +89,16 @@ function App() {
     setCompositeName(event.target.value as CompositeType);
   };
 
-  const fetchImage = async (object: ImageType) => {
-    const url = "";
-    const currentImage: ImageType = {
-      datetime: object.datetime,
-      key: object.key,
-      url: url,
-    };
-    setImage(currentImage);
+  // Format time to ISO 8601 string for tile URL
+  const formatTimeForTileUrl = (time: dayjs.Dayjs): string => {
+    return time.format("YYYY-MM-DDTHH:mm:00");
+  };
+
+  // Generate tile URL with time parameter
+  const generateTileUrl = (baseUrl: string, time: dayjs.Dayjs): string => {
+    // Replace {time} placeholder with actual ISO 8601 time
+    const timeStr = formatTimeForTileUrl(time);
+    return baseUrl.replace("{time}", timeStr);
   };
 
   useEffect(() => {
@@ -128,20 +107,29 @@ function App() {
     const fetchTileJson = async () => {
       try {
         const tileJson = await ky
-          .get(`http://127.0.0.1:5000/${compositeName}/tilejson.json`, {
+          .get(`http://127.0.0.1:5000/${compositeName}.tilejson`, {
             signal: controller.signal,
           })
           .json<TileJSON>();
+
+        // Get the appropriate tile URL template
+        // Use the time-based URL (index 1) if available, otherwise use the standard URL (index 0)
+        const tileUrlTemplate =
+          tileJson.tiles.length > 1 ? tileJson.tiles[1] : tileJson.tiles[0];
+
+        // Generate the actual URL with the selected time
+        const tileUrl = generateTileUrl(tileUrlTemplate, selectedTime);
+
         setMapConfig({
           bounds: tileJson.bounds
             ? [
-                [tileJson.bounds[1], tileJson.bounds[0]], // 西南角
-                [tileJson.bounds[3], tileJson.bounds[2]], // 东北角
+                [tileJson.bounds[1], tileJson.bounds[0]], // Southwest corner
+                [tileJson.bounds[3], tileJson.bounds[2]], // Northeast corner
               ]
             : null,
           minZoom: tileJson.minzoom ?? 0,
           maxZoom: tileJson.maxzoom ?? 18,
-          tileUrl: tileJson.tiles[0],
+          tileUrl: tileUrl,
           attribution: tileJson.attribution ?? "",
         });
       } catch (err) {
@@ -153,45 +141,14 @@ function App() {
     fetchTileJson();
 
     return () => controller.abort();
-  }, [compositeName]);
+  }, [compositeName, selectedTime]); // Add selectedTime as a dependency
 
+  // Log when selected time changes
   useEffect(() => {
-    const fetchComposites = async () => {
-      console.log("update objects");
-    };
-
-    fetchComposites();
-    const intervalId = setInterval(fetchComposites, 60000);
-
-    return () => clearInterval(intervalId);
-  }, []);
-
-  useEffect(() => {
-    let images = composites[compositeName];
-
-    if (playing) {
-      intervalRef.current = setInterval(() => {
-        setCurrentIndex((prevIndex) => {
-          const nextIndex = (prevIndex + 1) % images.length;
-          const currentImage = images[nextIndex];
-          fetchImage(currentImage);
-          return nextIndex;
-        });
-      }, 200);
-
-      return () => {
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-        }
-      };
-    } else {
-      if (images.length > 0) {
-        const latestObject = images[images.length - 1];
-        fetchImage(latestObject);
-        setCurrentIndex(0);
-      }
-    }
-  }, [playing, composites, compositeName]);
+    console.log(
+      `Selected time changed to: ${selectedTime.format("YYYY-MM-DD HH:mm")}`
+    );
+  }, [selectedTime]);
 
   const MapDebugger = () => {
     const map = useMap();
@@ -230,6 +187,7 @@ function App() {
         <MapConfigUpdater mapConfig={mapConfig} />
         {mapConfig.tileUrl && (
           <TileLayer
+            key={`${compositeName}-${selectedTime.format("YYYY-MM-DDTHH:mm")}`} // Add key to force re-render when time changes
             tileSize={256}
             url={mapConfig.tileUrl}
             minZoom={mapConfig.minZoom}
@@ -286,13 +244,6 @@ function App() {
         <Control position="topleft">
           <button
             className="leaflet-bar leaflet-icon-button"
-            onClick={handlePlayClick}
-          >
-            {playing ? "Stop" : "Play"}
-          </button>
-          <br />
-          <button
-            className="leaflet-bar leaflet-icon-button"
             onClick={handleSettingClick}
           >
             Pref
@@ -302,17 +253,12 @@ function App() {
           <MousePosition />
         </Control>
         <Control position="bottomright">
-          {image && (
-            <div className="text-stroke">
-              {image.datetime.format("YYYY-MM-DD HH:mm")}
-            </div>
-          )}
+          <div className="text-stroke">
+            {selectedTime.format("YYYY-MM-DD HH:mm")}
+          </div>
         </Control>
-        <SettingModal
-          visible={settingVisible}
-          handleClose={handleSettingClick}
-        />
       </MapContainer>
+      <SettingModal visible={settingVisible} handleClose={handleSettingClick} />
       <TimeRangeSelector onTimeChange={(time) => setSelectedTime(time)} />
     </>
   );
