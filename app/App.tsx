@@ -8,8 +8,10 @@ import {
 } from "react-leaflet";
 import { LatLngTuple, CRS } from "leaflet";
 import ky from "ky";
+import dayjs from "dayjs";
 
 import Control from "./components/Control";
+import TimeRangeSelector from "./components/time-range-selector";
 import SettingModal from "./components/Setting";
 import {
   CompositeListType,
@@ -82,6 +84,7 @@ function App() {
   });
   const [playing, setPlaying] = useState<boolean>(false);
   const [, setCurrentIndex] = useState<number>(0);
+  const [selectedTime, setSelectedTime] = useState<dayjs.Dayjs>(dayjs());
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [settingVisible, setSettingVisible] = useState(false);
@@ -212,99 +215,106 @@ function App() {
   };
 
   return (
-    <MapContainer
-      center={position}
-      maxBoundsViscosity={1.0}
-      zoom={6}
-      minZoom={mapConfig.minZoom}
-      maxZoom={mapConfig.maxZoom}
-      maxBounds={mapConfig.bounds ?? undefined}
-      crs={CRS.EPSG3857}
-    >
-      <MapDebugger />
-      <MapConfigUpdater mapConfig={mapConfig} />
-      {mapConfig.tileUrl && (
-        <TileLayer
-          tileSize={256}
-          url={mapConfig.tileUrl}
-          minZoom={mapConfig.minZoom}
-          maxZoom={mapConfig.maxZoom}
-          bounds={mapConfig.bounds ?? undefined}
-          attribution={mapConfig.attribution}
-          noWrap={true}
-        />
-      )}
-      <GeoJSON
-        data={lands as GeoJSON.GeoJsonObject}
-        style={{
-          color: "#828282",
-          weight: 2,
-          opacity: 1,
-          fillOpacity: 0,
-        }}
-      />
-      <GeoJSON
-        data={firs as GeoJSON.GeoJsonObject}
-        style={{
-          color: "#c8c8c8",
-          weight: 2,
-          opacity: 1,
-          fillOpacity: 0,
-        }}
-      />
-      <Control position="topright">
-        <div className="leaflet-control-layers leaflet-control-layers-expanded">
-          <label>
-            <input
-              type="radio"
-              name="ir_clouds"
-              className="leaflet-control-layers-selector"
-              value="ir_clouds"
-              checked={compositeName === "ir_clouds"}
-              onChange={handleCompositeChange}
-            />
-            Himawari IR Clouds
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="true_color"
-              className="leaflet-control-layers-selector"
-              value="true_color"
-              checked={compositeName === "true_color"}
-              onChange={handleCompositeChange}
-            />
-            Himawari True Color
-          </label>
-        </div>
-      </Control>
-      <Control position="topleft">
-        <button
-          className="leaflet-bar leaflet-icon-button"
-          onClick={handlePlayClick}
-        >
-          {playing ? "Stop" : "Play"}
-        </button>
-        <br />
-        <button
-          className="leaflet-bar leaflet-icon-button"
-          onClick={handleSettingClick}
-        >
-          Pref
-        </button>
-      </Control>
-      <Control position="bottomleft">
-        <MousePosition />
-      </Control>
-      <Control position="bottomright">
-        {image && (
-          <div className="text-stroke">
-            {image.datetime.format("YYYY-MM-DD HH:mm")}
-          </div>
+    <>
+      <MapContainer
+        center={position}
+        maxBoundsViscosity={1.0}
+        zoom={6}
+        minZoom={mapConfig.minZoom}
+        maxZoom={mapConfig.maxZoom}
+        maxBounds={mapConfig.bounds ?? undefined}
+        crs={CRS.EPSG3857}
+        keyboard={false}
+      >
+        <MapDebugger />
+        <MapConfigUpdater mapConfig={mapConfig} />
+        {mapConfig.tileUrl && (
+          <TileLayer
+            tileSize={256}
+            url={mapConfig.tileUrl}
+            minZoom={mapConfig.minZoom}
+            maxZoom={mapConfig.maxZoom}
+            bounds={mapConfig.bounds ?? undefined}
+            attribution={mapConfig.attribution}
+            noWrap={true}
+          />
         )}
-      </Control>
-      <SettingModal visible={settingVisible} handleClose={handleSettingClick} />
-    </MapContainer>
+        <GeoJSON
+          data={lands as GeoJSON.GeoJsonObject}
+          style={{
+            color: "#828282",
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0,
+          }}
+        />
+        <GeoJSON
+          data={firs as GeoJSON.GeoJsonObject}
+          style={{
+            color: "#c8c8c8",
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0,
+          }}
+        />
+        <Control position="topright">
+          <div className="leaflet-control-layers leaflet-control-layers-expanded">
+            <label>
+              <input
+                type="radio"
+                name="ir_clouds"
+                className="leaflet-control-layers-selector"
+                value="ir_clouds"
+                checked={compositeName === "ir_clouds"}
+                onChange={handleCompositeChange}
+              />
+              Himawari IR Clouds
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="true_color"
+                className="leaflet-control-layers-selector"
+                value="true_color"
+                checked={compositeName === "true_color"}
+                onChange={handleCompositeChange}
+              />
+              Himawari True Color
+            </label>
+          </div>
+        </Control>
+        <Control position="topleft">
+          <button
+            className="leaflet-bar leaflet-icon-button"
+            onClick={handlePlayClick}
+          >
+            {playing ? "Stop" : "Play"}
+          </button>
+          <br />
+          <button
+            className="leaflet-bar leaflet-icon-button"
+            onClick={handleSettingClick}
+          >
+            Pref
+          </button>
+        </Control>
+        <Control position="bottomleft">
+          <MousePosition />
+        </Control>
+        <Control position="bottomright">
+          {image && (
+            <div className="text-stroke">
+              {image.datetime.format("YYYY-MM-DD HH:mm")}
+            </div>
+          )}
+        </Control>
+        <SettingModal
+          visible={settingVisible}
+          handleClose={handleSettingClick}
+        />
+      </MapContainer>
+      <TimeRangeSelector onTimeChange={(time) => setSelectedTime(time)} />
+    </>
   );
 }
 

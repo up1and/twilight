@@ -1,0 +1,212 @@
+/* Leaflet-inspired timeline styles */
+.time-range-selector {
+  font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #333;
+  max-width: 80%;
+  margin: 0 auto;
+  padding: 10px;
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  z-index: 1000;
+}
+
+/* Header styles */
+.time-range-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.time-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Button styles */
+.play-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #5cb85c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.play-button:hover {
+  background-color: #4cae4c;
+}
+
+.play-button.playing {
+  background-color: #d9534f;
+}
+
+.play-button.playing:hover {
+  background-color: #c9302c;
+}
+
+/* Input styles */
+.datetime-picker input {
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.lookback-selector {
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: white;
+  font-size: 12px;
+}
+
+/* Time range info */
+.time-range-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #666;
+  margin-bottom: 6px;
+}
+
+/* Timeline styles */
+.timeline {
+  position: relative;
+  height: 80px; /* Increased height for more padding */
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: #f8f8f8;
+  cursor: pointer;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.15);
+  padding: 15px 0; /* Added padding top and bottom */
+  box-sizing: border-box; /* Include padding in height */
+}
+
+.timeline.dragging {
+  cursor: grabbing;
+}
+
+/* Time interval and tick mark styles */
+.time-interval {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0; /* Zero width as we're just positioning a point */
+}
+
+.tick-container {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* Center vertically */
+  align-items: center;
+}
+
+.tick-mark {
+  width: 1px;
+  background-color: #aaa;
+  flex-grow: 0;
+}
+
+.tick-mark.hour {
+  height: 32px;
+}
+
+.tick-mark:not(.hour) {
+  height: 20px;
+}
+
+.time-label {
+  position: absolute;
+  bottom: 5px; /* Position inside the timeline */
+  left: 0;
+  transform: translateX(-50%); /* Center the label on the tick */
+  font-size: 10px;
+  color: #666;
+  text-align: center;
+  white-space: nowrap;
+  z-index: 5; /* Ensure labels are above other elements */
+}
+
+/* Marker styles */
+.time-marker {
+  position: absolute;
+  top: 15px; /* Adjusted for padding */
+  bottom: 15px; /* Adjusted for padding */
+  width: 2px;
+  background-color: #1d85d0;
+  border-radius: 4px;
+  transform: translateX(-50%);
+  transition: background-color 0.2s;
+  cursor: grab;
+  z-index: 10;
+}
+
+.time-marker.dragging {
+  cursor: grabbing;
+}
+
+.time-marker.playing {
+  background-color: #5cb85c;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.marker-label {
+  position: absolute;
+  top: -25px; /* Position above the marker */
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  background-color: #1d85d0;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: normal;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  z-index: 20; /* Ensure marker label is on top */
+}
+
+.time-marker.playing .marker-label {
+  background-color: #5cb85c;
+}
+
+.marker-pointer {
+  position: absolute;
+  top: -5px; /* Position at the top of the marker */
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid #1d85d0;
+}
+
+.time-marker.playing .marker-pointer {
+  border-top-color: #5cb85c;
+}
