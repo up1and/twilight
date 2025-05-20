@@ -1,21 +1,17 @@
 import { useState, useRef, useEffect } from "react";
+import { getApiConfig, setApiConfig } from "../utils/api-client";
 import "./settings-button.css";
 
 interface SettingsButtonProps {
-  settings: {
-    serverUrl: string;
-    apiKey: string;
-  };
-  onSettingsChange: (settings: { serverUrl: string; apiKey: string }) => void;
+  onSettingsChange?: () => void; // Optional callback to notify parent component when settings change
 }
 
 export default function SettingsButton({
-  settings,
   onSettingsChange,
 }: SettingsButtonProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [serverUrl, setServerUrl] = useState(settings.serverUrl);
-  const [apiKey, setApiKey] = useState(settings.apiKey);
+  const [endpoint, setEndpoint] = useState(getApiConfig().endpoint);
+  const [token, setToken] = useState(getApiConfig().token);
   const modalRef = useRef<HTMLDivElement>(null);
 
   // Close modal when clicking outside
@@ -40,10 +36,17 @@ export default function SettingsButton({
   }, [isModalOpen]);
 
   const handleSave = () => {
-    onSettingsChange({
-      serverUrl,
-      apiKey,
+    // Save settings using the API client utility
+    setApiConfig({
+      endpoint,
+      token,
     });
+
+    // Call the callback function if provided to notify the parent component
+    if (onSettingsChange) {
+      onSettingsChange();
+    }
+
     setIsModalOpen(false);
   };
 
@@ -84,23 +87,23 @@ export default function SettingsButton({
             </div>
             <div className="settings-modal-body">
               <div className="settings-form-group">
-                <label htmlFor="server-url">Server</label>
+                <label htmlFor="endpoint">Endpoint</label>
                 <input
-                  id="server-url"
+                  id="endpoint"
                   type="text"
-                  value={serverUrl}
-                  onChange={(e) => setServerUrl(e.target.value)}
+                  value={endpoint}
+                  onChange={(e) => setEndpoint(e.target.value)}
                   placeholder="https://example.com"
                 />
               </div>
               <div className="settings-form-group">
-                <label htmlFor="api-key">API Key</label>
+                <label htmlFor="token">Token</label>
                 <input
-                  id="api-key"
+                  id="token"
                   type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="Enter your API key"
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                  placeholder="Enter your token"
                 />
               </div>
             </div>

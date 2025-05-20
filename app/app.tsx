@@ -11,6 +11,7 @@ import MultiSelectComposite from "./components/multi-select-composite";
 import CoordinatesDisplay from "./components/coordinates-display";
 import SideBySide from "./components/side-by-side";
 import { useIsMobile } from "./hooks/use-mobile";
+import { getApiConfig } from "./utils/api-client";
 import "leaflet/dist/leaflet.css";
 import "./app.css";
 import type L from "leaflet";
@@ -83,10 +84,7 @@ export default function MapView() {
     ["True Color"]
   );
 
-  const [serverSettings, setServerSettings] = useState({
-    serverUrl: "https://example.com/api",
-    apiKey: "",
-  });
+  // No longer need to store endpoint and token in component state
   const [mousePosition, setMousePosition] = useState<{
     lat: number;
     lng: number;
@@ -106,13 +104,10 @@ export default function MapView() {
     // Here you would update the map based on the selected time
   };
 
-  // Update server settings
-  const updateServerSettings = (newSettings: {
-    serverUrl: string;
-    apiKey: string;
-  }) => {
-    setServerSettings(newSettings);
-    // Here you would update the tile URLs or other map settings based on the new server settings
+  // Callback function when settings change
+  const handleSettingsChange = () => {
+    // Add any logic that needs to run after settings are updated
+    console.log("Settings updated:", getApiConfig());
   };
 
   // Handle mouse position change
@@ -208,10 +203,7 @@ export default function MapView() {
             onChange={handleCompositeChange}
             maxSelections={2}
           />
-          <SettingsButton
-            settings={serverSettings}
-            onSettingsChange={updateServerSettings}
-          />
+          <SettingsButton onSettingsChange={handleSettingsChange} />
         </div>
 
         {/* TimeRangeSelector at the bottom */}
