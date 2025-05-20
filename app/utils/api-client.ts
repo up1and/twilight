@@ -1,43 +1,62 @@
 /**
  * API Client Utility
- * Handles API requests, automatically retrieving endpoint and token from localStorage
+ * Handles API requests using ky HTTP client
  */
+import ky from "ky";
 
-// Get API configuration
+// Get API configuration from localStorage
 export function getApiConfig() {
   return {
-    endpoint: localStorage.getItem("endpoint") || "https://example.com/api",
+    endpoint: localStorage.getItem("endpoint") || "",
     token: localStorage.getItem("token") || "",
   };
 }
 
-// Set API configuration
+// Set API configuration to localStorage
 export function setApiConfig(config: { endpoint: string; token: string }) {
   localStorage.setItem("endpoint", config.endpoint);
   localStorage.setItem("token", config.token);
 }
 
-// Example API request function
-export async function fetchData(path: string, options: RequestInit = {}) {
-  const { endpoint, token } = getApiConfig();
-
-  const headers = {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...options.headers,
-  };
-
-  const response = await fetch(`${endpoint}${path}`, {
-    ...options,
-    headers,
-  });
-
-  if (!response.ok) {
-    throw new Error(`API request failed: ${response.status}`);
+// Format composite name for display (e.g., "day_convection" to "Day Convection")
+export function formatCompositeName(name: string): string {
+  // Special case for ir_clouds
+  if (name === "ir_clouds") {
+    return "IR Clouds";
   }
 
-  return response.json();
+  // Handle other cases with standard formatting
+  return name
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
-// Additional API methods can be added here
-// For example: fetchTileData, fetchCompositeList, etc.
+// Create a ky instance with default options
+const createApiClient = () => {
+  const { endpoint, token } = getApiConfig();
+
+  return ky.create({
+    prefixUrl: endpoint,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    retry: 1,
+    timeout: 30000,
+  });
+};
+
+// Fetch latest composites
+export async function fetchLatestComposites(): Promise<Record<string, string>> {
+  try {
+    const apiClient = createApiClient();
+    const data = await apiClient
+      .get("composites/latest")
+      .json<Record<string, string>>();
+    return data;
+  } catch (error) {
+    console.error("Error fetching latest composites:", error);
+    return {};
+  }
+}

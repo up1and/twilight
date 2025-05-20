@@ -11,7 +11,11 @@ import MultiSelectComposite from "./components/multi-select-composite";
 import CoordinatesDisplay from "./components/coordinates-display";
 import SideBySide from "./components/side-by-side";
 import { useIsMobile } from "./hooks/use-mobile";
-import { getApiConfig } from "./utils/api-client";
+import {
+  getApiConfig,
+  fetchLatestComposites,
+  formatCompositeName,
+} from "./utils/api-client";
 import "leaflet/dist/leaflet.css";
 import "./app.css";
 import type L from "leaflet";
@@ -38,26 +42,7 @@ function MousePositionTracker({
   return null;
 }
 
-// Get tile URL based on composite type
-function getTileUrlForComposite(compositeType: CompositeType): string {
-  switch (compositeType) {
-    case "True Color":
-      return DEFAULT_TILE_URL;
-    case "IR Clouds":
-      // In a real app, these would be actual URLs to your tile services
-      return "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-    case "Ash":
-      return "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";
-    case "Water Vapor":
-      return "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png";
-    case "Dust":
-      return "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png";
-    default:
-      return DEFAULT_TILE_URL;
-  }
-}
-
-// Get attribution based on composite type
+// Default attribution based on composite type
 function getAttributionForComposite(compositeType: CompositeType): string {
   switch (compositeType) {
     case "True Color":
@@ -73,13 +58,16 @@ function getAttributionForComposite(compositeType: CompositeType): string {
 }
 
 export default function MapView() {
-  const availableComposites: CompositeType[] = [
-    "True Color",
-    "IR Clouds",
-    "Ash",
-    "Water Vapor",
-    "Dust",
-  ];
+  // State for storing composites data from API (raw data)
+  const [compositesData, setCompositesData] = useState<Record<string, string>>(
+    {}
+  );
+
+  // State for storing formatted composite names for UI display
+  const [availableComposites, setAvailableComposites] = useState<
+    CompositeType[]
+  >([]);
+
   const [selectedComposites, setSelectedComposites] = useState<CompositeType[]>(
     ["True Color"]
   );
@@ -91,6 +79,38 @@ export default function MapView() {
   } | null>(null);
   const isMobile = useIsMobile();
 
+  // Fetch latest composites on component mount and every minute
+  useEffect(() => {
+    // Function to fetch composites
+    const fetchComposites = async () => {
+      try {
+        const data = await fetchLatestComposites();
+        setCompositesData(data);
+
+        // Update available composites with formatted names
+        if (Object.keys(data).length > 0) {
+          const formattedComposites = Object.keys(data).map(
+            (key) => formatCompositeName(key) as CompositeType
+          );
+          setAvailableComposites(formattedComposites);
+        }
+
+        console.log("latest composites:", data);
+      } catch (error) {
+        console.error("error fetching composites:", error);
+      }
+    };
+
+    // Fetch immediately on mount
+    fetchComposites();
+
+    // Set up interval to fetch every minute
+    const intervalId = setInterval(fetchComposites, 60000);
+
+    // Clean up interval on component unmount
+    return () => clearInterval(intervalId);
+  }, []);
+
   // References to the tile layers
   const leftLayerRef = useRef<L.TileLayer | null>(null);
   const rightLayerRef = useRef<L.TileLayer | null>(null);
@@ -100,14 +120,14 @@ export default function MapView() {
 
   // Handle time change from TimeRangeSelector
   const handleTimeChange = (time: any) => {
-    console.log("Selected time:", time.format());
+    console.log("selected time:", time.format());
     // Here you would update the map based on the selected time
   };
 
   // Callback function when settings change
   const handleSettingsChange = () => {
     // Add any logic that needs to run after settings are updated
-    console.log("Settings updated:", getApiConfig());
+    console.log("settings updated:", getApiConfig());
   };
 
   // Handle mouse position change
@@ -116,6 +136,45 @@ export default function MapView() {
       setMousePosition(null); // Hide when mouse leaves map
     } else {
       setMousePosition({ lat, lng });
+    }
+  };
+
+  // Get tile URL based on composite type
+  const getTileUrlForComposite = (compositeType: CompositeType): string => {
+    // Get the original key from formatted name
+    const getOriginalKey = (formattedName: string): string => {
+      for (const key of Object.keys(compositesData)) {
+        if (formatCompositeName(key) === formattedName) {
+          return key;
+        }
+      }
+      return "";
+    };
+
+    // Try to get the original key from compositesData
+    const originalKey = getOriginalKey(compositeType);
+
+    // If we have data for this composite, construct a URL with the endpoint
+    if (originalKey && compositesData[originalKey]) {
+      const { endpoint } = getApiConfig();
+      return `${endpoint}/tiles/${originalKey}/{z}/{x}/{y}.png`;
+    }
+
+    // Fallback to static URLs if no data is available
+    switch (compositeType) {
+      case "True Color":
+        return DEFAULT_TILE_URL;
+      case "IR Clouds":
+        // In a real app, these would be actual URLs to your tile services
+        return "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+      case "Ash":
+        return "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";
+      case "Water Vapor":
+        return "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png";
+      case "Dust":
+        return "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png";
+      default:
+        return DEFAULT_TILE_URL;
     }
   };
 
