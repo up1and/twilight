@@ -11,6 +11,15 @@ interface MultiSelectCompositeProps {
   maxSelections?: number;
 }
 
+// 用于在UI中显示的格式化名称类型
+type DisplayNameType = string;
+
+// 存储snake_case名称到显示名称的映射
+interface CompositeMapping {
+  value: CompositeType;
+  display: DisplayNameType;
+}
+
 export default function MultiSelectComposite({
   options,
   selectedOptions,
@@ -20,6 +29,23 @@ export default function MultiSelectComposite({
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [isCtrlPressed, setIsCtrlPressed] = useState(false);
+
+  // Format composite name for display (e.g., "day_convection" to "Day Convection")
+  const upperCase = (name: string): string => {
+    return name
+      .split("_")
+      .map((segment) =>
+        segment.length <= 2
+          ? segment.toUpperCase()
+          : segment[0].toUpperCase() + segment.slice(1).toLowerCase()
+      )
+      .join(" ");
+  };
+
+  options.map((option) => ({
+    value: option,
+    display: upperCase(option),
+  })) as CompositeMapping[];
 
   // Track Ctrl key state
   useEffect(() => {
@@ -88,10 +114,12 @@ export default function MultiSelectComposite({
     if (selectedOptions.length === 0) {
       return "Select layers";
     } else if (selectedOptions.length === 1) {
-      return selectedOptions[0];
+      return upperCase(selectedOptions[0]);
     } else {
       // Show both selected options with comma separator
-      return `${selectedOptions[0]}, ${selectedOptions[1]}`;
+      return `${upperCase(selectedOptions[0])}, ${upperCase(
+        selectedOptions[1]
+      )}`;
     }
   };
 
@@ -115,7 +143,7 @@ export default function MultiSelectComposite({
               }`}
               onClick={(e) => toggleOption(option, e)}
             >
-              <span>{option}</span>
+              <span>{upperCase(option)}</span>
               {selectedOptions.includes(option) && (
                 <span className="check-mark">✓</span>
               )}

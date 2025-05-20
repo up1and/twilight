@@ -23,8 +23,8 @@ client = Minio(
 )
 
 available_composites = [
-    'ir_clouds', 'true_color', 'day_cloud_phase_distinction', 'night_microphysics', 'fog',
-    'airmass', 'ash', 'water_vapor', 'day_convection', 'natural_color'
+    'ir_clouds', 'true_color',
+    'ash'
 ]
 
 def extract_timestamp_from_object_name(object_name):
@@ -223,7 +223,7 @@ def tilejson(composite):
                     "bounds": cog.get_geographic_bounds(cog.tms.rasterio_geographic_crs),
                     "minzoom": cog.minzoom,
                     "maxzoom": cog.maxzoom,
-                    "name": presigned_url,
+                    "name": extract_composite_from_object_name(object_name),
                     "tiles": [
                         f"{request.host_url.rstrip('/')}/{composite}/tiles/{'{time}'}/{'{z}'}/{'{x}'}/{'{y}'}.png"
                     ]

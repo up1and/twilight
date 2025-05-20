@@ -3,6 +3,7 @@
  * Handles API requests using ky HTTP client
  */
 import ky from "ky";
+import type { TileJSON } from "./types";
 
 // Get API configuration from localStorage
 export function getApiConfig() {
@@ -16,20 +17,6 @@ export function getApiConfig() {
 export function setApiConfig(config: { endpoint: string; token: string }) {
   localStorage.setItem("endpoint", config.endpoint);
   localStorage.setItem("token", config.token);
-}
-
-// Format composite name for display (e.g., "day_convection" to "Day Convection")
-export function formatCompositeName(name: string): string {
-  // Special case for ir_clouds
-  if (name === "ir_clouds") {
-    return "IR Clouds";
-  }
-
-  // Handle other cases with standard formatting
-  return name
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
 }
 
 // Create a ky instance with default options
@@ -58,5 +45,19 @@ export async function fetchLatestComposites(): Promise<Record<string, string>> {
   } catch (error) {
     console.error("Error fetching latest composites:", error);
     return {};
+  }
+}
+
+// Fetch TileJSON data for a composite
+export async function fetchTileJSON(
+  composite: string
+): Promise<TileJSON | null> {
+  try {
+    const apiClient = createApiClient();
+    const data = await apiClient.get(`${composite}.tilejson`).json<TileJSON>();
+    return data;
+  } catch (error) {
+    console.error(`Error fetching TileJSON for ${composite}:`, error);
+    return null;
   }
 }

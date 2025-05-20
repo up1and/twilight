@@ -14,16 +14,26 @@ import { useIsMobile } from "./hooks/use-mobile";
 import {
   getApiConfig,
   fetchLatestComposites,
-  formatCompositeName,
+  fetchTileJSON,
 } from "./utils/api-client";
 import "leaflet/dist/leaflet.css";
 import "./app.css";
 import type L from "leaflet";
+import { CRS } from "leaflet";
+import dayjs from "dayjs";
+import type { CompositeType, MapConfig } from "./utils/types";
 
-import type { CompositeType } from "./utils/types";
+// Format time to ISO 8601 string for tile URL
+const formatTimeForTileUrl = (time: dayjs.Dayjs): string => {
+  return time.format("YYYY-MM-DDTHH:mm:00");
+};
 
-// Default tile URL templates
-const DEFAULT_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+// Generate tile URL with time parameter
+const generateTileUrl = (baseUrl: string, time: dayjs.Dayjs): string => {
+  // Replace {time} placeholder with actual ISO 8601 time
+  const timeStr = formatTimeForTileUrl(time);
+  return baseUrl.replace("{time}", timeStr);
+};
 
 // Mouse position tracker component
 function MousePositionTracker({
@@ -45,12 +55,12 @@ function MousePositionTracker({
 // Default attribution based on composite type
 function getAttributionForComposite(compositeType: CompositeType): string {
   switch (compositeType) {
-    case "True Color":
-    case "IR Clouds":
+    case "true_color":
+    case "ir_clouds":
       return '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-    case "Ash":
-    case "Water Vapor":
-    case "Dust":
+    case "ash":
+    case "water_vapor":
+    case "dust":
       return '&copy; <a href="https://carto.com/attributions">CARTO</a>';
     default:
       return '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
@@ -59,18 +69,16 @@ function getAttributionForComposite(compositeType: CompositeType): string {
 
 export default function MapView() {
   // State for storing composites data from API (raw data)
-  const [compositesData, setCompositesData] = useState<Record<string, string>>(
-    {}
-  );
-
-  // State for storing formatted composite names for UI display
-  const [availableComposites, setAvailableComposites] = useState<
-    CompositeType[]
-  >([]);
+  const [composites, setComposites] = useState<Record<string, string>>({});
 
   const [selectedComposites, setSelectedComposites] = useState<CompositeType[]>(
-    ["True Color"]
+    ["true_color"]
   );
+
+  const [selectedTime, setSelectedTime] = useState<dayjs.Dayjs>(dayjs());
+
+  // Store map configurations for each selected composite
+  const [mapConfigs, setMapConfigs] = useState<Record<string, MapConfig>>({});
 
   // No longer need to store endpoint and token in component state
   const [mousePosition, setMousePosition] = useState<{
@@ -85,16 +93,7 @@ export default function MapView() {
     const fetchComposites = async () => {
       try {
         const data = await fetchLatestComposites();
-        setCompositesData(data);
-
-        // Update available composites with formatted names
-        if (Object.keys(data).length > 0) {
-          const formattedComposites = Object.keys(data).map(
-            (key) => formatCompositeName(key) as CompositeType
-          );
-          setAvailableComposites(formattedComposites);
-        }
-
+        setComposites(data);
         console.log("latest composites:", data);
       } catch (error) {
         console.error("error fetching composites:", error);
@@ -118,10 +117,54 @@ export default function MapView() {
   // Track if we need to reset layer clipping
   const [resetClipping, setResetClipping] = useState(false);
 
+  // Fetch TileJSON data for a specific composite
+  const fetchTileJSONForComposite = async (composite: CompositeType) => {
+    // Get the original key from formatted name
+    if (!composite) {
+      console.error(`Could not find original key for composite: ${composite}`);
+      return null;
+    }
+
+    try {
+      // Fetch TileJSON data
+      const tileJson = await fetchTileJSON(composite);
+
+      if (tileJson) {
+        // Create a MapConfig from TileJSON data
+        const mapConfig: MapConfig = {
+          bounds: tileJson.bounds
+            ? [
+                [tileJson.bounds[1], tileJson.bounds[0]],
+                [tileJson.bounds[3], tileJson.bounds[2]],
+              ]
+            : null,
+          minZoom: tileJson.minzoom || 1,
+          maxZoom: tileJson.maxzoom || 18,
+          tileUrl: tileJson.tiles[0],
+          attribution:
+            tileJson.attribution || getAttributionForComposite(composite),
+        };
+
+        // Update mapConfigs state
+        setMapConfigs((prev) => ({
+          ...prev,
+          [composite]: mapConfig,
+        }));
+
+        return mapConfig;
+      }
+    } catch (error) {
+      console.error(`Error fetching TileJSON for ${composite}:`, error);
+    }
+
+    // Return a default config if TileJSON fetch fails
+    return null;
+  };
+
   // Handle time change from TimeRangeSelector
   const handleTimeChange = (time: any) => {
     console.log("selected time:", time.format());
-    // Here you would update the map based on the selected time
+    setSelectedTime(time);
   };
 
   // Callback function when settings change
@@ -140,42 +183,13 @@ export default function MapView() {
   };
 
   // Get tile URL based on composite type
-  const getTileUrlForComposite = (compositeType: CompositeType): string => {
-    // Get the original key from formatted name
-    const getOriginalKey = (formattedName: string): string => {
-      for (const key of Object.keys(compositesData)) {
-        if (formatCompositeName(key) === formattedName) {
-          return key;
-        }
-      }
-      return "";
-    };
-
-    // Try to get the original key from compositesData
-    const originalKey = getOriginalKey(compositeType);
-
-    // If we have data for this composite, construct a URL with the endpoint
-    if (originalKey && compositesData[originalKey]) {
-      const { endpoint } = getApiConfig();
-      return `${endpoint}/tiles/${originalKey}/{z}/{x}/{y}.png`;
+  const getTileUrlForComposite = (composite: CompositeType): string => {
+    // Try to get the original key from composites
+    // First check if we have a mapConfig for this composite
+    if (mapConfigs[composite]) {
+      return generateTileUrl(mapConfigs[composite].tileUrl, selectedTime);
     }
-
-    // Fallback to static URLs if no data is available
-    switch (compositeType) {
-      case "True Color":
-        return DEFAULT_TILE_URL;
-      case "IR Clouds":
-        // In a real app, these would be actual URLs to your tile services
-        return "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-      case "Ash":
-        return "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png";
-      case "Water Vapor":
-        return "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png";
-      case "Dust":
-        return "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png";
-      default:
-        return DEFAULT_TILE_URL;
-    }
+    return "";
   };
 
   // Handle composite selection change
@@ -184,13 +198,8 @@ export default function MapView() {
     if (selected.length === 0) {
       return;
     }
-
-    // If we're going from 2 layers to 1 layer, we need to reset clipping
-    if (selectedComposites.length === 2 && selected.length === 1) {
-      setResetClipping(true);
-    }
-
     setSelectedComposites(selected);
+    console.log(getTileUrlForComposite(selectedComposites[0]));
   };
 
   // Reset clipping when going from 2 layers to 1 layer
@@ -206,48 +215,74 @@ export default function MapView() {
     }
   }, [resetClipping, selectedComposites]);
 
+  // Update map configurations when selected composites change
+  useEffect(() => {
+    // Update map configs for all selected composites
+    const updateMapConfigs = async () => {
+      for (const composite of selectedComposites) {
+        // if mapConfig has a corresponding composite name，fetchTileJSONForComposite is not called
+        if (!mapConfigs[composite]) {
+          await fetchTileJSONForComposite(composite);
+        }
+      }
+    };
+
+    updateMapConfigs();
+  }, [selectedComposites, composites]);
+
   return (
     <main style={{ height: "100vh", width: "100vw", overflow: "hidden" }}>
       <div className="map-container">
         {/* Map Container */}
-        <MapContainer
-          center={[51.505, -0.09]}
-          zoom={13}
-          zoomControl={false} // We'll add our own zoom control
-          className="leaflet-map"
-        >
-          {/* First Layer */}
-          {selectedComposites.length > 0 && (
-            <TileLayer
-              attribution={getAttributionForComposite(selectedComposites[0])}
-              url={getTileUrlForComposite(selectedComposites[0])}
-              ref={leftLayerRef}
-            />
-          )}
-
-          {/* Second Layer (only if two composites are selected) */}
-          {selectedComposites.length > 1 && (
-            <TileLayer
-              attribution={getAttributionForComposite(selectedComposites[1])}
-              url={getTileUrlForComposite(selectedComposites[1])}
-              ref={rightLayerRef}
-            />
-          )}
-
-          {/* Side-by-side control - only show if two layers are selected */}
-          {selectedComposites.length > 1 &&
-            leftLayerRef.current &&
-            rightLayerRef.current && (
-              <SideBySide
-                leftLayer={leftLayerRef.current}
-                rightLayer={rightLayerRef.current}
-                initialPosition={50}
+        {selectedComposites.length > 0 && mapConfigs[selectedComposites[0]] && (
+          <MapContainer
+            center={[51.505, -0.09]}
+            zoom={13}
+            zoomControl={false} // We'll add our own zoom control
+            className="leaflet-map"
+            minZoom={mapConfigs[selectedComposites[0]]?.minZoom || 1}
+            maxZoom={mapConfigs[selectedComposites[0]]?.maxZoom || 18}
+            bounds={
+              mapConfigs[selectedComposites[0]]?.bounds as
+                | L.LatLngBoundsExpression
+                | undefined
+            }
+            crs={CRS.EPSG3857}
+            keyboard={false}
+          >
+            {/* First Layer */}
+            {selectedComposites.length > 0 && (
+              <TileLayer
+                attribution={getAttributionForComposite(selectedComposites[0])}
+                url={getTileUrlForComposite(selectedComposites[0])}
+                ref={leftLayerRef}
               />
             )}
 
-          <ZoomControl position="topleft" />
-          <MousePositionTracker onPositionChange={handlePositionChange} />
-        </MapContainer>
+            {/* Second Layer (only if two composites are selected) */}
+            {selectedComposites.length > 1 && (
+              <TileLayer
+                attribution={getAttributionForComposite(selectedComposites[1])}
+                url={getTileUrlForComposite(selectedComposites[1])}
+                ref={rightLayerRef}
+              />
+            )}
+
+            {/* Side-by-side control - only show if two layers are selected */}
+            {selectedComposites.length > 1 &&
+              leftLayerRef.current &&
+              rightLayerRef.current && (
+                <SideBySide
+                  leftLayer={leftLayerRef.current}
+                  rightLayer={rightLayerRef.current}
+                  initialPosition={50}
+                />
+              )}
+
+            <ZoomControl position="topleft" />
+            <MousePositionTracker onPositionChange={handlePositionChange} />
+          </MapContainer>
+        )}
 
         {/* Coordinates Display */}
         {mousePosition && (
@@ -257,7 +292,7 @@ export default function MapView() {
         {/* Controls Overlay */}
         <div className="map-controls">
           <MultiSelectComposite
-            options={availableComposites}
+            options={Object.keys(composites)}
             selectedOptions={selectedComposites}
             onChange={handleCompositeChange}
             maxSelections={2}

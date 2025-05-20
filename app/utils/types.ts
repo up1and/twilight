@@ -1,11 +1,11 @@
 import dayjs from "dayjs";
 
 export type CompositeType =
-  | "True Color"
-  | "IR Clouds"
-  | "Ash"
-  | "Water Vapor"
-  | "Dust";
+  | "true_color"
+  | "ir_clouds"
+  | "ash"
+  | "water_vapor"
+  | string;
 
 export interface ImageType {
   datetime: dayjs.Dayjs;
