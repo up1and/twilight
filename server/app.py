@@ -1,4 +1,5 @@
 import datetime
+import re
 
 from flask import Flask, Response, request, jsonify
 from rio_tiler.io import Reader
@@ -26,24 +27,91 @@ available_composites = [
     'airmass', 'ash', 'water_vapor', 'day_convection', 'natural_color'
 ]
 
-def find_composite_object(composite, time=None):
-    if time:
-        filename = 'himawari_{}_{}.tif'.format(composite, time.strftime('%Y%m%d_%H%M'))
-        object_name = '{}/{}/{}'.format(
-            composite, time.strftime('%Y/%m/%d'), filename
-        )
-        return object_name
-    else:
-        objects = client.list_objects('himawari', prefix=composite, recursive=True)
-        object = list(objects)[-1]
-        return object.object_name
+def extract_timestamp_from_object_name(object_name):
+    """
+    Extract timestamp from object name
+    Expected format: composite/YYYY/MM/DD/himawari_composite_YYYYMMDD_HHMM.tif
+    """
+    match = re.search(r'_(\d{8})_(\d{4})\.tif$', object_name)
+    if match:
+        date_str = match.group(1)
+        time_str = match.group(2)
+        try:
+            return datetime.datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M")
+        except ValueError:
+            app.logger.warning(f"Failed to parse timestamp from {object_name}")
+    return None
+
+def extract_composite_from_object_name(object_name):
+    """
+    Extract composite name from object name
+    """
+    # Try to extract from the filename
+    for composite in available_composites:
+        if f"himawari_{composite}_" in object_name:
+            return composite
+
+    return None
+
+# Dictionary to store the latest update time for each composite
+composite_state = {composite: None for composite in available_composites}
+
+def initialize_composite_state():
+    """
+    Initialize composite_state with the latest objects from MinIO
+    """
+    app.logger.info("Initializing composite state...")
+
+    # Get all objects from MinIO in one call
+    try:
+        objects = list(client.list_objects('himawari', recursive=True))
+        # Group objects by composite
+        composite_objects = {}
+        for obj in objects:
+            composite_name = extract_composite_from_object_name(obj.object_name)
+            if composite_name and composite_name in available_composites:
+                if composite_name not in composite_objects:
+                    composite_objects[composite_name] = []
+                composite_objects[composite_name].append(obj)
+
+        # Find the latest timestamp for each composite
+        for composite, objects in composite_objects.items():
+            latest_timestamp = None
+
+            for obj in objects:
+                timestamp = extract_timestamp_from_object_name(obj.object_name)
+                if timestamp and (latest_timestamp is None or timestamp > latest_timestamp):
+                    latest_timestamp = timestamp
+
+            if latest_timestamp:
+                composite_state[composite] = latest_timestamp
+                app.logger.info(f"Found latest timestamp for {composite}: {latest_timestamp}")
+            else:
+                app.logger.info(f"No valid timestamp found for {composite}")
+
+    except Exception as e:
+        app.logger.error(f"Error initializing composite state: {str(e)}")
+
+
+initialize_composite_state()
+
+def find_composite_object(composite, timestamp=None):
+    """
+    Find the object name for a composite, either for a specific time or the latest
+    """
+    timestamp = timestamp if timestamp else composite_state.get(composite)
+    filename = 'himawari_{}_{}.tif'.format(composite, timestamp.strftime('%Y%m%d_%H%M'))
+    object_name = '{}/{}/{}'.format(
+        composite, timestamp.strftime('%Y/%m/%d'), filename
+    )
+    return object_name
 
 @app.after_request
 def after_request(response):
     response.headers.add('Access-Control-Allow-Origin', '*')
     return response
 
-def find_tile(composite, z, x, y, time=None):
+def find_tile(composite, z, x, y, timestamp=None):
     """
     Common function to handle tile requests with or without time parameter
     """
@@ -55,12 +123,8 @@ def find_tile(composite, z, x, y, time=None):
         }
         return jsonify(error_msg), 404
 
-    # Use provided time or default
-    if time is None:
-        time = datetime.datetime(2025, 4, 20, 4, 0)
-
     try:
-        object_name = find_composite_object(composite, time)
+        object_name = find_composite_object(composite, timestamp)
 
         try:
             presigned_url = client.presigned_get_object(
@@ -106,30 +170,30 @@ def find_tile(composite, z, x, y, time=None):
             return jsonify(error_msg), 500
 
     except S3Error as e:
-        app.logger.error(f"S3 error for {composite} at time {time}: {str(e)}", exc_info=True)
+        app.logger.error(f"S3 error for {composite} at time {timestamp}: {str(e)}", exc_info=True)
         error_msg = {
             "error": "S3 Error",
             "message": f"Error accessing object storage: {str(e)}",
             "composite": composite,
-            "time": time.isoformat() if time else None
+            "time": timestamp if timestamp else None
         }
         return jsonify(error_msg), 500
 
-@app.route("/<composite>/tiles/<time>/<int:z>/<int:x>/<int:y>.png")
-def tile(composite, time, z, x, y):
+@app.route("/<composite>/tiles/<timestamp>/<int:z>/<int:x>/<int:y>.png")
+def tile(composite, timestamp, z, x, y):
     """
     Tile request with ISO 8601 time format
     test url: http://localhost:5000/ash/tiles/2025-04-20T04:00:00/5/25/15.png
     """
     try:
         # Parse ISO 8601 time string
-        request_time = datetime.datetime.fromisoformat(time)
+        request_time = datetime.datetime.fromisoformat(timestamp)
         return find_tile(composite, z, x, y, request_time)
     except ValueError:
         error_msg = {
             "error": "Invalid Time Format",
             "message": "Invalid time format. Please use ISO 8601 format (e.g., 2023-04-20T04:00:00)",
-            "provided_time": time
+            "provided_time": timestamp
         }
         return jsonify(error_msg), 400
 
@@ -204,15 +268,64 @@ def index():
             "tiles": {
                 "standard": "/{composite}/tiles/{time}/{z}/{x}/{y}.png (ISO 8601 time format)"
             },
-            "tilejson": "/{composite}.tilejson"
+            "tilejson": "/{composite}.tilejson",
+            "latest_times": "/composites/latest"
         },
         "examples": {
             "standard_tile": f"/{available_composites[0]}/tiles/2025-04-20T04:00:00/5/25/15.png",
-            "tilejson": f"/{available_composites[0]}.tilejson"
+            "tilejson": f"/{available_composites[0]}.tilejson",
+            "latest_times": "/composites/latest"
         }
     }
     return jsonify(info)
 
+
+@app.route('/minio/events', methods=['GET', 'POST'])
+def minio_event():
+    """
+    Handle MinIO events for object creation/update
+    """
+    if request.method == 'POST':
+        try:
+            event = request.get_json()
+            object_key = event.get('Key', '')
+            # Split bucket name and object name
+            parts = object_key.split('/', 1)
+            if len(parts) < 2:
+                return jsonify({"error": "Invalid Key format"}), 400
+
+            _, object_name = parts
+
+            composite_name = extract_composite_from_object_name(object_name)
+            timestamp = extract_timestamp_from_object_name(object_name)
+            if composite_name and timestamp:
+                # Only update if the timestamp is newer than what we have
+                current_timestamp = composite_state.get(composite_name)
+                if current_timestamp is None or timestamp > current_timestamp:
+                    # Update composite_state with the new timestamp
+                    composite_state[composite_name] = timestamp
+                    app.logger.info(f"Updated state for {composite_name}: {timestamp}")
+
+            return jsonify(event), 201
+
+        except Exception as e:
+            app.logger.error(f"Error processing MinIO event: {str(e)}", exc_info=True)
+            return jsonify({"error": str(e)}), 500
+
+    else:
+        # GET request - return service status and composite state
+        result = {
+            'live': datetime.datetime.now(datetime.timezone.utc),
+        }
+        return jsonify(result)
+
+
+@app.route('/composites/latest', methods=['GET'])
+def latest_composite_state():
+    """
+    Get the latest update time for all composites
+    """
+    return jsonify(composite_state)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
