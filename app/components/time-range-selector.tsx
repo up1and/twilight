@@ -6,11 +6,13 @@ import "./time-range-selector.css";
 
 interface TimeRangeSelectorProps {
   initialTime?: Date | string | dayjs.Dayjs;
+  selectedTime?: dayjs.Dayjs | null;
   onTimeChange?: (time: dayjs.Dayjs) => void;
 }
 
 export default function TimeRangeSelector({
   initialTime = dayjs(),
+  selectedTime = null,
   onTimeChange,
 }: TimeRangeSelectorProps) {
   // Initialize time, ensuring minutes are rounded to the nearest 10
@@ -26,7 +28,7 @@ export default function TimeRangeSelector({
   const [currentTime, setCurrentTime] = useState<dayjs.Dayjs>(
     roundToNearestTenMinutes(new Date())
   );
-  const [selectedTime, setSelectedTime] = useState<dayjs.Dayjs>(
+  const [selectedTimeState, setSelectedTime] = useState<dayjs.Dayjs>(
     roundToNearestTenMinutes(initialTime)
   );
   const [lookbackHours, setLookbackHours] = useState<number>(6); // Default to 6 hours lookback
@@ -120,9 +122,9 @@ export default function TimeRangeSelector({
     const startTime = getStartTime();
     const endTime = getEndTime();
 
-    if (selectedTime.isBefore(startTime)) {
+    if (selectedTimeState.isBefore(startTime)) {
       updateSelectedTime(startTime);
-    } else if (selectedTime.isAfter(endTime)) {
+    } else if (selectedTimeState.isAfter(endTime)) {
       updateSelectedTime(endTime);
     }
   }, [lookbackHours, currentTime]);
@@ -150,6 +152,10 @@ export default function TimeRangeSelector({
       Math.floor(percentage * timeIntervals.length),
       timeIntervals.length - 1
     );
+
+    // Add additional safety checks
+    if (index < 0 || index >= timeIntervals.length) return;
+    if (!timeIntervals[index] || !timeIntervals[index].time) return;
 
     // Use the exact time from the interval
     updateSelectedTime(timeIntervals[index].time);
@@ -184,7 +190,7 @@ export default function TimeRangeSelector({
 
     setDragStartX(startX);
     setDragStartTime(currentTime);
-    setDragStartSelectedTime(selectedTime);
+    setDragStartSelectedTime(selectedTimeState);
     setHasMoved(false); // Reset movement tracking
 
     // Pause playback if dragging
@@ -213,6 +219,10 @@ export default function TimeRangeSelector({
         timeIntervals.length - 1
       );
 
+      // Add safety check
+      if (index < 0 || index >= timeIntervals.length) return;
+      if (!timeIntervals[index] || !timeIntervals[index].time) return;
+
       // Use the exact time from the interval
       updateSelectedTime(timeIntervals[index].time);
     };
@@ -234,6 +244,10 @@ export default function TimeRangeSelector({
         Math.floor(percentage * timeIntervals.length),
         timeIntervals.length - 1
       );
+
+      // Add safety check
+      if (index < 0 || index >= timeIntervals.length) return;
+      if (!timeIntervals[index] || !timeIntervals[index].time) return;
 
       // Use the exact time from the interval
       updateSelectedTime(timeIntervals[index].time);
@@ -393,7 +407,7 @@ export default function TimeRangeSelector({
 
         // Find current index
         const currentIndex = timeIntervals.findIndex(
-          (interval) => interval.time.format() === selectedTime.format()
+          (interval) => interval.time.format() === selectedTimeState.format()
         );
 
         if (currentIndex === -1) return;
@@ -404,20 +418,23 @@ export default function TimeRangeSelector({
         // Ensure we stay within bounds
         newIndex = Math.max(0, Math.min(newIndex, timeIntervals.length - 1));
 
+        // Add safety check
+        if (!timeIntervals[newIndex] || !timeIntervals[newIndex].time) return;
+
         updateSelectedTime(timeIntervals[newIndex].time);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedTime, timeIntervals]);
+  }, [selectedTimeState, timeIntervals]);
 
   // Handle playback
   useEffect(() => {
     if (!isPlaying || timeIntervals.length === 0) return;
 
     const currentIndex = timeIntervals.findIndex(
-      (interval) => interval.time.format() === selectedTime.format()
+      (interval) => interval.time.format() === selectedTimeState.format()
     );
 
     // If at the end or not found, stop playback
@@ -429,7 +446,11 @@ export default function TimeRangeSelector({
     // Set up timer to advance to next interval
     const timer = setTimeout(() => {
       const nextIndex = currentIndex + 1;
-      if (nextIndex < timeIntervals.length) {
+      if (
+        nextIndex < timeIntervals.length &&
+        timeIntervals[nextIndex] &&
+        timeIntervals[nextIndex].time
+      ) {
         updateSelectedTime(timeIntervals[nextIndex].time);
       } else {
         setIsPlaying(false);
@@ -437,7 +458,7 @@ export default function TimeRangeSelector({
     }, 500); // Fixed speed of 500ms per step
 
     return () => clearTimeout(timer);
-  }, [isPlaying, selectedTime, timeIntervals]);
+  }, [isPlaying, selectedTimeState, timeIntervals]);
 
   // Toggle play/pause
   const togglePlayback = () => {
@@ -445,7 +466,7 @@ export default function TimeRangeSelector({
       setIsPlaying(false);
     } else {
       // If at the end, restart from beginning
-      if (selectedTime.format() === currentTime.format()) {
+      if (selectedTimeState.format() === currentTime.format()) {
         updateSelectedTime(getStartTime());
       }
       setIsPlaying(true);
@@ -458,7 +479,7 @@ export default function TimeRangeSelector({
 
     // Find the index of the selected time in the intervals
     const index = timeIntervals.findIndex(
-      (interval) => interval.time.format() === selectedTime.format()
+      (interval) => interval.time.format() === selectedTimeState.format()
     );
 
     // If not found, find the closest interval
@@ -467,10 +488,12 @@ export default function TimeRangeSelector({
       let minDiff = Number.POSITIVE_INFINITY;
 
       timeIntervals.forEach((interval, i) => {
-        const diff = Math.abs(interval.time.diff(selectedTime));
-        if (diff < minDiff) {
-          minDiff = diff;
-          closestIndex = i;
+        if (interval && interval.time) {
+          const diff = Math.abs(interval.time.diff(selectedTimeState));
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestIndex = i;
+          }
         }
       });
 
@@ -490,12 +513,43 @@ export default function TimeRangeSelector({
     const newEndTime = parseDateTimeInput(e.target.value);
     // Prevent selecting future dates
     const currentRealTime = dayjs();
+    let updatedEndTime;
+
     if (newEndTime.isAfter(currentRealTime)) {
-      setCurrentTime(roundToNearestTenMinutes(currentRealTime));
+      updatedEndTime = roundToNearestTenMinutes(currentRealTime);
     } else {
-      setCurrentTime(roundToNearestTenMinutes(newEndTime));
+      updatedEndTime = roundToNearestTenMinutes(newEndTime);
     }
+
+    setCurrentTime(updatedEndTime);
   };
+
+  // Add an effect to handle changes to selectedTime prop
+  useEffect(() => {
+    if (selectedTime) {
+      // Update the selected time without changing the time range
+      setSelectedTime(roundToNearestTenMinutes(selectedTime));
+
+      // If the selected time is outside the current range, update the range
+      const startTime = getStartTime();
+      const endTime = getEndTime();
+
+      if (selectedTime.isBefore(startTime) || selectedTime.isAfter(endTime)) {
+        // Calculate new current time based on selected time and lookback hours
+        const newCurrentTime = roundToNearestTenMinutes(
+          selectedTime.add(lookbackHours, "hour")
+        );
+        setCurrentTime(newCurrentTime);
+      }
+    }
+  }, [selectedTime]);
+
+  // Ensure timeIntervals is initialized before rendering
+  useEffect(() => {
+    if (timeIntervals.length === 0) {
+      setTimeIntervals(generateTimeIntervals());
+    }
+  }, []);
 
   return (
     <div className={`time-range-selector ${isMobile ? "mobile" : ""}`}>
@@ -590,7 +644,7 @@ export default function TimeRangeSelector({
             >
               {/* Time display above the marker */}
               <div className="marker-label">
-                {formatFullDateTime(selectedTime)}
+                {formatFullDateTime(selectedTimeState)}
               </div>
 
               {/* Triangle pointer */}

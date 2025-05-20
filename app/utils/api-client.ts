@@ -34,7 +34,22 @@ const createApiClient = () => {
   });
 };
 
-// Fetch latest composites
+/**
+ * Fetches the latest available timestamps for each composite type
+ *
+ * @returns A Promise resolving to a Record where:
+ *   - Keys are composite names (e.g., 'true_color', 'ir_clouds', 'ash')
+ *   - Values are ISO 8601 timestamp strings (e.g., 'Fri, 20 Apr 2025 04:00:00 GMT')
+ *
+ * Example response:
+ * {
+ *   "true_color": "Fri, 20 Apr 2025 04:00:00 GMT",
+ *   "ir_clouds": "Fri, 20 Apr 2025 04:00:00 GMT",
+ *   "ash": "Fri, 20 Apr 2025 03:30:00 GMT"
+ * }
+ *
+ * This data is used to determine the most recent available imagery for each composite type.
+ */
 export async function fetchLatestComposites(): Promise<Record<string, string>> {
   try {
     const apiClient = createApiClient();
@@ -48,7 +63,24 @@ export async function fetchLatestComposites(): Promise<Record<string, string>> {
   }
 }
 
-// Fetch TileJSON data for a composite
+/**
+ * Fetches TileJSON metadata for a specific composite type
+ *
+ * @param composite - The composite name (e.g., 'true_color', 'ir_clouds', 'ash')
+ * @returns A Promise resolving to a TileJSON object or null if the request fails
+ *
+ * Example TileJSON response:
+ * {
+ *   "tiles": ["https://example.com/true_color/tiles/{time}/{z}/{x}/{y}.png"],
+ *   "bounds": [70.0, 0.0, 150.0, 55.0],  // [minLng, minLat, maxLng, maxLat]
+ *   "minzoom": 1,
+ *   "maxzoom": 10,
+ *   "attribution": "© Himawari Satellite Data"
+ * }
+ *
+ * This data is used to configure the map view with appropriate bounds, zoom levels,
+ * and tile URL templates that include time parameters for dynamic tile loading.
+ */
 export async function fetchTileJSON(
   composite: string
 ): Promise<TileJSON | null> {

@@ -91,9 +91,21 @@ export default function MapView() {
   useEffect(() => {
     // Function to fetch composites
     const fetchComposites = async () => {
+      const now = dayjs();
+      const diff = now.diff(selectedTime);
+      if (diff > 3600000) {
+        return;
+      }
       try {
         const data = await fetchLatestComposites();
+        const timestamps = selectedComposites
+          .filter((composite) => composite in data)
+          .map((composite) => dayjs(data[composite]));
+        const earliestTime = timestamps.reduce((earliest, current) =>
+          current.isBefore(earliest) ? current : earliest
+        );
         setComposites(data);
+        setSelectedTime(earliestTime);
         console.log("latest composites:", data);
       } catch (error) {
         console.error("error fetching composites:", error);
@@ -302,7 +314,10 @@ export default function MapView() {
 
         {/* TimeRangeSelector at the bottom */}
         <div className={`time-selector-container ${isMobile ? "mobile" : ""}`}>
-          <TimeRangeSelector onTimeChange={handleTimeChange} />
+          <TimeRangeSelector
+            onTimeChange={handleTimeChange}
+            selectedTime={selectedTime}
+          />
         </div>
       </div>
     </main>
