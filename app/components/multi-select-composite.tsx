@@ -11,10 +11,10 @@ interface MultiSelectCompositeProps {
   maxSelections?: number;
 }
 
-// 用于在UI中显示的格式化名称类型
+// Types of formatted names for display in the UI
 type DisplayNameType = string;
 
-// 存储snake_case名称到显示名称的映射
+// Stores a mapping of snake_case names to display names
 interface CompositeMapping {
   value: CompositeType;
   display: DisplayNameType;
@@ -130,7 +130,20 @@ export default function MultiSelectComposite({
         onClick={() => setIsOpen(!isOpen)}
       >
         {getDisplayText()}
-        <span className="dropdown-arrow">▼</span>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="dropdown-icon"
+        >
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
       </button>
 
       {isOpen && (
@@ -145,7 +158,21 @@ export default function MultiSelectComposite({
             >
               <span>{upperCase(option)}</span>
               {selectedOptions.includes(option) && (
-                <span className="check-mark">✓</span>
+                <span className="check-mark">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                </span>
               )}
             </div>
           ))}

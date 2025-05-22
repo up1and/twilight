@@ -28,8 +28,7 @@
   background-color: var(--background-hover);
 }
 
-.dropdown-arrow {
-  font-size: 8px;
+.dropdown-icon {
   margin-left: 5px;
   flex-shrink: 0;
 }
@@ -66,5 +65,7 @@
 
 .check-mark {
   color: var(--secondary);
-  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }

@@ -563,18 +563,34 @@ export default function TimeRangeSelector({
             {isPlaying ? "Pause" : "Play"}
           </button>
 
-          {/* Lookback hours selector - moved before datetime picker */}
-          <select
-            className="lookback-selector"
-            value={lookbackHours}
-            onChange={(e) => handleLookbackChange(Number(e.target.value))}
-          >
-            <option value={6}>Last 6 hours</option>
-            <option value={12}>Last 12 hours</option>
-            <option value={24}>Last 24 hours</option>
-          </select>
+          {/* Lookback hours selector*/}
+          <div className="lookback-wrapper">
+            <select
+              className="lookback-selector"
+              value={lookbackHours}
+              onChange={(e) => handleLookbackChange(Number(e.target.value))}
+            >
+              <option value={6}>Last 6 hours</option>
+              <option value={12}>Last 12 hours</option>
+              <option value={24}>Last 24 hours</option>
+            </select>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="select-icon"
+            >
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </div>
 
-          {/* Datetime picker - moved after lookback selector */}
+          {/* Datetime picker */}
           <div className="datetime-picker">
             <input
               type="datetime-local"
