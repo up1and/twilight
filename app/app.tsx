@@ -1,10 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import {
-  MapContainer,
-  TileLayer,
-  ZoomControl,
-  useMapEvents,
-} from "react-leaflet";
+import { MapContainer, TileLayer, GeoJSON, useMapEvents } from "react-leaflet";
 import TimeRangeSelector from "./components/time-range-selector";
 import SettingsButton from "./components/settings-button";
 import MultiSelectComposite from "./components/multi-select-composite";
@@ -19,19 +14,19 @@ import {
 import "leaflet/dist/leaflet.css";
 import "./app.css";
 import type L from "leaflet";
-import { CRS } from "leaflet";
+import { LatLngTuple, CRS } from "leaflet";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
 import type { CompositeType, MapConfig } from "./utils/types";
+import lands from "./natural-earth.json";
 
-// Format time to ISO 8601 string for tile URL
-const formatTimeForTileUrl = (time: dayjs.Dayjs): string => {
-  return time.format("YYYY-MM-DDTHH:mm:00");
-};
+// Extend dayjs with UTC plugin
+dayjs.extend(utc);
 
 // Generate tile URL with time parameter
 const generateTileUrl = (baseUrl: string, time: dayjs.Dayjs): string => {
-  // Replace {time} placeholder with actual ISO 8601 time
-  const timeStr = formatTimeForTileUrl(time);
+  // Replace {time} placeholder with actual ISO 8601 time in UTC
+  const timeStr = time.utc().format("YYYY-MM-DDTHH:mm:ss");
   return baseUrl.replace("{time}", timeStr);
 };
 
@@ -50,21 +45,6 @@ function MousePositionTracker({
     },
   });
   return null;
-}
-
-// Default attribution based on composite type
-function getAttributionForComposite(compositeType: CompositeType): string {
-  switch (compositeType) {
-    case "true_color":
-    case "ir_clouds":
-      return '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-    case "ash":
-    case "water_vapor":
-    case "dust":
-      return '&copy; <a href="https://carto.com/attributions">CARTO</a>';
-    default:
-      return '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-  }
 }
 
 export default function MapView() {
@@ -153,8 +133,7 @@ export default function MapView() {
           minZoom: tileJson.minzoom || 1,
           maxZoom: tileJson.maxzoom || 18,
           tileUrl: tileJson.tiles[0],
-          attribution:
-            tileJson.attribution || getAttributionForComposite(composite),
+          attribution: tileJson.attribution || "",
         };
 
         // Update mapConfigs state
@@ -195,8 +174,7 @@ export default function MapView() {
   };
 
   // Get tile URL based on composite type
-  const getTileUrlForComposite = (composite: CompositeType): string => {
-    // Try to get the original key from composites
+  const tileUrl = (composite: CompositeType): string => {
     // First check if we have a mapConfig for this composite
     if (mapConfigs[composite]) {
       return generateTileUrl(mapConfigs[composite].tileUrl, selectedTime);
@@ -211,7 +189,7 @@ export default function MapView() {
       return;
     }
     setSelectedComposites(selected);
-    console.log(getTileUrlForComposite(selectedComposites[0]));
+    console.log(tileUrl(selectedComposites[0]));
   };
 
   // Reset clipping when going from 2 layers to 1 layer
@@ -242,59 +220,66 @@ export default function MapView() {
     updateMapConfigs();
   }, [selectedComposites, composites]);
 
+  const position: LatLngTuple = [18, 110];
+  const bounds: [LatLngTuple, LatLngTuple] = [
+    [0, 70], // south west
+    [55, 150], // north east
+  ];
+
   return (
     <main style={{ height: "100vh", width: "100vw", overflow: "hidden" }}>
       <div className="map-container">
         {/* Map Container */}
-        {selectedComposites.length > 0 && mapConfigs[selectedComposites[0]] && (
-          <MapContainer
-            center={[51.505, -0.09]}
-            zoom={13}
-            zoomControl={false} // We'll add our own zoom control
-            className="leaflet-map"
-            minZoom={mapConfigs[selectedComposites[0]]?.minZoom || 1}
-            maxZoom={mapConfigs[selectedComposites[0]]?.maxZoom || 18}
-            bounds={
-              mapConfigs[selectedComposites[0]]?.bounds as
-                | L.LatLngBoundsExpression
-                | undefined
-            }
-            crs={CRS.EPSG3857}
-            keyboard={false}
-          >
-            {/* First Layer */}
-            {selectedComposites.length > 0 && (
-              <TileLayer
-                attribution={getAttributionForComposite(selectedComposites[0])}
-                url={getTileUrlForComposite(selectedComposites[0])}
-                ref={leftLayerRef}
+        <MapContainer
+          className="leaflet-map"
+          center={position}
+          zoom={6}
+          maxBoundsViscosity={1.0}
+          minZoom={mapConfigs[selectedComposites[0]]?.minZoom || 4}
+          maxZoom={mapConfigs[selectedComposites[0]]?.maxZoom || 6}
+          bounds={bounds}
+          crs={CRS.EPSG3857}
+          keyboard={false}
+        >
+          {/* First Layer */}
+          <TileLayer
+            url={tileUrl(selectedComposites[0])}
+            ref={leftLayerRef}
+            key={`${selectedComposites[0]}-${selectedTime.format()}`}
+          />
+
+          {/* Second Layer (only if two composites are selected) */}
+          {selectedComposites.length > 1 && (
+            <TileLayer
+              url={tileUrl(selectedComposites[1])}
+              ref={rightLayerRef}
+              key={`${selectedComposites[1]}-${selectedTime.format()}`}
+            />
+          )}
+
+          {/* Side-by-side control - only show if two layers are selected */}
+          {selectedComposites.length > 1 &&
+            leftLayerRef.current &&
+            rightLayerRef.current && (
+              <SideBySide
+                leftLayer={leftLayerRef.current}
+                rightLayer={rightLayerRef.current}
+                initialPosition={50}
               />
             )}
 
-            {/* Second Layer (only if two composites are selected) */}
-            {selectedComposites.length > 1 && (
-              <TileLayer
-                attribution={getAttributionForComposite(selectedComposites[1])}
-                url={getTileUrlForComposite(selectedComposites[1])}
-                ref={rightLayerRef}
-              />
-            )}
+          <GeoJSON
+            data={lands as GeoJSON.GeoJsonObject}
+            style={{
+              color: "#828282",
+              weight: 2,
+              opacity: 1,
+              fillOpacity: 0,
+            }}
+          />
 
-            {/* Side-by-side control - only show if two layers are selected */}
-            {selectedComposites.length > 1 &&
-              leftLayerRef.current &&
-              rightLayerRef.current && (
-                <SideBySide
-                  leftLayer={leftLayerRef.current}
-                  rightLayer={rightLayerRef.current}
-                  initialPosition={50}
-                />
-              )}
-
-            <ZoomControl position="topleft" />
-            <MousePositionTracker onPositionChange={handlePositionChange} />
-          </MapContainer>
-        )}
+          <MousePositionTracker onPositionChange={handlePositionChange} />
+        </MapContainer>
 
         {/* Coordinates Display */}
         {mousePosition && (

@@ -39,7 +39,7 @@ const createApiClient = () => {
  *
  * @returns A Promise resolving to a Record where:
  *   - Keys are composite names (e.g., 'true_color', 'ir_clouds', 'ash')
- *   - Values are ISO 8601 timestamp strings (e.g., 'Fri, 20 Apr 2025 04:00:00 GMT')
+ *   - Values are RFC 822 timestamp strings (e.g., 'Fri, 20 Apr 2025 04:00:00 GMT')
  *
  * Example response:
  * {
