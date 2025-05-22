@@ -14,7 +14,7 @@ import {
 import "leaflet/dist/leaflet.css";
 import "./app.css";
 import type L from "leaflet";
-import { LatLngTuple, CRS } from "leaflet";
+import { CRS, LatLngTuple } from "leaflet";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import type { CompositeType, MapConfig } from "./utils/types";
@@ -22,6 +22,18 @@ import lands from "./natural-earth.json";
 
 // Extend dayjs with UTC plugin
 dayjs.extend(utc);
+
+// Define map bounds
+const MAP_BOUNDS: L.LatLngBoundsExpression = [
+  [0.0, 70.0], // Southwest corner [lat, lng]
+  [55.0, 150.0], // Northeast corner [lat, lng]
+];
+
+// Calculate center of bounds
+const MAP_CENTER: LatLngTuple = [
+  (MAP_BOUNDS[0][0] + MAP_BOUNDS[1][0]) / 2,
+  (MAP_BOUNDS[0][1] + MAP_BOUNDS[1][1]) / 2,
+];
 
 // Generate tile URL with time parameter
 const generateTileUrl = (baseUrl: string, time: dayjs.Dayjs): string => {
@@ -220,24 +232,19 @@ export default function MapView() {
     updateMapConfigs();
   }, [selectedComposites, composites]);
 
-  const position: LatLngTuple = [18, 110];
-  const bounds: [LatLngTuple, LatLngTuple] = [
-    [0, 70], // south west
-    [55, 150], // north east
-  ];
-
   return (
     <main style={{ height: "100vh", width: "100vw", overflow: "hidden" }}>
       <div className="map-container">
         {/* Map Container */}
         <MapContainer
           className="leaflet-map"
-          center={position}
+          center={MAP_CENTER}
           zoom={6}
+          minZoom={mapConfigs[selectedComposites[0]]?.minZoom || 5}
+          maxZoom={mapConfigs[selectedComposites[0]]?.maxZoom || 10}
+          maxBounds={MAP_BOUNDS}
           maxBoundsViscosity={1.0}
-          minZoom={mapConfigs[selectedComposites[0]]?.minZoom || 4}
-          maxZoom={mapConfigs[selectedComposites[0]]?.maxZoom || 6}
-          bounds={bounds}
+          bounds={MAP_BOUNDS}
           crs={CRS.EPSG3857}
           keyboard={false}
         >
@@ -246,6 +253,8 @@ export default function MapView() {
             url={tileUrl(selectedComposites[0])}
             ref={leftLayerRef}
             key={`${selectedComposites[0]}-${selectedTime.format()}`}
+            noWrap={true}
+            bounds={MAP_BOUNDS}
           />
 
           {/* Second Layer (only if two composites are selected) */}
@@ -254,6 +263,8 @@ export default function MapView() {
               url={tileUrl(selectedComposites[1])}
               ref={rightLayerRef}
               key={`${selectedComposites[1]}-${selectedTime.format()}`}
+              noWrap={true}
+              bounds={MAP_BOUNDS}
             />
           )}
 
