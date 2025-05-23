@@ -13,11 +13,9 @@ def timing(f):
         te = time.time()
         duration = te - ts
 
-        # Store timing info in the result if it's a tuple, otherwise create a tuple
-        if isinstance(result, tuple):
-            return result + (duration,)
-        else:
-            return (result, duration)
+        # Log timing information
+        logger.info(f"Function '{f.__name__}' completed in {duration:.2f}s")
+        return result
     return wrap
 
 def createLogger(debug=False):
