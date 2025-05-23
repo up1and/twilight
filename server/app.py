@@ -23,8 +23,7 @@ client = Minio(
 )
 
 available_composites = [
-    'ir_clouds', 'true_color',
-    'ash'
+    'ir_clouds', 'true_color', 'ash', 'night_microphysics'
 ]
 
 def extract_timestamp_from_object_name(object_name):

@@ -11,8 +11,13 @@ def timing(f):
         ts = time.time()
         result = f(*args, **kw)
         te = time.time()
-        logger.debug('func {} args [{}, {}] took: {:.2f} sec'.format(f.__name__, args, kw, te-ts))
-        return result
+        duration = te - ts
+
+        # Store timing info in the result if it's a tuple, otherwise create a tuple
+        if isinstance(result, tuple):
+            return result + (duration,)
+        else:
+            return (result, duration)
     return wrap
 
 def createLogger(debug=False):

@@ -25,8 +25,8 @@ dayjs.extend(utc);
 
 // Define map bounds
 const MAP_BOUNDS: L.LatLngBoundsExpression = [
-  [0.0, 70.0], // Southwest corner [lat, lng]
-  [55.0, 150.0], // Northeast corner [lat, lng]
+  [0.0, 75.0], // Southwest corner [lat, lng]
+  [55.0, 160.0], // Northeast corner [lat, lng]
 ];
 
 // Calculate center of bounds
