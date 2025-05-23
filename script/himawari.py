@@ -8,7 +8,7 @@ import s3fs
 from satpy import Scene
 from pyresample import create_area_def
 
-from upload import upload
+from client import upload, check_object_exists
 from utils import logger, timing
 
 if os.name == 'nt':
@@ -80,6 +80,16 @@ def process_composite(composite_name, target_time):
     try:
         logger.info(f"Processing composite '{composite_name}' for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC")
 
+        # Check if the file already exists in Minio
+        name = 'himawari_{}_{}.tif'.format(composite_name, target_time.strftime('%Y%m%d_%H%M'))
+        object_name = '{}/{}/{}'.format(
+            composite_name, target_time.strftime('%Y/%m/%d'), name
+        )
+
+        if check_object_exists('himawari', object_name):
+            logger.info(f"Composite '{composite_name}' for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC already exists in Minio, skipping processing")
+            return True
+
         # Get the actual satpy composite name
         satpy_composite_name = composite_mapping.get(composite_name, composite_name)
 
@@ -115,7 +125,6 @@ def process_composite(composite_name, target_time):
         scn = Scene(filenames=files, reader='ahi_hsd', reader_kwargs=reader_kwargs)
         scn.load([satpy_composite_name])
         scn_china = scn.resample(china_area, resampler='bilinear', chunks=512)
-        name = 'himawari_{}_{}.tif'.format(composite_name, scn.start_time.strftime('%Y%m%d_%H%M'))
         filename = os.path.join(cache_dir, name)
 
         scn_china.save_dataset(
@@ -126,10 +135,6 @@ def process_composite(composite_name, target_time):
             blockxsize=256,
             blockysize=256,
             compress='deflate'
-        )
-
-        object_name = '{}/{}/{}'.format(
-            composite_name, scn.start_time.strftime('%Y/%m/%d'), name
         )
 
         upload('himawari', object_name, filename, composite_name)
@@ -182,10 +187,12 @@ def main():
 
                 for composite_name in available_composites:
                     success, duration = process_composite(composite_name, current_target_time)
-                    composite_results[composite_name] = duration
 
                     if success:
                         success_count += 1
+                        # Only record timing for actually processed files (duration > 1 second)
+                        if duration > 1.0:
+                            composite_results[composite_name] = duration
                     else:
                         failed_composites.append(composite_name)
 

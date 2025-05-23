@@ -8,18 +8,31 @@ from utils import logger
 from config import endpoint, access_key, secret_key
 
 
-def upload(bucket_name, object_name, file, composite_name):
-    client = Minio(
+def get_minio_client():
+    """Get a configured Minio client"""
+    return Minio(
         endpoint,
         access_key=access_key,
         secret_key=secret_key,
         secure=False
     )
 
+
+def check_object_exists(bucket_name, object_name):
+    """Check if an object exists in Minio"""
+    try:
+        client = get_minio_client()
+        client.stat_object(bucket_name, object_name)
+        return True
+    except Exception:
+        return False
+
+
+def upload(bucket_name, object_name, file, composite_name):
+    client = get_minio_client()
     found = client.bucket_exists(bucket_name)
     if not found:
         client.make_bucket(bucket_name)
-
 
     tags = Tags(for_object=True)
     tags['composite'] = composite_name
