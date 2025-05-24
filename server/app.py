@@ -229,7 +229,9 @@ def extract_timestamp_from_object_name(object_name):
         date_str = match.group(1)
         time_str = match.group(2)
         try:
-            return datetime.datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M")
+            # Parse datetime and set UTC timezone
+            dt = datetime.datetime.strptime(f"{date_str}_{time_str}", "%Y%m%d_%H%M")
+            return dt.replace(tzinfo=datetime.timezone.utc)
         except ValueError:
             app.logger.warning(f"Failed to parse timestamp from {object_name}")
     return None

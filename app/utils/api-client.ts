@@ -39,13 +39,13 @@ const createApiClient = () => {
  *
  * @returns A Promise resolving to a Record where:
  *   - Keys are composite names (e.g., 'true_color', 'ir_clouds', 'ash')
- *   - Values are RFC 822 timestamp strings (e.g., 'Fri, 20 Apr 2025 04:00:00 GMT')
+ *   - Values are ISO 8601 timestamp strings (e.g., '2025-04-20T04:00:00')
  *
  * Example response:
  * {
- *   "true_color": "Fri, 20 Apr 2025 04:00:00 GMT",
- *   "ir_clouds": "Fri, 20 Apr 2025 04:00:00 GMT",
- *   "ash": "Fri, 20 Apr 2025 03:30:00 GMT"
+ *   "true_color": "2025-04-20T04:00:00",
+ *   "ir_clouds": "2025-04-20T04:00:00",
+ *   "ash": "2025-04-20T03:30:00"
  * }
  *
  * This data is used to determine the most recent available imagery for each composite type.
