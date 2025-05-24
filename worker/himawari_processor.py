@@ -13,7 +13,7 @@ else:  # macOS/Linux
     cache_dir = "/tmp/satpy_cache"
 
 available_composites = [
-    'true_color', 'night_microphysics', 'ir_clouds','ash'
+    'true_color', 'ir_clouds', 'ash', 'night_microphysics'
 ]
 
 # Mapping from our naming to satpy composite names

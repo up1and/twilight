@@ -87,7 +87,7 @@ class TaskProcessor:
             from himawari_processor import process_composite
 
             # Process the composite
-            success = process_composite(composite, timestamp, task_id)
+            success = process_composite(composite, timestamp)
 
             if success:
                 # Report completion

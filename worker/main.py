@@ -24,7 +24,7 @@ def generate_worker_id():
     """Generate worker ID from hostname and IP"""
     hostname = socket.gethostname()
     ip = get_local_ip()
-    return f"worker_{hostname}_{ip}"
+    return f"{hostname}_{ip}"
 
 def _replace_minute(time):
     minute = int(time.minute / 10) * 10
@@ -68,7 +68,6 @@ def task_generator_thread(server_url):
 
             # If the current target time is still in the future compared to latest available, wait
             if current_target_time > latest_time:
-                logger.info(f"Target time {current_target_time.strftime('%Y-%m-%d %H:%M')} UTC is ahead of latest available time {latest_time.strftime('%Y-%m-%d %H:%M')} UTC, waiting...")
                 time.sleep(60)
                 continue
 
@@ -116,7 +115,7 @@ def task_generator_thread(server_url):
 def main():
     """Main entry point"""
     parser = argparse.ArgumentParser(description='Himawari satellite data processing')
-    parser.add_argument('--mode', choices=['task', 'monitor'], default='task',
+    parser.add_argument('--mode', choices=['hybrid', 'worker'], default='hybrid',
                         help='Processing mode: task (server-driven) or monitor (continuous)')
     parser.add_argument('--server-url', default='http://127.0.0.1:5000',
                         help='Task server URL')
