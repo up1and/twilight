@@ -1,7 +1,10 @@
-import datetime
+import os
 import re
 import uuid
+import sqlite3
+import datetime
 import threading
+
 from collections import deque
 
 from flask import Flask, Response, request, jsonify
@@ -317,11 +320,12 @@ def after_request(response):
 
     # Add HTTP cache headers for tile and tilejson responses
     if response.status_code == 200:
-        if request.endpoint == 'tile' and response.mimetype == 'image/png':
-            # Cache tiles for 24 hours (86400 seconds)
-            response.headers['Cache-Control'] = 'public, max-age=86400'
+        if request.endpoint == 'tile' and response.mimetype == 'image/png' or \
+            request.endpoint == 'natural_earth_tile' and response.mimetype == 'application/x-protobuf':
+            # Cache pbf tiles for 12 hours (43200 seconds)
+            response.headers['Cache-Control'] = 'public, max-age=43200'
             response.headers['Expires'] = (datetime.datetime.now(datetime.timezone.utc) +
-                                         datetime.timedelta(hours=24)).strftime('%a, %d %b %Y %H:%M:%S GMT')
+                                         datetime.timedelta(hours=12)).strftime('%a, %d %b %Y %H:%M:%S GMT')
         elif request.endpoint == 'tilejson' and response.mimetype == 'application/json':
             # Cache tilejson for 1 hour (3600 seconds)
             response.headers['Cache-Control'] = 'public, max-age=3600'
@@ -399,7 +403,7 @@ def find_tile(composite, z, x, y, timestamp=None):
         return jsonify(error_msg), 500
 
 @app.route("/<composite>/tiles/<timestamp>/<int:z>/<int:x>/<int:y>.png")
-@cache.cached(timeout=86400)  # Cache for 24 hours
+@cache.cached(timeout=43200)  # Cache for 12 hours
 def tile(composite, timestamp, z, x, y):
     """
     Tile request with ISO 8601 time format
@@ -475,6 +479,64 @@ def tilejson(composite):
         }
         return jsonify(error_msg), 500
 
+@app.route('/lands/<int:z>/<int:x>/<int:y>.pbf')
+@cache.cached(timeout=43200)  # Cache for 12 hours
+def natural_earth_tile(z, x, y):
+    """
+    Serve vector tiles from natural_earth.mbtiles
+    """
+    # Validate tile coordinates
+    if not (0 <= z <= 18):
+        return jsonify({
+            'error': 'Bad Request',
+            'message': 'Invalid zoom level. Must be between 0 and 18'
+        }), 400
+
+    max_coord = 2 ** z
+    if not (0 <= x < max_coord) or not (0 <= y < max_coord):
+        return jsonify({
+            'error': 'Bad Request',
+            'message': f'Invalid tile coordinates for zoom level {z}'
+        }), 400
+
+    mbtiles_path = os.path.join(os.path.dirname(__file__), 'natural_earth.mbtiles')
+
+    if not os.path.exists(mbtiles_path):
+        return jsonify({
+            'error': 'Not Found',
+            'message': 'natural_earth.mbtiles file not found'
+        }), 404
+
+    try:
+        conn = sqlite3.connect(mbtiles_path)
+        cursor = conn.cursor()
+
+        # Convert TMS y to XYZ y
+        tms_y = (1 << z) - 1 - y
+
+        # Use parameterized query to prevent SQL injection
+        cursor.execute(
+            "SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?",
+            (z, x, tms_y)
+        )
+
+        result = cursor.fetchone()
+        conn.close()
+
+        if result:
+            response = Response(result[0], mimetype='application/x-protobuf')
+            response.headers['Access-Control-Allow-Origin'] = '*'
+            response.headers['Content-Encoding'] = 'gzip'
+            return response
+        else:
+            return Response('', status=204)  # No content
+
+    except Exception as e:
+        app.logger.error(f"Error serving lands tile {z}/{x}/{y}: {str(e)}")
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), 500
 
 @app.route('/')
 def index():

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { MapContainer, TileLayer, GeoJSON, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, useMapEvents, useMap } from "react-leaflet";
 import TimeRangeSelector from "./components/time-range-selector";
 import SettingsButton from "./components/settings-button";
 import MultiSelectComposite from "./components/multi-select-composite";
@@ -18,7 +18,8 @@ import { CRS, LatLngTuple } from "leaflet";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import type { CompositeType, MapConfig } from "./utils/types";
-import lands from "./natural-earth.json";
+
+import "leaflet.vectorgrid";
 
 // Extend dayjs with UTC plugin
 dayjs.extend(utc);
@@ -41,6 +42,57 @@ const generateTileUrl = (baseUrl: string, time: dayjs.Dayjs): string => {
   const timeStr = time.utc().format("YYYY-MM-DDTHH:mm:ss");
   return baseUrl.replace("{time}", timeStr);
 };
+
+// VectorGrid Layer component with overzooming support
+function VectorGridLayer({
+  url,
+  styles,
+}: {
+  url: string;
+  styles: { [layerName: string]: any };
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map) return;
+
+    // Check if vectorGrid is available
+    if (!(window.L as any)?.vectorGrid?.protobuf) {
+      console.error("Leaflet VectorGrid plugin is not loaded");
+      return;
+    }
+
+    try {
+      // Create vector grid layer with overzooming support
+      const vectorGridLayer = (window.L as any).vectorGrid.protobuf(url, {
+        vectorTileLayerStyles: styles,
+        interactive: false,
+        // Add overzooming support - use zoom 6 data for zoom levels 7-10
+        maxNativeZoom: 6,
+        maxZoom: 10,
+        // Add caching to prevent re-requests
+        updateWhenIdle: true,
+        updateWhenZooming: false,
+        // Set z-index to display above tile layers
+        zIndex: 800,
+      });
+
+      // Add layer to map
+      map.addLayer(vectorGridLayer);
+
+      // Cleanup function
+      return () => {
+        if (map.hasLayer(vectorGridLayer)) {
+          map.removeLayer(vectorGridLayer);
+        }
+      };
+    } catch (error) {
+      console.error("Error creating VectorGrid layer:", error);
+    }
+  }, [map, url]); // Only depend on map and url
+
+  return null;
+}
 
 // Mouse position tracker component
 function MousePositionTracker({
@@ -268,6 +320,18 @@ export default function MapView() {
             />
           )}
 
+          {/* VectorGrid Layer */}
+          <VectorGridLayer
+            url={`${getApiConfig().endpoint}/lands/{z}/{x}/{y}.pbf`}
+            styles={{
+              land: {
+                color: "#828282",
+                weight: 1.5,
+                fillOpacity: 0,
+              },
+            }}
+          />
+
           {/* Side-by-side control - only show if two layers are selected */}
           {selectedComposites.length > 1 &&
             leftLayerRef.current &&
@@ -278,16 +342,6 @@ export default function MapView() {
                 initialPosition={50}
               />
             )}
-
-          <GeoJSON
-            data={lands as GeoJSON.GeoJsonObject}
-            style={{
-              color: "#828282",
-              weight: 2,
-              opacity: 1,
-              fillOpacity: 0,
-            }}
-          />
 
           <MousePositionTracker onPositionChange={handlePositionChange} />
         </MapContainer>
