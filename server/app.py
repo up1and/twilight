@@ -5,6 +5,7 @@ import threading
 from collections import deque
 
 from flask import Flask, Response, request, jsonify
+from flask_caching import Cache
 
 from rio_tiler.io import Reader
 from rio_tiler.colormap import cmap
@@ -19,6 +20,14 @@ from config import endpoint, access_key, secret_key
 TILE_SIZE = 256
 
 app = Flask(__name__)
+
+# Configure Flask-Caching with SimpleCache (in-memory)
+cache_config = {
+    'CACHE_TYPE': 'SimpleCache',  # In-memory cache
+    'CACHE_DEFAULT_TIMEOUT': 3600  # 1 hour default cache timeout
+}
+app.config.update(cache_config)
+cache = Cache(app)
 
 # Custom JSON encoder function for datetime objects
 def default_json_handler(obj):
@@ -305,6 +314,20 @@ def after_request(response):
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+
+    # Add HTTP cache headers for tile and tilejson responses
+    if response.status_code == 200:
+        if request.endpoint == 'tile' and response.mimetype == 'image/png':
+            # Cache tiles for 24 hours (86400 seconds)
+            response.headers['Cache-Control'] = 'public, max-age=86400'
+            response.headers['Expires'] = (datetime.datetime.now(datetime.timezone.utc) +
+                                         datetime.timedelta(hours=24)).strftime('%a, %d %b %Y %H:%M:%S GMT')
+        elif request.endpoint == 'tilejson' and response.mimetype == 'application/json':
+            # Cache tilejson for 1 hour (3600 seconds)
+            response.headers['Cache-Control'] = 'public, max-age=3600'
+            response.headers['Expires'] = (datetime.datetime.now(datetime.timezone.utc) +
+                                         datetime.timedelta(hours=1)).strftime('%a, %d %b %Y %H:%M:%S GMT')
+
     return response
 
 def find_tile(composite, z, x, y, timestamp=None):
@@ -376,6 +399,7 @@ def find_tile(composite, z, x, y, timestamp=None):
         return jsonify(error_msg), 500
 
 @app.route("/<composite>/tiles/<timestamp>/<int:z>/<int:x>/<int:y>.png")
+@cache.cached(timeout=86400)  # Cache for 24 hours
 def tile(composite, timestamp, z, x, y):
     """
     Tile request with ISO 8601 time format
@@ -394,6 +418,7 @@ def tile(composite, timestamp, z, x, y):
         return jsonify(error_msg), 400
 
 @app.route('/<composite>.tilejson')
+@cache.cached(timeout=3600)  # Cache for 1 hour
 def tilejson(composite):
     if composite not in available_composites:
         error_msg = {
