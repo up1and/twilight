@@ -397,9 +397,17 @@ export default function TimeRangeSelector({
     lookbackHours,
   ]);
 
-  // Handle keyboard navigation
+  // Handle keyboard navigation and playback control
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Handle spacebar for play/pause
+      if (e.key === " " || e.key === "Spacebar") {
+        e.preventDefault(); // Prevent page scrolling
+        togglePlayback();
+        return;
+      }
+
+      // Handle arrow keys for navigation
       if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
         e.preventDefault();
 
