@@ -5,6 +5,7 @@ import threading
 from collections import deque
 
 from flask import Flask, Response, request, jsonify
+
 from rio_tiler.io import Reader
 from rio_tiler.colormap import cmap
 from rio_tiler.errors import TileOutsideBounds
@@ -18,6 +19,17 @@ from config import endpoint, access_key, secret_key
 TILE_SIZE = 256
 
 app = Flask(__name__)
+
+# Custom JSON encoder function for datetime objects
+def default_json_handler(obj):
+    """JSON serializer for objects not serializable by default json code"""
+    if isinstance(obj, datetime.datetime):
+        return obj.isoformat()
+    raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+
+# Configure Flask to use custom JSON encoder
+app.json.default = default_json_handler
+
 client = Minio(
     endpoint,
     access_key=access_key,
@@ -534,9 +546,7 @@ def create_task():
 
         # Parse timestamp
         try:
-            timestamp = datetime.datetime.fromisoformat(data['timestamp'].replace('Z', '+00:00'))
-            if timestamp.tzinfo is None:
-                timestamp = timestamp.replace(tzinfo=datetime.timezone.utc)
+            timestamp = datetime.datetime.fromisoformat(data['timestamp'])
         except ValueError:
             return jsonify({
                 'error': 'Bad Request',
