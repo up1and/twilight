@@ -11,7 +11,7 @@ interface TimeRangeSelectorProps {
 }
 
 export default function TimeRangeSelector({
-  initialTime = dayjs(),
+  initialTime = dayjs().utc(),
   selectedTime = null,
   onTimeChange,
 }: TimeRangeSelectorProps) {
@@ -26,7 +26,7 @@ export default function TimeRangeSelector({
   };
 
   const [currentTime, setCurrentTime] = useState<dayjs.Dayjs>(
-    roundToNearestTenMinutes(new Date())
+    roundToNearestTenMinutes(dayjs().utc())
   );
   const [selectedTimeState, setSelectedTime] = useState<dayjs.Dayjs>(
     roundToNearestTenMinutes(initialTime)
@@ -301,7 +301,7 @@ export default function TimeRangeSelector({
       const newEndTime = dragStartTime.subtract(minutesShift, "minute");
 
       // Prevent dragging if the new end time would be greater than current time
-      const currentRealTime = dayjs();
+      const currentRealTime = dayjs().utc();
       if (newEndTime.isAfter(currentRealTime)) {
         return;
       }
@@ -345,7 +345,7 @@ export default function TimeRangeSelector({
       const newEndTime = dragStartTime.subtract(minutesShift, "minute");
 
       // Prevent dragging if the new end time would be greater than current time
-      const currentRealTime = dayjs();
+      const currentRealTime = dayjs().utc();
       if (newEndTime.isAfter(currentRealTime)) {
         return;
       }
@@ -520,7 +520,7 @@ export default function TimeRangeSelector({
   const handleEndTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newEndTime = parseDateTimeInput(e.target.value);
     // Prevent selecting future dates
-    const currentRealTime = dayjs();
+    const currentRealTime = dayjs().utc();
     let updatedEndTime;
 
     if (newEndTime.isAfter(currentRealTime)) {
@@ -543,11 +543,21 @@ export default function TimeRangeSelector({
       const endTime = getEndTime();
 
       if (selectedTime.isBefore(startTime) || selectedTime.isAfter(endTime)) {
-        // Calculate new current time based on selected time and lookback hours
-        const newCurrentTime = roundToNearestTenMinutes(
-          selectedTime.add(lookbackHours, "hour")
-        );
-        setCurrentTime(newCurrentTime);
+        // Calculate the earliest time that would include selectedTime in the timeline
+        const currentRealTime = dayjs().utc();
+        const earliestTime = currentRealTime.subtract(lookbackHours, "hour");
+
+        if (earliestTime.isAfter(selectedTime)) {
+          // selectedTime is too old, we need to extend the timeline to include it
+          const newCurrentTime = roundToNearestTenMinutes(
+            selectedTime.add(lookbackHours, "hour")
+          );
+          setCurrentTime(newCurrentTime);
+        } else {
+          // selectedTime can be included in current timeline, use current real time as end
+          const newCurrentTime = roundToNearestTenMinutes(currentRealTime);
+          setCurrentTime(newCurrentTime);
+        }
       }
     }
   }, [selectedTime]);
@@ -604,7 +614,7 @@ export default function TimeRangeSelector({
               type="datetime-local"
               value={formatDateTimeInput(currentTime)}
               onChange={handleEndTimeChange}
-              max={formatDateTimeInput(dayjs())}
+              max={formatDateTimeInput(dayjs().utc())}
             />
           </div>
         </div>
