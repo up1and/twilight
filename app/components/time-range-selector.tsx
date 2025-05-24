@@ -129,6 +129,34 @@ export default function TimeRangeSelector({
     }
   }, [lookbackHours, currentTime]);
 
+  // Find the closest time interval index for a given time
+  const findClosestIntervalIndex = (targetTime: dayjs.Dayjs): number => {
+    if (timeIntervals.length === 0) return -1;
+
+    // First try to find exact match
+    const exactIndex = timeIntervals.findIndex(
+      (interval) => interval.time.format() === targetTime.format()
+    );
+
+    if (exactIndex !== -1) return exactIndex;
+
+    // If no exact match, find the closest one
+    let closestIndex = 0;
+    let minDiff = Number.POSITIVE_INFINITY;
+
+    timeIntervals.forEach((interval, i) => {
+      if (interval && interval.time) {
+        const diff = Math.abs(interval.time.diff(targetTime, "millisecond"));
+        if (diff < minDiff) {
+          minDiff = diff;
+          closestIndex = i;
+        }
+      }
+    });
+
+    return closestIndex;
+  };
+
   // Update selected time and ensure it's rounded to nearest 10 minutes
   const updateSelectedTime = (newTime: dayjs.Dayjs) => {
     const roundedTime = roundToNearestTenMinutes(newTime);
@@ -476,6 +504,21 @@ export default function TimeRangeSelector({
       // If at the end, restart from beginning
       if (selectedTimeState.format() === currentTime.format()) {
         updateSelectedTime(getStartTime());
+      } else {
+        // Ensure the selected time is in the timeIntervals array
+        const currentIndex = findClosestIntervalIndex(selectedTimeState);
+
+        // If current time is not found in intervals, snap to the closest one
+        if (currentIndex !== -1 && timeIntervals[currentIndex]) {
+          const exactIndex = timeIntervals.findIndex(
+            (interval) => interval.time.format() === selectedTimeState.format()
+          );
+
+          // If not exact match, update to the closest valid time before starting playback
+          if (exactIndex === -1 && timeIntervals[currentIndex].time) {
+            updateSelectedTime(timeIntervals[currentIndex].time);
+          }
+        }
       }
       setIsPlaying(true);
     }
@@ -485,28 +528,9 @@ export default function TimeRangeSelector({
   const getMarkerPosition = () => {
     if (timeIntervals.length === 0) return 0;
 
-    // Find the index of the selected time in the intervals
-    const index = timeIntervals.findIndex(
-      (interval) => interval.time.format() === selectedTimeState.format()
-    );
+    const index = findClosestIntervalIndex(selectedTimeState);
 
-    // If not found, find the closest interval
-    if (index === -1) {
-      let closestIndex = 0;
-      let minDiff = Number.POSITIVE_INFINITY;
-
-      timeIntervals.forEach((interval, i) => {
-        if (interval && interval.time) {
-          const diff = Math.abs(interval.time.diff(selectedTimeState));
-          if (diff < minDiff) {
-            minDiff = diff;
-            closestIndex = i;
-          }
-        }
-      });
-
-      return (closestIndex / (timeIntervals.length - 1)) * 100;
-    }
+    if (index === -1) return 0;
 
     return (index / (timeIntervals.length - 1)) * 100;
   };
