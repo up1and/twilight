@@ -82,7 +82,7 @@ def task_generator_thread(server_url):
                             json={
                                 'composite': composite_name,
                                 'timestamp': current_target_time.isoformat(),
-                                'priority': 'high'
+                                'priority': 'normal'
                             },
                             timeout=10
                         )

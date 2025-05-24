@@ -83,7 +83,7 @@ class TaskManager:
         self.lock = threading.Lock()
 
     def create_task(self, composite, timestamp, priority='normal'):
-        """Create a new task with deduplication"""
+        """Create a new task with deduplication and optional priority promotion"""
         with self.lock:
             # Create a temporary task for comparison
             temp_task = Task(composite, timestamp, priority)
@@ -99,13 +99,66 @@ class TaskManager:
             task = temp_task
             self.tasks[task.task_id] = task
 
-            # Add to queue based on priority
-            if priority == 'high':
-                self.task_queue.appendleft(task.task_id)
-            else:
-                self.task_queue.append(task.task_id)
+            # If this is a monitor mode task with normal priority, promote older pending normal tasks
+            if priority == 'normal':
+                self._promote_tasks_in_queue(timestamp)
+
+            # Add task to queue with smart insertion
+            self._insert_task_to_queue(task)
 
             return task
+
+    def _promote_tasks_in_queue(self, reference_timestamp):
+        """Promote pending normal priority tasks in queue older than reference timestamp to high priority"""
+
+        # Iterate through queue and promote tasks (queue contains Task objects now)
+        for task in self.task_queue:
+            if (task.priority == 'normal' and
+                task.timestamp < reference_timestamp):
+                task.priority = 'high'
+
+        # Re-sort queue to reflect new priorities
+        self._sort_queue()
+
+    def _insert_task_to_queue(self, task):
+        """Insert task to queue at the correct position based on priority and timestamp"""
+        if not self.task_queue:
+            self.task_queue.append(task)
+            return
+
+        # Find the correct position to insert
+        priority_order = {'high': 0, 'normal': 1, 'low': 2}
+        task_priority_value = priority_order.get(task.priority, 1)
+
+        insert_index = len(self.task_queue)  # Default to end
+
+        for i, existing_task in enumerate(self.task_queue):
+            existing_priority_value = priority_order.get(existing_task.priority, 1)
+
+            # If new task has higher priority, insert here
+            if task_priority_value < existing_priority_value:
+                insert_index = i
+                break
+            # If same priority, compare timestamps (earlier first)
+            elif (task_priority_value == existing_priority_value and
+                  task.timestamp < existing_task.timestamp):
+                insert_index = i
+                break
+
+        # Insert at the found position
+        self.task_queue.insert(insert_index, task)
+
+    def _sort_queue(self):
+        """Sort the existing queue by priority and timestamp"""
+        priority_order = {'high': 0, 'normal': 1, 'low': 2}
+
+        def sort_key(task):
+            return (priority_order.get(task.priority, 1), task.timestamp)
+
+        # Convert to list, sort, and convert back to deque
+        sorted_tasks = sorted(list(self.task_queue), key=sort_key)
+        self.task_queue.clear()
+        self.task_queue.extend(sorted_tasks)
 
     def get_task(self, task_id):
         """Get task by ID"""
@@ -115,13 +168,12 @@ class TaskManager:
         """Get next pending task for worker"""
         with self.lock:
             while self.task_queue:
-                task_id = self.task_queue.popleft()
-                task = self.tasks.get(task_id)
-                if task and task.status == 'pending':
-                    task.status = 'processing'
-                    task.started = datetime.datetime.now(datetime.timezone.utc)
-                    task.worker_id = worker_id
-                    return task
+                task = self.task_queue.popleft()
+                task.status = 'processing'
+                task.started = datetime.datetime.now(datetime.timezone.utc)
+                task.worker_id = worker_id
+                return task
+                # If task is not pending, continue to next task
             return None
 
     def update_task_status(self, task_id, status, error_message=None):
