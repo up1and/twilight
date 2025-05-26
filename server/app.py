@@ -306,6 +306,8 @@ def find_composite_object(composite, timestamp=None):
     Find the object name for a composite, either for a specific time or the latest
     """
     timestamp = timestamp if timestamp else composite_state.get(composite)
+    if timestamp is None:
+        timestamp = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=30)
     filename = 'himawari_{}_{}.tif'.format(composite, timestamp.strftime('%Y%m%d_%H%M'))
     object_name = '{}/{}/{}'.format(
         composite, timestamp.strftime('%Y/%m/%d'), filename
