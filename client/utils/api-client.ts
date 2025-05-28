@@ -93,3 +93,53 @@ export async function fetchTileJSON(
     return null;
   }
 }
+
+/**
+ * Create a snapshot image with geographic bounds and coastlines
+ *
+ * @param params - Snapshot parameters
+ * @returns A Promise resolving to snapshot response or null if the request fails
+ *
+ * Example request:
+ * {
+ *   "bbox": [100.0, 20.0, 140.0, 50.0],  // [min_lng, min_lat, max_lng, max_lat]
+ *   "timestamp": "2025-04-20T04:00:00",
+ *   "composite": "true_color",
+ *   "zoom": 5
+ * }
+ *
+ * Example response:
+ * {
+ *   "status": "completed",
+ *   "download_url": "https://minio.example.com/snapshots/snapshot_true_color_20250420_0400_z5_a1b2c3d4.png?...",
+ *   "filename": "snapshot_true_color_20250420_0400_z5_a1b2c3d4.png"
+ * }
+ */
+export async function createSnapshot(params: {
+  bbox: [number, number, number, number];
+  timestamp: string;
+  composite: string;
+}): Promise<{
+  status: string;
+  download_url?: string;
+  filename?: string;
+  task_id?: string;
+  message?: string;
+  estimated_wait_time?: string;
+} | null> {
+  try {
+    const apiClient = createApiClient();
+    const data = await apiClient.post("api/snapshots", { json: params }).json<{
+      status: string;
+      download_url?: string;
+      filename?: string;
+      task_id?: string;
+      message?: string;
+      estimated_wait_time?: string;
+    }>();
+    return data;
+  } catch (error) {
+    console.error("Failed to create snapshot:", error);
+    return null;
+  }
+}

@@ -1,0 +1,60 @@
+/* Snapshot button styles */
+.snapshot-button-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.snapshot-button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background-color: var(--background);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 5px var(--shadow);
+  transition: background-color 0.2s;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.snapshot-button:hover:not(:disabled) {
+  background-color: var(--background-hover);
+}
+
+.snapshot-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.loading-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.snapshot-status {
+  position: absolute;
+  top: 33px;
+  right: 0;
+  background-color: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  box-shadow: 0 1px 5px var(--shadow);
+  z-index: 1001;
+}

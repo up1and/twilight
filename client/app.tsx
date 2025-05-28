@@ -5,6 +5,7 @@ import SettingsButton from "./components/settings-button";
 import MultiSelectComposite from "./components/multi-select-composite";
 import CoordinatesDisplay from "./components/coordinates-display";
 import SideBySide from "./components/side-by-side";
+import SnapshotButton from "./components/snapshot-button";
 import { useIsMobile } from "./hooks/use-mobile";
 import {
   getApiConfig,
@@ -111,6 +112,21 @@ function MousePositionTracker({
   return null;
 }
 
+// Map ref setter component
+function MapRefSetter({
+  mapRef,
+}: {
+  mapRef: React.MutableRefObject<L.Map | null>;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    mapRef.current = map;
+  }, [map, mapRef]);
+
+  return null;
+}
+
 export default function MapView() {
   // State for storing composites data from API (raw data)
   const [composites, setComposites] = useState<Record<string, string>>({});
@@ -129,6 +145,10 @@ export default function MapView() {
     lat: number;
     lng: number;
   } | null>(null);
+
+  // Map ref for getting current bounds and zoom
+  const mapRef = useRef<L.Map | null>(null);
+
   const isMobile = useIsMobile();
 
   // Fetch latest composites on component mount and every minute
@@ -344,6 +364,7 @@ export default function MapView() {
             )}
 
           <MousePositionTracker onPositionChange={handlePositionChange} />
+          <MapRefSetter mapRef={mapRef} />
         </MapContainer>
 
         {/* Coordinates Display */}
@@ -358,6 +379,11 @@ export default function MapView() {
             selectedOptions={selectedComposites}
             onChange={handleCompositeChange}
             maxSelections={2}
+          />
+          <SnapshotButton
+            composites={selectedComposites}
+            selectedTime={selectedTime}
+            mapRef={mapRef}
           />
           <SettingsButton onSettingsChange={handleSettingsChange} />
         </div>

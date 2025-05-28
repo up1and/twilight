@@ -18,6 +18,11 @@ from rasterio.errors import RasterioIOError
 from minio import Minio
 from minio.error import S3Error
 from config import endpoint, access_key, secret_key
+from snapshot import (
+    generate_snapshot_filename,
+    create_snapshot_image,
+    upload_snapshot_to_minio
+)
 
 
 TILE_SIZE = 256
@@ -773,5 +778,116 @@ def update_task_status(task_id):
         }), 500
 
 
+@app.route('/api/snapshots', methods=['POST'])
+def create_snapshot():
+    """Create a snapshot image with geographic bounds and coastlines"""
+    try:
+        data = request.get_json()
+
+        # Validate required fields
+        required_fields = ['bbox', 'timestamp', 'composite']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({
+                    'error': 'Bad Request',
+                    'message': f'Missing required field: {field}'
+                }), 400
+
+        bbox = data['bbox']
+        timestamp = data['timestamp']
+        composite = data['composite']
+
+        # Validate bbox format
+        if not isinstance(bbox, list) or len(bbox) != 4:
+            return jsonify({
+                'error': 'Bad Request',
+                'message': 'bbox must be an array of 4 numbers [min_lng, min_lat, max_lng, max_lat]'
+            }), 400
+
+        # Validate composite
+        if composite not in available_composites:
+            return jsonify({
+                'error': 'Bad Request',
+                'message': f'Invalid composite. Available: {available_composites}'
+            }), 400
+
+        # Parse timestamp
+        try:
+            timestamp = datetime.datetime.fromisoformat(timestamp)
+        except ValueError:
+            return jsonify({
+                'error': 'Bad Request',
+                'message': 'Invalid timestamp format. Use ISO 8601 format'
+            }), 400
+        
+
+        object_name = find_composite_object(composite, timestamp)
+        try:
+            client.stat_object('himawari', object_name)
+            cog_exists = True
+        except S3Error:
+            cog_exists = False
+
+        if not cog_exists:
+            # Create a low priority task
+            task = task_manager.create_task(composite, timestamp, 'low')
+
+            return jsonify({
+                'status': 'processing',
+                'message': 'COG file not found. Task created for processing.',
+                'task_id': task.task_id,
+                'estimated_wait_time': '10-30 minutes'
+            }), 202  # Accepted
+
+        # COG exists, create snapshot
+        try:
+            # Generate filename
+            filename = generate_snapshot_filename(composite, timestamp, bbox)
+
+            # Get presigned URL for COG
+            presigned_url = client.presigned_get_object(
+                bucket_name='himawari',
+                object_name=object_name,
+                expires=datetime.timedelta(hours=24)
+            )
+
+            # Create the snapshot image
+            image_buffer = create_snapshot_image(presigned_url, bbox)
+
+            # Upload to minio and get download URL
+            download_url = upload_snapshot_to_minio(client, image_buffer, filename)
+
+            return jsonify({
+                'status': 'completed',
+                'download_url': download_url,
+                'filename': filename
+            })
+
+        except Exception as e:
+            app.logger.error(f"Error creating snapshot: {str(e)}", exc_info=True)
+            return jsonify({
+                'error': 'Internal Server Error',
+                'message': f'Error creating snapshot: {str(e)}'
+            }), 500
+
+    except Exception as e:
+        app.logger.error(f"Error in create_snapshot: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), 500
+
+
 if __name__ == '__main__':
+    import logging
+    # Set logging level to INFO to see debug messages
+    app.logger.setLevel(logging.INFO)
+
+    # Create console handler and set level to INFO
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+
+    # Add handler to app logger
+    app.logger.addHandler(console_handler)
+
     app.run(host='0.0.0.0', port=5000, debug=True)
