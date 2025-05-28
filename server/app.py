@@ -19,9 +19,9 @@ from minio import Minio
 from minio.error import S3Error
 from config import endpoint, access_key, secret_key
 from snapshot import (
-    generate_snapshot_filename,
-    create_snapshot_image,
-    upload_snapshot_to_minio
+    create_single_snapshot,
+    create_series_snapshot,
+    find_composite_object
 )
 
 
@@ -306,19 +306,6 @@ def initialize_composite_state():
 
 initialize_composite_state()
 
-def find_composite_object(composite, timestamp=None):
-    """
-    Find the object name for a composite, either for a specific time or the latest
-    """
-    timestamp = timestamp if timestamp else composite_state.get(composite)
-    if timestamp is None:
-        timestamp = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=30)
-    filename = 'himawari_{}_{}.tif'.format(composite, timestamp.strftime('%Y%m%d_%H%M'))
-    object_name = '{}/{}/{}'.format(
-        composite, timestamp.strftime('%Y/%m/%d'), filename
-    )
-    return object_name
-
 @app.after_request
 def after_request(response):
     response.headers['Access-Control-Allow-Origin'] = '*'
@@ -440,7 +427,8 @@ def tilejson(composite):
         return jsonify(error_msg), 404
 
     try:
-        object_name = find_composite_object(composite)
+        timestamp = composite_state.get(composite)
+        object_name = find_composite_object(composite, timestamp)
 
         try:
             presigned_url = client.presigned_get_object(
@@ -780,7 +768,7 @@ def update_task_status(task_id):
 
 @app.route('/api/snapshots', methods=['POST'])
 def create_snapshot():
-    """Create a snapshot image with geographic bounds and coastlines"""
+    """Create a snapshot image or video with geographic bounds and coastlines"""
     try:
         data = request.get_json()
 
@@ -796,6 +784,7 @@ def create_snapshot():
         bbox = data['bbox']
         timestamp = data['timestamp']
         composite = data['composite']
+        timedelta_minutes = data.get('timedelta')  # Optional time delta in minutes
 
         # Validate bbox format
         if not isinstance(bbox, list) or len(bbox) != 4:
@@ -811,64 +800,44 @@ def create_snapshot():
                 'message': f'Invalid composite. Available: {available_composites}'
             }), 400
 
-        # Parse timestamp
+        # Parse timestamps
         try:
-            timestamp = datetime.datetime.fromisoformat(timestamp)
+            start_time = datetime.datetime.fromisoformat(timestamp)
         except ValueError:
             return jsonify({
                 'error': 'Bad Request',
                 'message': 'Invalid timestamp format. Use ISO 8601 format'
             }), 400
-        
 
-        object_name = find_composite_object(composite, timestamp)
-        try:
-            client.stat_object('himawari', object_name)
-            cog_exists = True
-        except S3Error:
-            cog_exists = False
+        if timedelta_minutes:
+            # Validate timedelta
+            if not isinstance(timedelta_minutes, (int, float)) or timedelta_minutes <= 0:
+                return jsonify({
+                    'error': 'Bad Request',
+                    'message': 'timedelta must be a positive number (minutes)'
+                }), 400
 
-        if not cog_exists:
-            # Create a low priority task
-            task = task_manager.create_task(composite, timestamp, 'low')
+            # Validate time range (max 24 hours = 1440 minutes)
+            if timedelta_minutes > 1440:
+                return jsonify({
+                    'error': 'Bad Request',
+                    'message': 'Time range cannot exceed 24 hours (1440 minutes)'
+                }), 400
 
-            return jsonify({
-                'status': 'processing',
-                'message': 'COG file not found. Task created for processing.',
-                'task_id': task.task_id,
-                'estimated_wait_time': '10-30 minutes'
-            }), 202  # Accepted
+            # Calculate end time
+            end_time = start_time + datetime.timedelta(minutes=timedelta_minutes)
 
-        # COG exists, create snapshot
-        try:
-            # Generate filename
-            filename = generate_snapshot_filename(composite, timestamp, bbox)
+        # Create video from time range
+        if timedelta_minutes:
+            result = create_series_snapshot(client, composite, start_time, end_time, bbox, task_manager)
+        else:
+            # Create single snapshot
+            result = create_single_snapshot(client, composite, start_time, bbox, task_manager)
 
-            # Get presigned URL for COG
-            presigned_url = client.presigned_get_object(
-                bucket_name='himawari',
-                object_name=object_name,
-                expires=datetime.timedelta(hours=24)
-            )
-
-            # Create the snapshot image
-            image_buffer = create_snapshot_image(presigned_url, bbox)
-
-            # Upload to minio and get download URL
-            download_url = upload_snapshot_to_minio(client, image_buffer, filename)
-
-            return jsonify({
-                'status': 'completed',
-                'download_url': download_url,
-                'filename': filename
-            })
-
-        except Exception as e:
-            app.logger.error(f"Error creating snapshot: {str(e)}", exc_info=True)
-            return jsonify({
-                'error': 'Internal Server Error',
-                'message': f'Error creating snapshot: {str(e)}'
-            }), 500
+        if result['status'] == 'processing':
+            return jsonify(result), 202
+        else:
+            return jsonify(result)
 
     except Exception as e:
         app.logger.error(f"Error in create_snapshot: {str(e)}", exc_info=True)
