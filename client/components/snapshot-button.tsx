@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createSnapshot } from "../utils/api-client";
 import type { CompositeType } from "../utils/types";
 import dayjs from "dayjs";
@@ -7,42 +7,68 @@ import "./snapshot-button.css";
 interface SnapshotButtonProps {
   composites: CompositeType[];
   selectedTime: dayjs.Dayjs;
-  mapRef: React.MutableRefObject<L.Map | null>;
+  bbox: [number, number, number, number] | null; // [min_lng, min_lat, max_lng, max_lat]
+  timedelta?: number; // Time delta in minutes for video generation
 }
 
 export default function SnapshotButton({
   composites,
   selectedTime,
-  mapRef,
+  bbox,
+  timedelta,
 }: SnapshotButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [isCtrlPressed, setIsCtrlPressed] = useState(false);
+
+  // Track Ctrl key state
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Control") {
+        setIsCtrlPressed(true);
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Control") {
+        setIsCtrlPressed(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, []);
 
   const handleSnapshot = async () => {
-    if (!mapRef.current) {
-      console.error("Map not available");
+    if (!bbox) {
+      console.error("Map bounds not available");
       return;
     }
 
-    // Get current map bounds
-    const mapBounds = mapRef.current.getBounds();
     setIsLoading(true);
 
     try {
-      // Convert Leaflet bounds to bbox array [min_lng, min_lat, max_lng, max_lat]
-      const bbox: [number, number, number, number] = [
-        mapBounds.getWest(),
-        mapBounds.getSouth(),
-        mapBounds.getEast(),
-        mapBounds.getNorth(),
-      ];
-
       // Process each composite
       for (const composite of composites) {
-        const params = {
+        const params: {
+          bbox: [number, number, number, number];
+          timestamp: string;
+          composite: string;
+          timedelta?: number;
+        } = {
           bbox,
           timestamp: selectedTime.utc().format("YYYY-MM-DDTHH:mm:ss"),
           composite: composite,
         };
+
+        // If Ctrl is pressed and timedelta is available, generate video
+        if (isCtrlPressed && timedelta && timedelta > 0) {
+          params.timedelta = timedelta;
+        }
 
         const response = await createSnapshot(params);
 
@@ -72,7 +98,11 @@ export default function SnapshotButton({
             console.error("Download error:", downloadError);
           }
         } else {
-          console.error("Failed to create snapshot for", composite);
+          console.error(
+            "Failed to create snapshot for",
+            composite,
+            response?.message
+          );
         }
       }
     } catch (error) {
@@ -104,7 +134,23 @@ export default function SnapshotButton({
           >
             <path d="M21 12a9 9 0 11-6.219-8.56" />
           </svg>
+        ) : isCtrlPressed ? (
+          // Video icon
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polygon points="23 7 16 12 23 17 23 7" />
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+          </svg>
         ) : (
+          // Camera icon
           <svg
             width="16"
             height="16"

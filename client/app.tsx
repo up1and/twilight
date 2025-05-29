@@ -112,17 +112,40 @@ function MousePositionTracker({
   return null;
 }
 
-// Map ref setter component
-function MapRefSetter({
-  mapRef,
+// Map viewport bounds tracker component
+function MapViewportBoundsTracker({
+  onBoundsChange,
 }: {
-  mapRef: React.MutableRefObject<L.Map | null>;
+  onBoundsChange: (bounds: [number, number, number, number]) => void;
 }) {
   const map = useMap();
 
   useEffect(() => {
-    mapRef.current = map;
-  }, [map, mapRef]);
+    if (!map) return;
+
+    const updateBounds = () => {
+      const bounds = map.getBounds();
+      const bbox: [number, number, number, number] = [
+        bounds.getWest(),
+        bounds.getSouth(),
+        bounds.getEast(),
+        bounds.getNorth(),
+      ];
+      onBoundsChange(bbox);
+    };
+
+    // Update bounds initially
+    updateBounds();
+
+    // Update bounds when map moves or zooms
+    map.on("moveend", updateBounds);
+    map.on("zoomend", updateBounds);
+
+    return () => {
+      map.off("moveend", updateBounds);
+      map.off("zoomend", updateBounds);
+    };
+  }, [map]);
 
   return null;
 }
@@ -136,6 +159,10 @@ export default function MapView() {
   );
 
   const [selectedTime, setSelectedTime] = useState<dayjs.Dayjs>(dayjs());
+  const [timeRangeEnd, setTimeRangeEnd] = useState<dayjs.Dayjs>(dayjs());
+  const [viewportBounds, setViewportBounds] = useState<
+    [number, number, number, number] | null
+  >(null);
 
   // Store map configurations for each selected composite
   const [mapConfigs, setMapConfigs] = useState<Record<string, MapConfig>>({});
@@ -145,9 +172,6 @@ export default function MapView() {
     lat: number;
     lng: number;
   } | null>(null);
-
-  // Map ref for getting current bounds and zoom
-  const mapRef = useRef<L.Map | null>(null);
 
   const isMobile = useIsMobile();
 
@@ -240,6 +264,26 @@ export default function MapView() {
   const handleTimeChange = (time: any) => {
     console.log("selected time:", time.format());
     setSelectedTime(time);
+  };
+
+  // Handle time range change from TimeRangeSelector
+  const handleTimeRangeChange = (
+    _startTime: dayjs.Dayjs,
+    endTime: dayjs.Dayjs
+  ) => {
+    setTimeRangeEnd(endTime);
+  };
+
+  // Calculate timedelta for video generation
+  const calculateTimedelta = (): number => {
+    return timeRangeEnd.diff(selectedTime, "minute");
+  };
+
+  // Handle current viewport bounds change
+  const handleViewportBoundsChange = (
+    bbox: [number, number, number, number]
+  ) => {
+    setViewportBounds(bbox);
   };
 
   // Callback function when settings change
@@ -364,7 +408,9 @@ export default function MapView() {
             )}
 
           <MousePositionTracker onPositionChange={handlePositionChange} />
-          <MapRefSetter mapRef={mapRef} />
+          <MapViewportBoundsTracker
+            onBoundsChange={handleViewportBoundsChange}
+          />
         </MapContainer>
 
         {/* Coordinates Display */}
@@ -383,7 +429,8 @@ export default function MapView() {
           <SnapshotButton
             composites={selectedComposites}
             selectedTime={selectedTime}
-            mapRef={mapRef}
+            bbox={viewportBounds}
+            timedelta={calculateTimedelta()}
           />
           <SettingsButton onSettingsChange={handleSettingsChange} />
         </div>
@@ -393,6 +440,7 @@ export default function MapView() {
           <TimeRangeSelector
             onTimeChange={handleTimeChange}
             selectedTime={selectedTime}
+            onTimeRangeChange={handleTimeRangeChange}
           />
         </div>
       </div>

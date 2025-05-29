@@ -105,7 +105,7 @@ export async function fetchTileJSON(
  *   "bbox": [100.0, 20.0, 140.0, 50.0],  // [min_lng, min_lat, max_lng, max_lat]
  *   "timestamp": "2025-04-20T04:00:00",
  *   "composite": "true_color",
- *   "zoom": 5
+ *   "timedelta": 100
  * }
  *
  * Example response:
@@ -119,13 +119,18 @@ export async function createSnapshot(params: {
   bbox: [number, number, number, number];
   timestamp: string;
   composite: string;
+  timedelta?: number; // Optional timedelta in minutes for video generation
 }): Promise<{
   status: string;
   download_url?: string;
   filename?: string;
   task_id?: string;
   message?: string;
-  estimated_wait_time?: string;
+  frame_count?: number;
+  time_range?: {
+    start: string;
+    end: string;
+  };
 } | null> {
   try {
     const apiClient = createApiClient();
@@ -135,7 +140,11 @@ export async function createSnapshot(params: {
       filename?: string;
       task_id?: string;
       message?: string;
-      estimated_wait_time?: string;
+      frame_count?: number;
+      time_range?: {
+        start: string;
+        end: string;
+      };
     }>();
     return data;
   } catch (error) {

@@ -181,6 +181,17 @@
   z-index: 5; /* Ensure labels are above other elements */
 }
 
+/* Timeline overlay for darkening effect */
+.timeline-overlay {
+  position: absolute;
+  top: 0; /* Cover entire timeline height */
+  bottom: 0; /* Cover entire timeline height */
+  background-color: var(--shadow);
+  pointer-events: none;
+  z-index: 5;
+  border-radius: 4px;
+}
+
 /* Marker styles */
 .time-marker {
   position: absolute;

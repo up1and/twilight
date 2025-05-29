@@ -8,12 +8,14 @@ interface TimeRangeSelectorProps {
   initialTime?: Date | string | dayjs.Dayjs;
   selectedTime?: dayjs.Dayjs | null;
   onTimeChange?: (time: dayjs.Dayjs) => void;
+  onTimeRangeChange?: (startTime: dayjs.Dayjs, endTime: dayjs.Dayjs) => void;
 }
 
 export default function TimeRangeSelector({
   initialTime = dayjs().utc(),
   selectedTime = null,
   onTimeChange,
+  onTimeRangeChange,
 }: TimeRangeSelectorProps) {
   // Initialize time, ensuring minutes are rounded to the nearest 10
   const roundToNearestTenMinutes = (
@@ -41,6 +43,7 @@ export default function TimeRangeSelector({
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [recentlyDragged, setRecentlyDragged] = useState<boolean>(false);
   const [hasMoved, setHasMoved] = useState<boolean>(false); // Track if mouse has moved during drag
+  const [isCtrlPressed, setIsCtrlPressed] = useState<boolean>(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<HTMLDivElement>(null);
   const [timeIntervals, setTimeIntervals] = useState<any[]>([]);
@@ -127,6 +130,9 @@ export default function TimeRangeSelector({
     } else if (selectedTimeState.isAfter(endTime)) {
       updateSelectedTime(endTime);
     }
+
+    // Notify parent component of time range change
+    onTimeRangeChange?.(startTime, endTime);
   }, [lookbackHours, currentTime]);
 
   // Find the closest time interval index for a given time
@@ -586,6 +592,29 @@ export default function TimeRangeSelector({
     }
   }, [selectedTime]);
 
+  // Track Ctrl key state
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Control") {
+        setIsCtrlPressed(true);
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Control") {
+        setIsCtrlPressed(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, []);
+
   // Ensure timeIntervals is initialized before rendering
   useEffect(() => {
     if (timeIntervals.length === 0) {
@@ -688,6 +717,17 @@ export default function TimeRangeSelector({
               </div>
             );
           })}
+
+          {/* Overlay for darkening left side when Ctrl is pressed */}
+          {isCtrlPressed && timeIntervals.length > 0 && (
+            <div
+              className="timeline-overlay"
+              style={{
+                left: "0%",
+                width: `${getMarkerPosition()}%`,
+              }}
+            />
+          )}
 
           {/* Selected time marker with time display above */}
           {timeIntervals.length > 0 && (
