@@ -1,8 +1,6 @@
 import os
 import hashlib
 import datetime
-import tempfile
-import subprocess
 
 from io import BytesIO
 
@@ -15,15 +13,15 @@ def generate_bbox_hash(bbox):
     return hashlib.md5(bbox_str.encode()).hexdigest()[:8]
 
 def generate_filename(composite, timestamp, bbox, file_type='image', end_timestamp=None):
-    """Generate filename for snapshot image or video"""
+    """Generate filename for snapshot image or video with prefix"""
     bbox_hash = generate_bbox_hash(bbox)
     time_str = timestamp.strftime('%Y%m%d_%H%M')
 
     if file_type == 'video' and end_timestamp:
         end_str = end_timestamp.strftime('%Y%m%d_%H%M')
-        return f"video_{composite}_{time_str}_to_{end_str}_{bbox_hash}.mp4"
+        return f"video/snapshot_{composite}_{time_str}_to_{end_str}_{bbox_hash}.mp4"
     else:
-        return f"snapshot_{composite}_{time_str}_{bbox_hash}.png"
+        return f"image/snapshot_{composite}_{time_str}_{bbox_hash}.png"
 
 def create_snapshot_image(presigned_url, bbox):
     """
@@ -179,58 +177,53 @@ def find_composite_object(composite, timestamp):
     return object_name
 
 
-def create_video_from_images(image_buffers, output_path, fps=2):
+def create_video_from_images(image_buffers, fps=4):
     """
-    Create MP4 video from image buffers using ffmpeg
+    Create MP4 video from image buffers using imageio in memory
 
     Args:
         image_buffers: List of BytesIO buffers containing PNG images
-        output_path: Path where to save the output video
-        fps: Frames per second (default: 2)
+        fps: Frames per second (default: 4)
 
     Returns:
-        bool: True if successful, False otherwise
+        BytesIO: Video buffer if successful, None if failed
     """
     try:
-        # Create temporary directory for images
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Save all images to temporary files
-            image_paths = []
-            for i, buffer in enumerate(image_buffers):
-                image_path = os.path.join(temp_dir, f"frame_{i:04d}.png")
-                with open(image_path, 'wb') as f:
-                    buffer.seek(0)
-                    f.write(buffer.read())
-                image_paths.append(image_path)
+        import imageio
+        from PIL import Image
+        import numpy as np
 
-            if not image_paths:
-                print("No images to create video")
-                return False
+        if not image_buffers:
+            print("No images to create video")
+            return None
 
-            # Create video using ffmpeg
-            ffmpeg_cmd = [
-                'ffmpeg',
-                '-y',  # Overwrite output file
-                '-framerate', str(fps),
-                '-i', os.path.join(temp_dir, 'frame_%04d.png'),
-                '-c:v', 'libx264',
-                '-pix_fmt', 'yuv420p',
-                '-crf', '23',  # Quality setting (lower = better quality)
-                output_path
-            ]
+        # Read images from buffers
+        images = []
+        for buffer in image_buffers:
+            buffer.seek(0)
+            # Use PIL to read the image from buffer
+            pil_image = Image.open(buffer)
+            # Convert to numpy array
+            image_array = np.array(pil_image)
+            images.append(image_array)
 
-            result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+        # Create video in memory using BytesIO
+        video_buffer = BytesIO()
 
-            if result.returncode == 0:
-                print(f"Video created successfully: {output_path}")
-                return True
-            else:
-                print(f"FFmpeg error: {result.stderr}")
-                return False
+        # Create video using imageio with in-memory buffer
+        with imageio.get_writer(video_buffer, format='mp4', fps=fps, codec='libx264', quality=8) as writer:
+            for image in images:
+                writer.append_data(image)
+
+        # Reset buffer position to beginning
+        video_buffer.seek(0)
+
+        print(f"Video created successfully in memory with {len(images)} frames at {fps:.2f} fps")
+        return video_buffer
 
     except Exception as e:
-        print(f"Error creating video: {str(e)}")
-        return False
+        print(f"Error creating video with imageio: {str(e)}")
+        return None
 
 def create_single_snapshot(client, composite, timestamp, bbox, task_manager=None):
     """
@@ -285,7 +278,7 @@ def create_single_snapshot(client, composite, timestamp, bbox, task_manager=None
         return {
             'status': 'completed',
             'download_url': download_url,
-            'filename': filename
+            'filename': os.path.basename(filename)
         }
 
     except Exception as e:
@@ -342,7 +335,7 @@ def create_series_snapshot(client, composite, start_time, end_time, bbox, task_m
 
             return {
                 'status': 'processing',
-                'message': f'Missing {len(missing_cogs)} COG files. Tasks created for processing.',
+                'message': f'Missing {len(missing_cogs)} files. Tasks created for processing.',
                 'missing_count': len(missing_cogs),
                 'total_count': len(time_intervals),
                 'task_ids': created_tasks
@@ -377,39 +370,30 @@ def create_series_snapshot(client, composite, start_time, end_time, bbox, task_m
         print(f"Successfully generated {len(image_buffers)} images")
 
         # Generate video filename
-        video_filename = generate_filename(composite, start_time, bbox, 'video', end_time)
+        filename = generate_filename(composite, start_time, bbox, 'video', end_time)
 
-        # Create video
-        with tempfile.NamedTemporaryFile(suffix='.mp4', delete=False) as temp_video:
-            temp_video_path = temp_video.name
+        # Create video in memory (250ms per frame = 4 fps)
+        video_buffer = create_video_from_images(image_buffers, fps=4)
 
-        try:
-            success = create_video_from_images(image_buffers, temp_video_path, fps=2)
-
-            if not success:
-                return {
-                    'status': 'error',
-                    'message': 'Failed to create video with ffmpeg'
-                }
-
-            # Upload video to MinIO
-            download_url = upload_to_minio(client, temp_video_path, video_filename)
-
+        if not video_buffer:
             return {
-                'status': 'completed',
-                'download_url': download_url,
-                'filename': video_filename,
-                'frame_count': len(image_buffers),
-                'time_range': {
-                    'start': start_time.isoformat(),
-                    'end': end_time.isoformat()
-                }
+                'status': 'error',
+                'message': 'Failed to create video with imageio'
             }
 
-        finally:
-            # Clean up temporary video file
-            if os.path.exists(temp_video_path):
-                os.unlink(temp_video_path)
+        # Upload video to MinIO
+        download_url = upload_to_minio(client, video_buffer, filename)
+
+        return {
+            'status': 'completed',
+            'download_url': download_url,
+            'filename': os.path.basename(filename),
+            'frame_count': len(image_buffers),
+            'time_range': {
+                'start': start_time.isoformat(),
+                'end': end_time.isoformat()
+            }
+        }
 
     except Exception as e:
         print(f"Error creating series snapshot: {str(e)}")

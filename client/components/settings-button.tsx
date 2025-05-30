@@ -56,6 +56,7 @@ export default function SettingsButton({
         className="settings-button"
         onClick={() => setIsModalOpen(true)}
         aria-label="Settings"
+        title="Settings"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
