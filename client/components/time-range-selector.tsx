@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import dayjs from "dayjs";
 import { useIsMobile } from "../hooks/use-mobile";
 import "./time-range-selector.css";
@@ -164,11 +164,14 @@ export default function TimeRangeSelector({
   };
 
   // Update selected time and ensure it's rounded to nearest 10 minutes
-  const updateSelectedTime = (newTime: dayjs.Dayjs) => {
-    const roundedTime = roundToNearestTenMinutes(newTime);
-    setSelectedTime(roundedTime);
-    onTimeChange?.(roundedTime);
-  };
+  const updateSelectedTime = useCallback(
+    (time: dayjs.Dayjs) => {
+      const roundedTime = roundToNearestTenMinutes(time);
+      setSelectedTime(roundedTime);
+      onTimeChange?.(roundedTime);
+    },
+    [onTimeChange]
+  );
 
   // Handle timeline click
   const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -431,12 +434,41 @@ export default function TimeRangeSelector({
     lookbackHours,
   ]);
 
+  // Toggle play/pause
+  const togglePlayback = useCallback(() => {
+    if (isPlaying) {
+      setIsPlaying(false);
+    } else {
+      // If at the end, restart from beginning
+      if (selectedTimeState.format() === currentTime.format()) {
+        updateSelectedTime(getStartTime());
+      } else {
+        // Ensure the selected time is in the timeIntervals array
+        const currentIndex = findClosestIntervalIndex(selectedTimeState);
+
+        // If current time is not found in intervals, snap to the closest one
+        if (currentIndex !== -1 && timeIntervals[currentIndex]) {
+          const exactIndex = timeIntervals.findIndex(
+            (interval) => interval.time.format() === selectedTimeState.format()
+          );
+
+          // If not exact match, update to the closest valid time before starting playback
+          if (exactIndex === -1 && timeIntervals[currentIndex].time) {
+            updateSelectedTime(timeIntervals[currentIndex].time);
+          }
+        }
+      }
+      setIsPlaying(true);
+    }
+  }, [isPlaying, selectedTimeState, currentTime, timeIntervals]);
+
   // Handle keyboard navigation and playback control
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Handle spacebar for play/pause
       if (e.key === " " || e.key === "Spacebar") {
         e.preventDefault(); // Prevent page scrolling
+        e.stopPropagation(); // Prevent event bubbling
         togglePlayback();
         return;
       }
@@ -444,6 +476,7 @@ export default function TimeRangeSelector({
       // Handle arrow keys for navigation
       if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
         e.preventDefault();
+        e.stopPropagation();
 
         if (timeIntervals.length === 0) return;
 
@@ -469,7 +502,7 @@ export default function TimeRangeSelector({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedTimeState, timeIntervals]);
+  }, [selectedTimeState, timeIntervals, togglePlayback]);
 
   // Handle playback
   useEffect(() => {
@@ -501,34 +534,6 @@ export default function TimeRangeSelector({
 
     return () => clearTimeout(timer);
   }, [isPlaying, selectedTimeState, timeIntervals]);
-
-  // Toggle play/pause
-  const togglePlayback = () => {
-    if (isPlaying) {
-      setIsPlaying(false);
-    } else {
-      // If at the end, restart from beginning
-      if (selectedTimeState.format() === currentTime.format()) {
-        updateSelectedTime(getStartTime());
-      } else {
-        // Ensure the selected time is in the timeIntervals array
-        const currentIndex = findClosestIntervalIndex(selectedTimeState);
-
-        // If current time is not found in intervals, snap to the closest one
-        if (currentIndex !== -1 && timeIntervals[currentIndex]) {
-          const exactIndex = timeIntervals.findIndex(
-            (interval) => interval.time.format() === selectedTimeState.format()
-          );
-
-          // If not exact match, update to the closest valid time before starting playback
-          if (exactIndex === -1 && timeIntervals[currentIndex].time) {
-            updateSelectedTime(timeIntervals[currentIndex].time);
-          }
-        }
-      }
-      setIsPlaying(true);
-    }
-  };
 
   // Calculate marker position based on time intervals
   const getMarkerPosition = () => {
