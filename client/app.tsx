@@ -15,7 +15,7 @@ import {
 import "leaflet/dist/leaflet.css";
 import "./app.css";
 import type L from "leaflet";
-import { CRS, LatLngTuple } from "leaflet";
+import { CRS } from "leaflet";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import type { CompositeType, MapConfig } from "./utils/types";
@@ -24,18 +24,6 @@ import "leaflet.vectorgrid";
 
 // Extend dayjs with UTC plugin
 dayjs.extend(utc);
-
-// Define map bounds
-const MAP_BOUNDS: L.LatLngBoundsExpression = [
-  [0.0, 75.0], // Southwest corner [lat, lng]
-  [55.0, 160.0], // Northeast corner [lat, lng]
-];
-
-// Calculate center of bounds
-const MAP_CENTER: LatLngTuple = [
-  (MAP_BOUNDS[0][0] + MAP_BOUNDS[1][0]) / 2,
-  (MAP_BOUNDS[0][1] + MAP_BOUNDS[1][1]) / 2,
-];
 
 // Generate tile URL with time parameter
 const generateTileUrl = (baseUrl: string, time: dayjs.Dayjs): string => {
@@ -150,6 +138,28 @@ function MapViewportBoundsTracker({
   return null;
 }
 
+// Map bounds updater component
+function MapBoundsUpdater({
+  bounds,
+}: {
+  bounds: L.LatLngBoundsExpression | null;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map || !bounds) return;
+
+    try {
+      // Set max bounds to prevent dragging outside
+      map.setMaxBounds(bounds);
+    } catch (error) {
+      console.error("Error setting map bounds:", error);
+    }
+  }, [map, bounds]);
+
+  return null;
+}
+
 export default function MapView() {
   // State for storing composites data from API (raw data)
   const [composites, setComposites] = useState<Record<string, string>>({});
@@ -166,6 +176,12 @@ export default function MapView() {
 
   // Store map configurations for each selected composite
   const [mapConfigs, setMapConfigs] = useState<Record<string, MapConfig>>({});
+
+  // Fixed zoom levels and center
+  const center: [number, number] = [27.5, 117.5];
+  const minZoom = 5;
+  const maxZoom = 10;
+  const defaultZoom = 6;
 
   // No longer need to store endpoint and token in component state
   const [mousePosition, setMousePosition] = useState<{
@@ -335,10 +351,8 @@ export default function MapView() {
 
   // Update map configurations when selected composites change
   useEffect(() => {
-    // Update map configs for all selected composites
     const updateMapConfigs = async () => {
       for (const composite of selectedComposites) {
-        // if mapConfig has a corresponding composite name，fetchTileJSONForComposite is not called
         if (!mapConfigs[composite]) {
           await fetchTileJSONForComposite(composite);
         }
@@ -348,29 +362,36 @@ export default function MapView() {
     updateMapConfigs();
   }, [selectedComposites, composites]);
 
+  // Get the composite's bounds
+  const compositeBounds =
+    selectedComposites.length > 0 && mapConfigs[selectedComposites[0]]
+      ? mapConfigs[selectedComposites[0]].bounds
+      : null;
+
   return (
     <main style={{ height: "100vh", width: "100vw", overflow: "hidden" }}>
       <div className="map-container">
         {/* Map Container */}
         <MapContainer
           className="leaflet-map"
-          center={MAP_CENTER}
-          zoom={6}
-          minZoom={mapConfigs[selectedComposites[0]]?.minZoom || 5}
-          maxZoom={mapConfigs[selectedComposites[0]]?.maxZoom || 10}
-          maxBounds={MAP_BOUNDS}
+          center={center}
+          zoom={defaultZoom}
+          minZoom={minZoom}
+          maxZoom={maxZoom}
           maxBoundsViscosity={1.0}
-          bounds={MAP_BOUNDS}
           crs={CRS.EPSG3857}
           keyboard={false}
         >
+          {/* Map bounds updater */}
+          <MapBoundsUpdater bounds={compositeBounds} />
+
           {/* First Layer */}
           <TileLayer
             url={tileUrl(selectedComposites[0])}
             ref={leftLayerRef}
             key={`${selectedComposites[0]}-${selectedTime.format()}`}
             noWrap={true}
-            bounds={MAP_BOUNDS}
+            bounds={compositeBounds || undefined}
           />
 
           {/* Second Layer (only if two composites are selected) */}
@@ -380,7 +401,7 @@ export default function MapView() {
               ref={rightLayerRef}
               key={`${selectedComposites[1]}-${selectedTime.format()}`}
               noWrap={true}
-              bounds={MAP_BOUNDS}
+              bounds={compositeBounds || undefined}
             />
           )}
 
