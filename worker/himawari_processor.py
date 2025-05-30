@@ -7,10 +7,12 @@ from client import upload, check_object_exists
 from utils import logger, timing
 
 
-if os.name == 'nt':
-    cache_dir = os.path.join(os.environ['TEMP'], 'satpy_cache')
-else:  # macOS/Linux
-    cache_dir = "/tmp/satpy_cache"
+# Set cache directory based on OS
+cache_dir = (
+    os.path.join(os.environ['TEMP'], 'satpy_cache')
+    if os.name == 'nt'
+    else "/tmp/satpy_cache"
+)
 
 available_composites = [
     'true_color', 'ir_clouds', 'ash', 'night_microphysics'

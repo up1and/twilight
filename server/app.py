@@ -561,7 +561,7 @@ def index():
 @app.route('/minio/events', methods=['GET', 'POST'])
 def minio_event():
     """
-    Handle MinIO events for object creation/update
+    Handle MinIO events for object creation/update (legacy fallback)
     """
     if request.method == 'POST':
         try:
@@ -582,7 +582,7 @@ def minio_event():
                 if current_timestamp is None or timestamp > current_timestamp:
                     # Update composite_state with the new timestamp
                     composite_state[composite_name] = timestamp
-                    app.logger.info(f"Updated state for {composite_name}: {timestamp}")
+                    app.logger.info(f"Updated state via MinIO event for {composite_name}: {timestamp}")
 
             return jsonify(event), 201
 
@@ -604,6 +604,7 @@ def latest_composite_state():
     Get the latest update time for all composites
     """
     return jsonify(composite_state)
+
 
 
 # Task Management API Routes
@@ -753,6 +754,25 @@ def update_task_status(task_id):
                 'error': 'Not Found',
                 'message': f'Task {task_id} not found'
             }), 404
+
+        # Get task details before updating status
+        task = task_manager.get_task(task_id)
+        if not task:
+            return jsonify({
+                'error': 'Not Found',
+                'message': f'Task {task_id} not found'
+            }), 404
+
+        # Update composite_state when task is completed
+        if status == 'completed':
+            composite_name = task.composite
+            timestamp = task.timestamp
+
+            # Only update if this timestamp is newer than what we have
+            current_timestamp = composite_state.get(composite_name)
+            if current_timestamp is None or timestamp > current_timestamp:
+                composite_state[composite_name] = timestamp
+                app.logger.info(f"Updated composite state via task completion: {composite_name} -> {timestamp}")
 
         return jsonify({
             'message': 'Task status updated successfully'
