@@ -58,6 +58,21 @@ available_composites = [
     'ir_clouds', 'true_color', 'ash', 'night_microphysics'
 ]
 
+def upper_case(name):
+    """
+    Format composite name for display (e.g., "day_convection" to "Day Convection")
+    """
+    segments = name.split('_')
+    formatted_segments = []
+    
+    for segment in segments:
+        if len(segment) <= 2:
+            formatted_segments.append(segment.upper())
+        else:
+            formatted_segments.append(segment[0].upper() + segment[1:].lower())
+    
+    return ' '.join(formatted_segments)
+
 # Task management
 class Task:
     def __init__(self, composite, timestamp, priority='normal'):
@@ -437,11 +452,14 @@ def tilejson(composite):
                 expires=datetime.timedelta(hours=24)
             )
             with Reader(presigned_url) as cog:
+                # Define attribution for different composites
+                name = upper_case(composite)
                 return jsonify({
                     "bounds": cog.get_geographic_bounds(cog.tms.rasterio_geographic_crs),
                     "minzoom": cog.minzoom,
                     "maxzoom": cog.maxzoom,
-                    "name": extract_composite_from_object_name(object_name),
+                    "name": f"Himawari {name}",
+                    "attribution": f"© Himawari {name}",
                     "tiles": [
                         f"{request.host_url.rstrip('/')}/{composite}/tiles/{'{time}'}/{'{z}'}/{'{x}'}/{'{y}'}.png"
                     ]

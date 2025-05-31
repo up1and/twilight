@@ -4,9 +4,11 @@
   font-size: 12px;
   line-height: 1.4;
   color: var(--text);
-  width: 100%;
+  width: 70%;
+  margin: 0 auto;
   padding: 10px 0 20px; /* Increased bottom padding to move timeline up */
   box-sizing: border-box;
+  pointer-events: auto;
 }
 
 /* Controls container for width control */
@@ -22,7 +24,7 @@
   display: flex;
   gap: 8px;
   align-items: center;
-  width: 70%; /* Match timeline width */
+  width: 100%;
   justify-content: flex-end;
 }
 
@@ -113,8 +115,7 @@
   box-shadow: 0 1px 5px var(--shadow);
   padding: 5px 0; /* Reduced padding */
   box-sizing: border-box; /* Include padding in height */
-  margin: 0; /* Remove margin */
-  width: 70%; /* Set to 70% width */
+  width: 100%; /* Set to 70% width */
   touch-action: none; /* Prevent browser handling of touch events */
 }
 
@@ -267,19 +268,15 @@
 /* Mobile styles */
 @media (max-width: 768px) {
   .time-range-selector.mobile {
+    width: 90%; /* Wider on mobile to match timeline width */
     padding: 5px 0 10px;
     /* No background color */
   }
 
   .time-controls {
-    width: 90%;
     flex-wrap: wrap;
     justify-content: center;
     gap: 5px;
-  }
-
-  .timeline {
-    width: 90%;
   }
 
   .datetime-picker input {

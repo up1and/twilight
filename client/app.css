@@ -31,9 +31,8 @@ body {
   left: 0;
   z-index: 1000;
   width: 100%;
+  pointer-events: none;
 }
-
-/* Custom styles to match TimeRangeSelector aesthetic */
 
 /* Zoom control styling - treated as a group */
 .leaflet-control-zoom {

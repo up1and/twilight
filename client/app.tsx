@@ -160,6 +160,44 @@ function MapBoundsUpdater({
   return null;
 }
 
+// Attribution updater component to handle attribution updates
+function AttributionUpdater({
+  selectedComposites,
+  mapConfigs,
+}: {
+  selectedComposites: CompositeType[];
+  mapConfigs: Record<CompositeType, MapConfig>;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    const attributionControl = map.attributionControl;
+    if (!attributionControl) return;
+
+    // Remove all possible attributions first
+    Object.values(mapConfigs).forEach((config) => {
+      if (config.attribution) {
+        attributionControl.removeAttribution(config.attribution);
+      }
+    });
+
+    // Add attributions for selected composites
+    const attributions = new Set<string>();
+    selectedComposites.forEach((composite) => {
+      const config = mapConfigs[composite];
+      if (config && config.attribution) {
+        attributions.add(config.attribution);
+      }
+    });
+
+    attributions.forEach((attribution) => {
+      attributionControl.addAttribution(attribution);
+    });
+  }, [map, selectedComposites, mapConfigs]);
+
+  return null;
+}
+
 export default function MapView() {
   // State for storing composites data from API (raw data)
   const [composites, setComposites] = useState<Record<string, string>>({});
@@ -431,6 +469,10 @@ export default function MapView() {
           <MousePositionTracker onPositionChange={handlePositionChange} />
           <MapViewportBoundsTracker
             onBoundsChange={handleViewportBoundsChange}
+          />
+          <AttributionUpdater
+            selectedComposites={selectedComposites}
+            mapConfigs={mapConfigs}
           />
         </MapContainer>
 
