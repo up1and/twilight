@@ -1,7 +1,11 @@
 import os
+import functools
 
 from satpy import Scene
 from pyresample import create_area_def
+import dask
+from dask.diagnostics import ProgressBar, ResourceProfiler
+from dask.diagnostics.profile_visualize import visualize
 
 from client import upload, check_object_exists
 from utils import logger, timing
@@ -13,6 +17,68 @@ cache_dir = (
     if os.name == 'nt'
     else "/tmp/satpy_cache"
 )
+
+# Configure Dask
+dask.config.set({
+    'array.chunk-size': '256mb',
+    'array.slicing.split_large_chunks': True,
+    'distributed.worker.memory.target': 0.8,
+    'distributed.worker.memory.spill': 0.9,
+    'distributed.worker.memory.pause': 0.95,
+    'distributed.worker.memory.terminate': 0.98
+})
+
+
+def memory_profiler(chunk_size='256mb', save_profile=True):
+    """
+    Decorator for memory profiling with Dask diagnostics
+
+    Args:
+        chunk_size: Dask chunk size for the operation
+        save_profile: Whether to save HTML profile report
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            # Extract function name and args for profile naming
+            func_name = func.__name__
+
+            # Try to extract composite_name and target_time from args for naming
+            composite_name, target_time, *_ = args
+            time_str = target_time.strftime('%Y%m%d_%H%M')
+
+            # Set memory limit for this operation
+            with dask.config.set({'array.chunk-size': chunk_size}):
+                # Initialize diagnostics
+                resource_prof = ResourceProfiler(dt=0.25)  # Sample every 250ms
+                progress = ProgressBar()
+
+                with resource_prof, progress:
+                    # Execute the original function
+                    result = func(*args, **kwargs)
+
+                # Log detailed resource usage
+                try:
+                    # Extract memory usage from resource profiler
+                    memory_usage = [entry['memory'] for entry in resource_prof.results if 'memory' in entry]
+                    peak_memory = max(memory_usage) / 1e9 if memory_usage else 0
+                    logger.info(f"[{func_name}] Peak memory usage: {peak_memory:.2f} GB")
+                except Exception as e:
+                    logger.info(f"[{func_name}] Memory profiling completed (details unavailable: {e})")
+
+                # Generate resource profile visualization (optional)
+                if save_profile:
+                    try:
+                        profile_file = os.path.join(cache_dir, f"dask_profile_{func_name}_{composite_name}_{time_str}.html")
+                        visualize([resource_prof], filename=profile_file, show=False)
+                        logger.info(f"[{func_name}] Resource profile saved to: {profile_file}")
+                    except Exception as e:
+                        logger.warning(f"[{func_name}] Could not save resource profile: {e}")
+
+                return result
+        return wrapper
+    return decorator
+
 
 available_composites = [
     'true_color', 'ir_clouds', 'ash', 'night_microphysics'
@@ -37,6 +103,7 @@ def ahi_s3_files(time, cache=False):
 
 
 @timing
+@memory_profiler()
 def process_composite(composite_name, target_time):
     """Process a single composite for the given time"""
     try:
@@ -67,7 +134,7 @@ def process_composite(composite_name, target_time):
             }
         }
 
-        china_bbox = [75, 0, 160, 55]  # 东经75°-160°，纬度0°-55°
+        china_bbox = [75, 0, 160, 55]  # lon: 75°-160°，lat 0°-55°
 
         lon_span = china_bbox[2] - china_bbox[0]
         lat_span = china_bbox[3] - china_bbox[1]
@@ -77,8 +144,8 @@ def process_composite(composite_name, target_time):
         height = int(lat_span / pixel_resolution) # 55° / 0.02° = 2750
 
         china_area = create_area_def(
-            area_id='china',  # 区域唯一标识符
-            projection='EPSG:4326',  # WGS84经纬度投影
+            area_id='china',
+            projection='EPSG:3857',
             width=width,
             height=height,
             area_extent=china_bbox,  # [min_lon, min_lat, max_lon, max_lat]
@@ -87,7 +154,8 @@ def process_composite(composite_name, target_time):
         scn = Scene(filenames=files, reader='ahi_hsd', reader_kwargs=reader_kwargs)
         scn.load([satpy_composite_name])
 
-        scn_china = scn.resample(china_area, resampler='bilinear', chunks=512)
+        # Resample with chunking for memory efficiency
+        scn_china = scn.resample(china_area, resampler='bilinear', chunks=(512, 512))
         filename = os.path.join(cache_dir, name)
 
         scn_china.save_dataset(

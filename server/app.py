@@ -73,6 +73,20 @@ def upper_case(name):
     
     return ' '.join(formatted_segments)
 
+def parse_iso_timestamp(timestamp_str):
+    """
+    Parse an ISO 8601 timestamp string into a timezone-aware datetime object.
+    """
+    # Handle timezone-aware timestamps
+    if timestamp_str.endswith('Z'):
+        timestamp_str = timestamp_str.replace('Z', '+00:00')
+    timestamp = datetime.datetime.fromisoformat(timestamp_str)
+    # Ensure timezone-aware datetime
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=datetime.timezone.utc)
+    
+    return timestamp
+
 # Task management
 class Task:
     def __init__(self, composite, timestamp, priority='normal'):
@@ -419,8 +433,7 @@ def tile(composite, timestamp, z, x, y):
     test url: http://localhost:5000/ash/tiles/2025-04-20T04:00:00/5/25/15.png
     """
     try:
-        # Parse ISO 8601 time string
-        request_time = datetime.datetime.fromisoformat(timestamp)
+        request_time = parse_iso_timestamp(timestamp)
         return find_tile(composite, z, x, y, request_time)
     except ValueError:
         error_msg = {
@@ -623,8 +636,6 @@ def latest_composite_state():
     """
     return jsonify(composite_state)
 
-
-
 # Task Management API Routes
 
 @app.route('/api/tasks', methods=['POST'])
@@ -649,7 +660,7 @@ def create_task():
 
         # Parse timestamp
         try:
-            timestamp = datetime.datetime.fromisoformat(data['timestamp'])
+            timestamp = parse_iso_timestamp(data['timestamp'])
         except ValueError:
             return jsonify({
                 'error': 'Bad Request',
@@ -840,7 +851,7 @@ def create_snapshot():
 
         # Parse timestamps
         try:
-            start_time = datetime.datetime.fromisoformat(timestamp)
+            start_time = parse_iso_timestamp(timestamp)
         except ValueError:
             return jsonify({
                 'error': 'Bad Request',

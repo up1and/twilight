@@ -61,7 +61,7 @@ export default function SnapshotButton({
           timedelta?: number;
         } = {
           bbox,
-          timestamp: selectedTime.utc().format("YYYY-MM-DDTHH:mm:ss"),
+          timestamp: selectedTime.utc().format("YYYY-MM-DDTHH:mm:ssZZ"),
           composite: composite,
         };
 
