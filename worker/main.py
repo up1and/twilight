@@ -4,36 +4,12 @@ import s3fs
 import argparse
 import threading
 import requests
-import socket
 
 from himawari_processor import available_composites
 from task_manager import TaskManager
-from utils import logger
+from sync import HimawariDataSync
+from utils import logger, _available_latest_time, generate_worker_id
 
-def get_local_ip():
-    """Get local IP address"""
-    try:
-        # Connect to a remote address to determine local IP
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.connect(("8.8.8.8", 80))
-            return s.getsockname()[0]
-    except Exception:
-        return "127.0.0.1"
-
-def generate_worker_id():
-    """Generate worker ID from hostname and IP"""
-    hostname = socket.gethostname()
-    ip = get_local_ip()
-    return f"{hostname}_{ip}"
-
-def _replace_minute(time):
-    minute = int(time.minute / 10) * 10
-    return time.replace(minute=minute)
-
-def _available_latest_time():
-    utc = datetime.datetime.now(datetime.timezone.utc)
-    time = _replace_minute(utc)
-    return time - datetime.timedelta(minutes=20)
 
 def check_files_available(target_time):
     """Check if 160 files are available for the given time"""
@@ -112,6 +88,16 @@ def task_generator_thread(server_url):
             time.sleep(60)
 
 
+def sync_thread():
+    """Data synchronization thread"""
+    logger.info("Starting Himawari data sync thread...")
+    try:
+        syncer = HimawariDataSync()
+        syncer.run()
+    except Exception as e:
+        logger.error(f"Error in sync thread: {e}")
+
+
 def main():
     """Main entry point"""
     parser = argparse.ArgumentParser(description='Himawari satellite data processing')
@@ -122,6 +108,8 @@ def main():
     parser.add_argument('--worker-id', help='Worker ID (auto-generated if not provided)')
     parser.add_argument('--poll-interval', type=int, default=5,
                         help='Task polling interval in seconds')
+    parser.add_argument('--sync', action='store_true',
+                        help='Enable Himawari data synchronization from NOAA S3')
 
     args = parser.parse_args()
 
@@ -136,7 +124,14 @@ def main():
             daemon=True
         )
         generator_thread.start()
-        logger.info("Task generator thread started")
+
+    if args.sync:
+        # Start data synchronization thread
+        sync_thread_obj = threading.Thread(
+            target=sync_thread,
+            daemon=True
+        )
+        sync_thread_obj.start()
 
     logger.info(f"Starting in {args.mode} mode")
     logger.info(f"Server URL: {args.server_url}")
