@@ -3,9 +3,9 @@ import re
 import uuid
 import sqlite3
 import datetime
-import threading
+import json
 
-from collections import deque
+import redis
 
 from flask import Flask, Response, request, jsonify
 from flask_caching import Cache
@@ -17,7 +17,7 @@ from rasterio.errors import RasterioIOError
 
 from minio import Minio
 from minio.error import S3Error
-from config import endpoint, access_key, secret_key
+from config import endpoint, access_key, secret_key, redis_url
 from snapshot import (
     create_single_snapshot,
     create_series_snapshot,
@@ -29,13 +29,18 @@ TILE_SIZE = 256
 
 app = Flask(__name__)
 
-# Configure Flask-Caching with SimpleCache (in-memory)
+# Configure Flask-Caching with RedisCache
 cache_config = {
-    'CACHE_TYPE': 'SimpleCache',  # In-memory cache
-    'CACHE_DEFAULT_TIMEOUT': 3600  # 1 hour default cache timeout
+    'CACHE_TYPE': 'RedisCache',
+    'CACHE_REDIS_URL': redis_url,
+    'CACHE_DEFAULT_TIMEOUT': 3600,  # 1 hour default cache timeout
+    'CACHE_KEY_PREFIX': 'twilight_cache_'
 }
 app.config.update(cache_config)
 cache = Cache(app)
+
+# Configure Redis connection
+redis_client = redis.from_url(redis_url, decode_responses=True)
 
 # Custom JSON encoder function for datetime objects
 def default_json_handler(obj):
@@ -134,11 +139,57 @@ class Task:
             'error_message': self.error_message
         }
 
+    def to_json(self):
+        """Serialize task to JSON string for Redis storage"""
+        data = self.to_dict()
+        # Convert datetime objects to ISO format strings
+        for key in ['timestamp', 'created', 'started', 'completed']:
+            if data[key] is not None:
+                data[key] = data[key].isoformat()
+        return json.dumps(data)
+
+    @classmethod
+    def from_json(cls, json_str):
+        """Deserialize task from JSON string"""
+        data = json.loads(json_str)
+
+        # Create task instance
+        task = cls.__new__(cls)
+        task.task_id = data['task_id']
+        task.composite = data['composite']
+        task.priority = data['priority']
+        task.status = data['status']
+        task.worker_id = data['worker_id']
+        task.error_message = data['error_message']
+
+        # Convert ISO format strings back to datetime objects
+        task.timestamp = datetime.datetime.fromisoformat(data['timestamp'])
+        task.created = datetime.datetime.fromisoformat(data['created'])
+        task.started = datetime.datetime.fromisoformat(data['started']) if data['started'] else None
+        task.completed = datetime.datetime.fromisoformat(data['completed']) if data['completed'] else None
+
+        return task
+
 class TaskManager:
-    def __init__(self):
-        self.tasks = {}  # task_id -> Task
-        self.task_queue = deque()  # pending tasks
-        self.lock = threading.Lock()
+    def __init__(self, redis_client):
+        self.redis = redis_client
+        # Redis keys
+        self.tasks_key = 'tasks'  # Hash: task_id -> task_json
+        self.queue_key = 'task_queue'  # Sorted Set: task_id with priority+timestamp score
+        self.expire_time = 3600 * 24 * 7  # 1 week
+
+        # Redis lock for distributed locking
+        self.lock = self.redis.lock('task_lock', timeout=10, blocking_timeout=10)
+
+        # Priority weights for scoring (lower score = higher priority)
+        self.priority_weights = {'high': 0, 'normal': 1000000, 'low': 2000000}
+
+    def _calculate_score(self, task):
+        """Calculate score for sorted set (lower score = higher priority)"""
+        priority_weight = self.priority_weights.get(task.priority, 1000000)
+        # Use timestamp as seconds since epoch for fine-grained ordering
+        timestamp_score = int(task.timestamp.timestamp())
+        return priority_weight + timestamp_score
 
     def create_task(self, composite, timestamp, priority='normal'):
         """Create a new task with deduplication and optional priority promotion"""
@@ -147,7 +198,8 @@ class TaskManager:
             temp_task = Task(composite, timestamp, priority)
 
             # Check for existing task using __eq__ method
-            for existing_task in self.tasks.values():
+            existing_tasks = self._get_all_tasks()
+            for existing_task in existing_tasks:
                 if (existing_task == temp_task and
                     existing_task.status in ['pending', 'processing']):
                     # Task already exists, return existing task
@@ -155,102 +207,115 @@ class TaskManager:
 
             # Create new task if no duplicate found
             task = temp_task
-            self.tasks[task.task_id] = task
+
+            # Store task in Redis
+            self.redis.hset(self.tasks_key, task.task_id, task.to_json())
+
+            # Add to sorted set with calculated score
+            score = self._calculate_score(task)
+            self.redis.zadd(self.queue_key, {task.task_id: score})
 
             # If this is a monitor mode task with normal priority, promote older pending normal tasks
             if priority == 'normal':
                 self._promote_tasks_in_queue(timestamp)
 
-            # Add task to queue with smart insertion
-            self._insert_task_to_queue(task)
-
+            self.redis.expire(self.tasks_key, self.expire_time)
             return task
+
+    def _get_all_tasks(self):
+        """Get all tasks from Redis"""
+        task_data = self.redis.hgetall(self.tasks_key)
+        tasks = []
+        for task_json in task_data.values():
+            tasks.append(Task.from_json(task_json))
+        return tasks
 
     def _promote_tasks_in_queue(self, reference_timestamp):
         """Promote pending normal priority tasks in queue older than reference timestamp to high priority"""
+        # Note: This method is called within the create_task lock, so no additional locking needed
 
-        # Iterate through queue and promote tasks (queue contains Task objects now)
-        for task in self.task_queue:
-            if (task.priority == 'normal' and
-                task.timestamp < reference_timestamp):
-                task.priority = 'high'
+        # Get all task IDs from the queue
+        task_ids = self.redis.zrange(self.queue_key, 0, -1)
 
-        # Re-sort queue to reflect new priorities
-        self._sort_queue()
+        # Process tasks that need promotion
+        promoted_tasks = []
+        for task_id in task_ids:
+            task_json = self.redis.hget(self.tasks_key, task_id)
+            if task_json:
+                task = Task.from_json(task_json)
+                if (task.priority == 'normal' and
+                    task.timestamp < reference_timestamp):
+                    task.priority = 'high'
+                    promoted_tasks.append(task)
 
-    def _insert_task_to_queue(self, task):
-        """Insert task to queue at the correct position based on priority and timestamp"""
-        if not self.task_queue:
-            self.task_queue.append(task)
-            return
-
-        # Find the correct position to insert
-        priority_order = {'high': 0, 'normal': 1, 'low': 2}
-        task_priority_value = priority_order.get(task.priority, 1)
-
-        insert_index = len(self.task_queue)  # Default to end
-
-        for i, existing_task in enumerate(self.task_queue):
-            existing_priority_value = priority_order.get(existing_task.priority, 1)
-
-            # If new task has higher priority, insert here
-            if task_priority_value < existing_priority_value:
-                insert_index = i
-                break
-            # If same priority, compare timestamps (earlier first)
-            elif (task_priority_value == existing_priority_value and
-                  task.timestamp < existing_task.timestamp):
-                insert_index = i
-                break
-
-        # Insert at the found position
-        self.task_queue.insert(insert_index, task)
-
-    def _sort_queue(self):
-        """Sort the existing queue by priority and timestamp"""
-        priority_order = {'high': 0, 'normal': 1, 'low': 2}
-
-        def sort_key(task):
-            return (priority_order.get(task.priority, 1), task.timestamp)
-
-        # Convert to list, sort, and convert back to deque
-        sorted_tasks = sorted(list(self.task_queue), key=sort_key)
-        self.task_queue.clear()
-        self.task_queue.extend(sorted_tasks)
+        # Update promoted tasks
+        for task in promoted_tasks:
+            # Update task data
+            self.redis.hset(self.tasks_key, task.task_id, task.to_json())
+            # Update score in sorted set
+            new_score = self._calculate_score(task)
+            self.redis.zadd(self.queue_key, {task.task_id: new_score})
 
     def get_task(self, task_id):
         """Get task by ID"""
-        return self.tasks.get(task_id)
+        task_json = self.redis.hget(self.tasks_key, task_id)
+        if task_json:
+            return Task.from_json(task_json)
+        return None
 
     def get_next_task(self, worker_id):
         """Get next pending task for worker"""
         with self.lock:
-            while self.task_queue:
-                task = self.task_queue.popleft()
-                task.status = 'processing'
-                task.started = datetime.datetime.now(datetime.timezone.utc)
-                task.worker_id = worker_id
-                return task
-                # If task is not pending, continue to next task
-            return None
+            # Get the task with lowest score (highest priority)
+            task_ids = self.redis.zrange(self.queue_key, 0, 0)
+            if not task_ids:
+                return None
+
+            task_id = task_ids[0]
+
+            # Check if task still exists
+            task_json = self.redis.hget(self.tasks_key, task_id)
+            if not task_json:
+                # Task was deleted, remove from queue
+                self.redis.zrem(self.queue_key, task_id)
+                return None
+
+            task = Task.from_json(task_json)
+            task.status = 'processing'
+            task.started = datetime.datetime.now(datetime.timezone.utc)
+            task.worker_id = worker_id
+
+            # Remove from queue and update task status
+            self.redis.zrem(self.queue_key, task_id)
+            self.redis.hset(self.tasks_key, task.task_id, task.to_json())
+
+            return task
 
     def update_task_status(self, task_id, status, error_message=None):
         """Update task status"""
         with self.lock:
-            task = self.tasks.get(task_id)
-            if task:
-                task.status = status
-                if error_message:
-                    task.error_message = error_message
-                if status in ['completed', 'failed']:
-                    task.completed = datetime.datetime.now(datetime.timezone.utc)
-                return True
-            return False
+            task_json = self.redis.hget(self.tasks_key, task_id)
+            if not task_json:
+                return False
+
+            task = Task.from_json(task_json)
+            task.status = status
+            if error_message:
+                task.error_message = error_message
+            if status in ['completed', 'failed']:
+                task.completed = datetime.datetime.now(datetime.timezone.utc)
+
+            # Update task in Redis
+            self.redis.hset(self.tasks_key, task.task_id, task.to_json())
+            self.redis.expire(self.tasks_key, self.expire_time)
+            return True
 
     def get_tasks(self, status=None, composite=None, limit=20, offset=0):
         """Get tasks with optional filtering"""
+        all_tasks = self._get_all_tasks()
         filtered_tasks = []
-        for task in self.tasks.values():
+
+        for task in all_tasks:
             if status and task.status != status:
                 continue
             if composite and task.composite != composite:
@@ -263,7 +328,7 @@ class TaskManager:
         return filtered_tasks[offset:offset+limit], len(filtered_tasks)
 
 # Global task manager
-task_manager = TaskManager()
+task_manager = TaskManager(redis_client)
 
 def extract_timestamp_from_object_name(object_name):
     """
