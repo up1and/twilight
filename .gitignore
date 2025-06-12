@@ -31,3 +31,5 @@ __pycache__
 .pdm-python
 .python-version
 */hsd/*
+server/config.py
+worker/config.py

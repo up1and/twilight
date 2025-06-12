@@ -2,18 +2,15 @@
 Himawari-9 Data Synchronization Script
 Syncs latest AHI-L1b-FLDK data from NOAA S3 to local MinIO
 """
-import time
-import datetime
-
 from minio import Minio
-from utils import logger, _available_latest_time
+from utils import logger
 from client import get_minio_client
 
 # Configuration
 noaa_bucket = 'noaa-himawari9'
 local_bucket = 'raw'
 
-class HimawariDataSync(object):
+class HimawariDataSync:
     """Synchronizes Himawari-9 data from NOAA S3 to local MinIO"""
 
     def __init__(self):
@@ -109,32 +106,3 @@ class HimawariDataSync(object):
         logger.info(f"Local file count for {time_folder}: {local_count}")
 
         return local_count >= 160
-
-    def run(self):
-        """Run the sync process continuously"""
-        logger.info("Starting Himawari-9 data synchronization")
-
-        # Start with available latest time
-        current_target_time = _available_latest_time()
-        logger.info(f"Starting sync from time: {current_target_time.strftime('%Y-%m-%d %H:%M')} UTC")
-
-        while True:
-            try:
-                # Try to sync current target time
-                if self.sync(current_target_time):
-                    # Successfully synced 160 files, move to next 10-minute interval
-                    current_target_time = current_target_time + datetime.timedelta(minutes=10)
-                    logger.info(f"Moving to next time: {current_target_time.strftime('%Y-%m-%d %H:%M')} UTC")
-                else:
-                    time.sleep(60)
-
-            except KeyboardInterrupt:
-                logger.info("Shutting down...")
-                break
-            except Exception as e:
-                logger.error(f"Error in sync loop: {e}")
-                time.sleep(60)
-
-if __name__ == '__main__':
-    syncer = HimawariDataSync()
-    syncer.run()
