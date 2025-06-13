@@ -3,6 +3,7 @@ import functools
 
 from satpy import Scene
 from pyresample import create_area_def
+
 import dask
 from dask.diagnostics import ProgressBar, ResourceProfiler
 from dask.diagnostics.profile_visualize import visualize
@@ -17,16 +18,6 @@ cache_dir = (
     if os.name == 'nt'
     else "/tmp/satpy_cache"
 )
-
-# Configure Dask
-dask.config.set({
-    'array.chunk-size': '256mb',
-    'array.slicing.split_large_chunks': True,
-    'distributed.worker.memory.target': 0.8,
-    'distributed.worker.memory.spill': 0.9,
-    'distributed.worker.memory.pause': 0.95,
-    'distributed.worker.memory.terminate': 0.98
-})
 
 
 def memory_profiler(chunk_size='256mb', save_profile=True):
@@ -92,7 +83,6 @@ composite_mapping = {
     'ash': 'ash'
 }
 
-
 def ahi_s3_files(time, cache=False):
     base_path = 's3://noaa-himawari9/AHI-L1b-FLDK/{}/*'.format(time.strftime('%Y/%m/%d/%H%M'))
 
@@ -145,7 +135,7 @@ def process_composite(composite_name, target_time):
 
         china_area = create_area_def(
             area_id='china',
-            projection='EPSG:3857',
+            projection='EPSG:4326',
             width=width,
             height=height,
             area_extent=china_bbox,  # [min_lon, min_lat, max_lon, max_lat]
@@ -154,8 +144,11 @@ def process_composite(composite_name, target_time):
         scn = Scene(filenames=files, reader='ahi_hsd', reader_kwargs=reader_kwargs)
         scn.load([satpy_composite_name])
 
+        dims = len(scn[satpy_composite_name].data.shape)
+        chunks = (512, 512) if dims == 2 else ('auto', 512, 512)
+
         # Resample with chunking for memory efficiency
-        scn_china = scn.resample(china_area, resampler='bilinear', chunks=(512, 512))
+        scn_china = scn.resample(china_area, resampler='bilinear', chunks=chunks)
         filename = os.path.join(cache_dir, name)
 
         scn_china.save_dataset(
