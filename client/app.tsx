@@ -240,14 +240,25 @@ export default function MapView() {
       }
       try {
         const data = await fetchLatestComposites();
-        const timestamps = selectedComposites
-          .filter((composite) => composite in data)
+
+        // Filter selected composites that have valid (non-null) timestamps
+        const selectedTimestamps = selectedComposites
+          .filter((composite) => composite in data && data[composite] !== null)
           .map((composite) => dayjs(data[composite]));
-        const earliestTime = timestamps.reduce((earliest, current) =>
-          current.isBefore(earliest) ? current : earliest
-        );
+
+        let timeToSet: dayjs.Dayjs | null = null;
+
+        if (selectedTimestamps.length > 0) {
+          // Use earliest time from selected composites if available
+          timeToSet = selectedTimestamps.reduce((earliest, current) =>
+            current.isBefore(earliest) ? current : earliest
+          );
+        }
+
         setComposites(data);
-        setSelectedTime(earliestTime);
+        if (timeToSet) {
+          setSelectedTime(timeToSet);
+        }
         console.log("latest composites:", data);
       } catch (error) {
         console.error("error fetching composites:", error);
