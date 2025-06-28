@@ -1,9 +1,10 @@
-import datetime
 import time
-import s3fs
+import datetime
 import argparse
 import threading
 import requests
+
+import s3fs
 
 from himawari_processor import available_composites
 from task import TaskClient, TaskProcessor
@@ -12,21 +13,17 @@ from utils import logger, _available_latest_time, generate_worker_id
 from config import server_url
 
 
-def check_files_available(target_time):
-    """Check if 160 files are available for the given time"""
+def check_files(target_time):
+    """Check files are available for the given time"""
     try:
         fs = s3fs.S3FileSystem(anon=True)
         s3_path = 'noaa-himawari9/AHI-L1b-FLDK/{}'.format(target_time.strftime('%Y/%m/%d/%H%M'))
-
         files = fs.ls(s3_path)
-        file_count = len(files)
+        return files
 
-        logger.info(f"Found {file_count} files for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC")
-
-        return file_count >= 160
     except Exception as e:
         logger.error(f"Error checking files for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC: {e}")
-        return False
+        return []
 
 def run_task_generator(server_url, shutdown_event=None):
     """
@@ -55,7 +52,8 @@ def run_task_generator(server_url, shutdown_event=None):
                 continue
 
             # Check if files are available
-            if check_files_available(current_target_time):
+            files = check_files(current_target_time)
+            if len(files) >= 160:
                 for composite_name in available_composites:
                     try:
                         # Create task on server (server will handle deduplication)

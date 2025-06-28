@@ -1,8 +1,8 @@
-import datetime
-import time
-import requests
-import socket
 import os
+import socket
+import datetime
+
+import requests
 
 from utils import logger
 
