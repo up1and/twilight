@@ -28,6 +28,7 @@ dist-ssr
 *.tif
 *.tiff
 __pycache__
+diff.txt
 .pdm-python
 .python-version
 */hsd/*

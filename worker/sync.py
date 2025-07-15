@@ -176,11 +176,11 @@ class HimawariDataSync:
         # Build time folder path
         time_folder = f"AHI-L1b-FLDK/{target_time.strftime('%Y/%m/%d/%H%M')}"
 
-        # List files in NOAA S3 and local MinIO
+        # List files in NOAA S3
         noaa_files = self.list_files(self.noaa_fs, noaa_bucket, time_folder)
         if not noaa_files:
-            logger.warning(f"No files found in {time_folder}")
-            return False
+            logger.warning(f"No files found in NOAA S3 for {time_folder}")
+            return 'missing'
 
         existing_files = set(self.list_files(self.client, local_bucket, time_folder))
 
@@ -198,4 +198,8 @@ class HimawariDataSync:
         local_count = self.count_local_files(time_folder)
         logger.info(f"Local file count for {time_folder}: {local_count}")
 
-        return local_count >= 160
+        if local_count >= 160:
+            return 'done'
+        else:
+            return 'pending'
+

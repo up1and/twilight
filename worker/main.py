@@ -59,6 +59,10 @@ def run_task_generator(server_url, shutdown_event=None):
             if current_target_time is None:
                 current_target_time = latest_time
 
+            # If the current target time is too far behind, manually move to next interval
+            if latest_time - current_target_time > datetime.timedelta(minutes=20):
+                current_target_time = current_target_time + datetime.timedelta(minutes=10)
+
             # If the current target time is still in the future compared to latest available, wait
             if current_target_time > latest_time:
                 shutdown_event.wait(60)
@@ -119,18 +123,32 @@ def run_himawari_sync(shutdown_event=None):
     
     # Start with available latest time
     current_target_time = _available_latest_time()
+    target_start_time = datetime.datetime.now(datetime.timezone.utc)
+    timeout_minutes = 10  # 10 minutes per target_time
     logger.info(f"Starting sync from time: {current_target_time.strftime('%Y-%m-%d %H:%M')} UTC")
 
     while not shutdown_event.is_set():
         try:
             # Try to sync current target time
-            if sync_client.sync(current_target_time):
-                # Successfully synced 160 files, move to next 10-minute interval
+            sync_status = sync_client.sync(current_target_time)
+            if sync_status == 'done':
+                # Successfully synced files, move to next 10-minute interval
                 current_target_time = current_target_time + datetime.timedelta(minutes=10)
-                logger.info(f"Moving to next time: {current_target_time.strftime('%Y-%m-%d %H:%M')} UTC")
+                target_start_time = datetime.datetime.now(datetime.timezone.utc)  # Reset timer for new target_time
+                logger.info(f"Sync completed, moving to next time: {current_target_time.strftime('%Y-%m-%d %H:%M')} UTC")
             else:
-                # Wait with shutdown awareness
-                shutdown_event.wait(60)
+                # Check if we've spent too much time on this target_time
+                current_time = datetime.datetime.now(datetime.timezone.utc)
+                elapsed_time = current_time - target_start_time
+                if elapsed_time > datetime.timedelta(minutes=timeout_minutes):
+                    logger.warning(f"Target time {current_target_time.strftime('%Y-%m-%d %H:%M')} exceeded {timeout_minutes}-minute limit, moving to next")
+                    current_target_time = current_target_time + datetime.timedelta(minutes=10)
+                    target_start_time = datetime.datetime.now(datetime.timezone.utc)  # Reset timer for new target_time
+                else:
+                    # Still within time limit, wait and retry
+                    elapsed_seconds = elapsed_time.total_seconds()
+                    logger.info(f"Status: {sync_status}, waiting before retry (elapsed: {elapsed_seconds:.1f}s)")
+                    shutdown_event.wait(60)
 
         except KeyboardInterrupt:
             break
