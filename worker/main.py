@@ -10,6 +10,7 @@ from himawari_processor import available_composites
 from task import TaskClient, TaskProcessor
 from sync import HimawariDataSync
 from utils import logger, _available_latest_time, generate_worker_id
+from client import check_local_files
 from config import server_url
 
 
@@ -24,6 +25,18 @@ def check_files(target_time):
     except Exception as e:
         logger.error(f"Error checking files for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC: {e}")
         return []
+    
+def get_source_priorty(timestamp):
+    from config import data_source
+    if data_source == 'auto':
+        # Check if it's old data (>1 month), if so, allow remote processing
+        one_month_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
+        if timestamp > one_month_ago:
+            data_source = 'local'
+        else:
+            data_source = 'remote'
+
+    return data_source
 
 def run_task_generator(server_url, shutdown_event=None):
     """
@@ -150,12 +163,28 @@ def run_task_manager(server_url, worker_id=None, poll_interval=10, shutdown_even
 
     while not shutdown_event.is_set():
         try:
-            # Get next task
-            task_data = task_client.get_next_task()
+            # Peek at next task
+            task_data = task_client.peek_next_task()
 
             if task_data:
-                # Process the task
-                task_processor.process_task(task_data)
+                task_id = task_data['task_id']
+                timestamp = task_data['timestamp']
+                source = get_source_priorty(timestamp)
+                
+                # Check if we can process this task
+                if source == 'remote' or (source == 'local' and check_local_files(timestamp)):
+                    # Claim the task before processing
+                    claimed_task = task_client.claim_task(task_id)
+                    if claimed_task:
+                        # Successfully claimed, now process it
+                        task_processor.process_task(claimed_task, source)
+                    else:
+                        # Task was claimed by another worker or no longer available
+                        logger.debug("Task %s was claimed by another worker, trying next task...", task_id)
+                        continue
+                else:
+                    logger.debug("Task skipped, %s files not exist, waiting %s seconds...", source, poll_interval)
+                    shutdown_event.wait(poll_interval)
             else:
                 # No tasks available, wait with shutdown awareness
                 logger.debug("No tasks available, waiting %s seconds...", poll_interval)

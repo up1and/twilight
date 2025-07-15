@@ -9,7 +9,7 @@ from functools import wraps
 
 def _replace_minute(time):
     minute = int(time.minute / 10) * 10
-    return time.replace(minute=minute)
+    return time.replace(minute=minute, second=0, microsecond=0)
 
 def _available_latest_time():
     utc = datetime.datetime.now(datetime.timezone.utc)

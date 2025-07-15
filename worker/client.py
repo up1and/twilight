@@ -27,6 +27,24 @@ def check_object_exists(bucket_name, object_name):
     except Exception:
         return False
 
+def check_local_files(time):
+    """Check if raw AHI data exists and is complete in local minio raw bucket"""
+    try:
+        # Check if raw bucket exists
+        client = get_minio_client()
+        if not client.bucket_exists('raw'):
+            return False
+        
+        # List objects with the time-based prefix
+        prefix = 'AHI-L1b-FLDK/{}/'.format(time.strftime('%Y/%m/%d/%H%M'))
+        objects = list(client.list_objects('raw', prefix=prefix))
+        
+        # Count .DAT.bz2 files (complete dataset should have 160 files)
+        dat_files = [obj for obj in objects if obj.object_name.endswith('.DAT.bz2')]
+        return len(dat_files) >= 160
+    except Exception as e:
+        logger.warning(f"Error checking local raw data: {e}")
+        return False
 
 def upload(bucket_name, object_name, file, composite_name):
     client = get_minio_client()

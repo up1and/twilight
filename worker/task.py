@@ -15,36 +15,72 @@ class TaskClient:
         self.worker_id = worker_id or f"worker_{socket.gethostname()}_{os.getpid()}"
         self.session = requests.Session()
 
-    def get_next_task(self):
-        """Get next pending task from server"""
+    def peek_next_task(self):
+        """Peek next pending task from server"""
         try:
             response = self.session.get(
                 f"{self.server_url}/api/tasks/next",
-                params={'worker_id': self.worker_id},
                 timeout=10
             )
 
             if response.status_code == 204:  # No Content
                 return None
             elif response.status_code == 200:
-                return response.json()
+                data = response.json()
+                # Parse timestamp
+                timestamp = datetime.datetime.fromisoformat(data['timestamp'].replace('Z', '+00:00'))
+                if timestamp.tzinfo is None:
+                    timestamp = timestamp.replace(tzinfo=datetime.timezone.utc)
+
+                data['timestamp'] = timestamp
+                return data
             else:
-                logger.error(f"Failed to get next task: {response.status_code} {response.text}")
+                logger.error(f"Failed to peek next task: {response.status_code} {response.text}")
                 return None
 
         except Exception as e:
-            logger.error(f"Error getting next task: {e}")
+            logger.error(f"Error peeking next task: {e}")
             return None
 
-    def update_task_status(self, task_id, status, error_message=None):
+    def claim_task(self, task_id):
+        """Claim a specific task for processing"""
+        try:
+            data = {
+                'worker_id': self.worker_id
+            }
+
+            response = self.session.put(
+                f"{self.server_url}/api/tasks/{task_id}/claim",
+                json=data,
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                # Parse timestamp
+                timestamp = datetime.datetime.fromisoformat(data['timestamp'].replace('Z', '+00:00'))
+                if timestamp.tzinfo is None:
+                    timestamp = timestamp.replace(tzinfo=datetime.timezone.utc)
+
+                data['timestamp'] = timestamp
+                return data
+            else:
+                logger.error(f"Failed to claim task: {response.status_code} {response.text}")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error claiming task: {e}")
+            return None
+
+    def update_task_status(self, task_id, status, message=None):
         """Update task status on server"""
         try:
             data = {
                 'status': status,
                 'worker_id': self.worker_id
             }
-            if error_message:
-                data['error_message'] = error_message
+            if message:
+                data['message'] = message
 
             response = self.session.put(
                 f"{self.server_url}/api/tasks/{task_id}/status",
@@ -69,40 +105,24 @@ class TaskProcessor:
     def __init__(self, task_client: TaskClient):
         self.task_client = task_client
 
-    def process_task(self, task_data):
+    def process_task(self, task_data, data_source='remote'):
         """Process a single task"""
         task_id = task_data['task_id']
         composite = task_data['composite']
-        timestamp_str = task_data['timestamp']
+        timestamp = task_data['timestamp']
 
         try:
-            # Parse timestamp
-            timestamp = datetime.datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-            if timestamp.tzinfo is None:
-                timestamp = timestamp.replace(tzinfo=datetime.timezone.utc)
-
             logger.info(f"Starting task {task_id}: {composite} at {timestamp.strftime('%Y-%m-%d %H:%M')} UTC")
 
             # Import here to avoid circular imports
             from himawari_processor import process_composite
-
             # Process the composite
-            success = process_composite(composite, timestamp)
-
-            if success:
-                # Report completion
-                self.task_client.update_task_status(task_id, 'completed')
-                logger.info(f"Task {task_id} completed successfully")
-                return True
-            else:
-                # Report failure
-                self.task_client.update_task_status(task_id, 'failed',
-                    error_message=f'Processing failed for {composite}')
-                logger.error(f"Task {task_id} failed")
-                return False
-
+            process_composite(composite, timestamp, data_source)
+            # Report completion
+            self.task_client.update_task_status(task_id, 'completed')
+            logger.info(f"Task {task_id} completed successfully")
+            return True
         except Exception as e:
             logger.error(f"Error processing task {task_id}: {e}", exc_info=True)
-            self.task_client.update_task_status(task_id, 'failed',
-                error_message=str(e))
+            self.task_client.update_task_status(task_id, 'failed', message=str(e))
             return False

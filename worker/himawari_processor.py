@@ -83,18 +83,78 @@ composite_mapping = {
     'ash': 'ash'
 }
 
-def ahi_s3_files(time, cache=False):
-    base_path = 's3://noaa-himawari9/AHI-L1b-FLDK/{}/*'.format(time.strftime('%Y/%m/%d/%H%M'))
 
+def get_reader_kwargs(data_source, cache=True):
+    """
+    Get reader kwargs based on data source
+    
+    Args:
+        data_source: 'local' or 'remote'
+        cache: whether to use simplecache
+    
+    Returns:
+        dict: reader_kwargs for satpy Scene
+    """
+    from config import endpoint, access_key, secret_key
+    
+    if data_source == 'remote':
+        # Use remote S3 configuration (anonymous access)
+        reader_kwargs = {
+            'storage_options': {
+                's3': {'anon': True}
+            }
+        }
+
+    else:  # local
+        # Use local minio configuration
+        reader_kwargs = {
+            'storage_options': {
+                's3': {
+                    'key': access_key,
+                    'secret': secret_key,
+                    'client_kwargs': {
+                        'endpoint_url': f'http://{endpoint}'
+                    }
+                }
+            }
+        }
+    
+    if cache:
+        reader_kwargs['storage_options']['simplecache'] = {
+            'cache_storage': cache_dir,
+            'cache_check': 600,
+        }
+    
+    return reader_kwargs
+
+
+def ahi_s3_files(time, data_source='remote', cache=True):
+    """
+    Get AHI data files based on data source preference
+    
+    Args:
+        time: target datetime
+        data_source: 'local' or 'remote'
+        cache: whether to use simplecache
+    
+    Returns:
+        list: file paths for satpy scene
+    """
+    if data_source == 'remote':
+        # Server has already checked data availability, use local first
+        base_path = 's3://noaa-himawari9/AHI-L1b-FLDK/{}/*'.format(time.strftime('%Y/%m/%d/%H%M'))
+    else:
+        base_path = 's3://raw/AHI-L1b-FLDK/{}/*'.format(time.strftime('%Y/%m/%d/%H%M'))
+    
     if cache:
         base_path = 'simplecache::' + base_path
-
+    
     return [base_path]
 
 
 @timing
 @memory_profiler()
-def process_composite(composite_name, target_time):
+def process_composite(composite_name, target_time, data_source='remote'):
     """Process a single composite for the given time"""
     try:
         logger.info(f"Processing composite '{composite_name}' for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC")
@@ -107,22 +167,14 @@ def process_composite(composite_name, target_time):
 
         if check_object_exists('himawari', object_name):
             logger.info(f"Composite '{composite_name}' for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC already exists in Minio, skipping processing")
-            return True
+            return
 
         # Get the actual satpy composite name
-        satpy_composite_name = composite_mapping.get(composite_name, composite_name)
+        satpy_composite_name = composite_mapping.get(composite_name, composite_name)      
+        files = ahi_s3_files(time=target_time, data_source=data_source, cache=True)
+        reader_kwargs = get_reader_kwargs(data_source, cache=True)
 
-        files = ahi_s3_files(time=target_time, cache=True)
-
-        reader_kwargs = {
-            'storage_options': {
-                's3': {'anon': True},
-                'simplecache': {
-                    'cache_storage': cache_dir,
-                    'cache_check': 600,
-                }
-            }
-        }
+        print(files, reader_kwargs)
 
         china_bbox = [75, 0, 160, 55]  # lon: 75°-160°，lat 0°-55°
 
@@ -164,7 +216,6 @@ def process_composite(composite_name, target_time):
         upload('himawari', object_name, filename, composite_name)
         logger.info(f"Successfully processed and uploaded composite '{composite_name}' for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC")
 
-        return True
     except Exception as e:
         logger.error(f"Error processing composite '{composite_name}' for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC: {e}", exc_info=True)
-        return False
+        raise e

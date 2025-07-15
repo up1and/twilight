@@ -104,7 +104,7 @@ class Task:
         self.started = None
         self.completed = None
         self.worker_id = None
-        self.error_message = None
+        self.message = None
 
     def __eq__(self, other):
         """Compare tasks based on composite and timestamp"""
@@ -136,7 +136,7 @@ class Task:
             'completed': self.completed if self.completed else None,
             'duration': self.duration,
             'worker_id': self.worker_id,
-            'error_message': self.error_message
+            'message': self.message
         }
 
     def to_json(self):
@@ -160,7 +160,7 @@ class Task:
         task.priority = data['priority']
         task.status = data['status']
         task.worker_id = data['worker_id']
-        task.error_message = data['error_message']
+        task.message = data['message']
 
         # Convert ISO format strings back to datetime objects
         task.timestamp = datetime.datetime.fromisoformat(data['timestamp'])
@@ -263,8 +263,8 @@ class TaskManager:
             return Task.from_json(task_json)
         return None
 
-    def get_next_task(self, worker_id):
-        """Get next pending task for worker"""
+    def peek_next_task(self):
+        """Peek at the next pending task without removing it from queue"""
         with self.lock:
             # Get the task with lowest score (highest priority)
             task_ids = self.redis.zrange(self.queue_key, 0, 0)
@@ -274,6 +274,23 @@ class TaskManager:
             task_id = task_ids[0]
 
             # Check if task still exists
+            task_json = self.redis.hget(self.tasks_key, task_id)
+            if not task_json:
+                # Task was deleted, remove from queue
+                self.redis.zrem(self.queue_key, task_id)
+                return None
+
+            task = Task.from_json(task_json)
+            return task
+
+    def claim_task(self, task_id, worker_id):
+        """Claim a specific task and mark it as processing"""
+        with self.lock:
+            # Check if task still exists in queue
+            if not self.redis.zscore(self.queue_key, task_id):
+                return None
+
+            # Get task data
             task_json = self.redis.hget(self.tasks_key, task_id)
             if not task_json:
                 # Task was deleted, remove from queue
@@ -291,7 +308,7 @@ class TaskManager:
 
             return task
 
-    def update_task_status(self, task_id, status, error_message=None):
+    def update_task_status(self, task_id, status, message=None):
         """Update task status"""
         with self.lock:
             task_json = self.redis.hget(self.tasks_key, task_id)
@@ -300,8 +317,8 @@ class TaskManager:
 
             task = Task.from_json(task_json)
             task.status = status
-            if error_message:
-                task.error_message = error_message
+            if message:
+                task.message = message
             if status in ['completed', 'failed']:
                 task.completed = datetime.datetime.now(datetime.timezone.utc)
 
@@ -800,16 +817,9 @@ def get_tasks():
 
 
 @app.route('/api/tasks/next', methods=['GET'])
-def get_next_task():
-    """Get next pending task for worker"""
-    worker_id = request.args.get('worker_id')
-    if not worker_id:
-        return jsonify({
-            'error': 'Bad Request',
-            'message': 'worker_id parameter is required'
-        }), 400
-
-    task = task_manager.get_next_task(worker_id)
+def peek_next_task():
+    """Peek next pending task for worker"""
+    task = task_manager.peek_next_task()
     if not task:
         return jsonify({
             'message': 'No pending tasks'
@@ -819,6 +829,35 @@ def get_next_task():
         'task_id': task.task_id,
         'composite': task.composite,
         'timestamp': task.timestamp
+    })
+
+
+@app.route('/api/tasks/<task_id>/claim', methods=['PUT'])
+def claim_task(task_id):
+    """Claim a specific task for processing"""
+    data = request.get_json()
+    if not data or 'worker_id' not in data:
+        return jsonify({
+            'error': 'Bad Request',
+            'message': 'Missing required field: worker_id'
+        }), 400
+
+    worker_id = data['worker_id']
+    
+    # Claim the task
+    task = task_manager.claim_task(task_id, worker_id)
+    if not task:
+        return jsonify({
+            'error': 'Not Found',
+            'message': f'Task {task_id} not found or already claimed'
+        }), 404
+
+    return jsonify({
+        'task_id': task.task_id,
+        'composite': task.composite,
+        'timestamp': task.timestamp,
+        'status': task.status,
+        'worker_id': task.worker_id
     })
 
 
@@ -840,9 +879,9 @@ def update_task_status(task_id):
                 'message': 'Invalid status. Must be: pending, processing, completed, failed'
             }), 400
 
-        error_message = data.get('error_message')
+        message = data.get('message')
 
-        success = task_manager.update_task_status(task_id, status, error_message)
+        success = task_manager.update_task_status(task_id, status, message)
         if not success:
             return jsonify({
                 'error': 'Not Found',
