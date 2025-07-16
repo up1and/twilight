@@ -8,7 +8,7 @@ import s3fs
 
 from himawari_processor import available_composites
 from task import TaskClient, TaskProcessor
-from sync import HimawariDataSync
+from sync import SyncClient, SyncProcessor
 from utils import logger, _available_latest_time, generate_worker_id
 from client import check_local_files
 from config import server_url
@@ -119,22 +119,34 @@ def run_himawari_sync(shutdown_event=None):
     logger.info("Starting Himawari-9 data synchronization")
     
     # Initialize sync client
-    sync_client = HimawariDataSync()
+    sync_client = SyncClient(server_url)
+    sync_processor = SyncProcessor(sync_client)
     
     # Start with available latest time
     current_target_time = _available_latest_time()
     target_start_time = datetime.datetime.now(datetime.timezone.utc)
     timeout_minutes = 10  # 10 minutes per target_time
     logger.info(f"Starting sync from time: {current_target_time.strftime('%Y-%m-%d %H:%M')} UTC")
+    
+    # Create pending sync record for initial target time
+    sync_client.create_sync(current_target_time)
+
+    def move_to_next(target_time):
+        # Move to next 10-minute interval
+        target_time += datetime.timedelta(minutes=10)
+        # Reset timer for new target_time
+        start_time = datetime.datetime.now(datetime.timezone.utc)
+        # Create pending sync record for new target time
+        sync_client.create_sync(target_time)
+        return target_time, start_time
 
     while not shutdown_event.is_set():
         try:
             # Try to sync current target time
-            sync_status = sync_client.sync(current_target_time)
+            sync_status = sync_processor.sync(current_target_time)
             if sync_status == 'done':
                 # Successfully synced files, move to next 10-minute interval
-                current_target_time = current_target_time + datetime.timedelta(minutes=10)
-                target_start_time = datetime.datetime.now(datetime.timezone.utc)  # Reset timer for new target_time
+                current_target_time, target_start_time = move_to_next(current_target_time)
                 logger.info(f"Sync completed, moving to next time: {current_target_time.strftime('%Y-%m-%d %H:%M')} UTC")
             else:
                 # Check if we've spent too much time on this target_time
@@ -142,12 +154,11 @@ def run_himawari_sync(shutdown_event=None):
                 elapsed_time = current_time - target_start_time
                 if elapsed_time > datetime.timedelta(minutes=timeout_minutes):
                     logger.warning(f"Target time {current_target_time.strftime('%Y-%m-%d %H:%M')} exceeded {timeout_minutes}-minute limit, moving to next")
-                    current_target_time = current_target_time + datetime.timedelta(minutes=10)
-                    target_start_time = datetime.datetime.now(datetime.timezone.utc)  # Reset timer for new target_time
+                    sync_client.update_sync(current_target_time, status='pending')
+                    current_target_time, target_start_time = move_to_next(current_target_time)
                 else:
                     # Still within time limit, wait and retry
-                    elapsed_seconds = elapsed_time.total_seconds()
-                    logger.info(f"Status: {sync_status}, waiting before retry (elapsed: {elapsed_seconds:.1f}s)")
+                    logger.info(f"Status: {sync_status}, waiting before retry")
                     shutdown_event.wait(60)
 
         except KeyboardInterrupt:

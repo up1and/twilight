@@ -4,6 +4,7 @@ Syncs latest AHI-L1b-FLDK data from NOAA S3 to local MinIO
 """
 import sys
 import time
+import requests
 
 import s3fs
 
@@ -15,6 +16,88 @@ from client import get_minio_client
 # Configuration
 noaa_bucket = 'noaa-himawari9'
 local_bucket = 'raw'
+
+
+class SyncClient:
+    """Client for communicating with the himawari sync server"""
+
+    def __init__(self, server_url):
+        self.server_url = server_url.rstrip('/')
+        self.session = requests.Session()
+
+    def get_sync(self, target_time):
+        """Get current himawari sync progress from server"""
+        try:
+            response = self.session.get(
+                f"{self.server_url}/api/raws/{target_time.isoformat()}",
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    'files': data.get('files', 0),
+                    'size': data.get('size', 0),
+                    'status': data.get('status', 'pending')
+                }
+            elif response.status_code == 404:
+                # No existing record, return defaults
+                return {'files': 0, 'size': 0, 'status': 'pending'}
+            else:
+                logger.warning(f"Failed to get himawari sync progress: {response.status_code} {response.text}")
+                return {'files': 0, 'size': 0, 'status': 'pending'}
+                
+        except Exception as e:
+            logger.error(f"Error getting himawari sync progress: {e}")
+            return {'files': 0, 'size': 0, 'status': 'pending'}
+
+    def update_sync(self, target_time, status=None, files=None, size=None):
+        """Update himawari sync progress to server"""
+        try:
+            # Validate that at least one field is provided
+            if status is None and files is None and size is None:
+                raise ValueError("At least one of status, files, or size must be provided")
+            
+            # Build data payload with only non-None values
+            data = {'timestamp': target_time.isoformat()}
+            
+            if status is not None:
+                data['status'] = status
+            if files is not None:
+                data['files'] = files
+            if size is not None:
+                data['size'] = size
+                
+            response = self.session.put(
+                f"{self.server_url}/api/raws",
+                json=data,
+                timeout=10
+            )
+            
+            if response.status_code != 200:
+                logger.warning(f"Failed to report himawari sync progress: {response.status_code} {response.text}")
+                
+        except Exception as e:
+            logger.error(f"Error reporting himawari sync progress: {e}")
+
+    def create_sync(self, target_time):
+        """Create a pending himawari sync record"""
+        try:
+            data = {
+                'timestamp': target_time.isoformat()
+            }
+            
+            response = self.session.post(
+                f"{self.server_url}/api/raws",
+                json=data,
+                timeout=10
+            )
+            
+            if response.status_code != 201:
+                logger.warning(f"Failed to create pending himawari sync: {response.status_code} {response.text}")
+                
+        except Exception as e:
+            logger.error(f"Error creating pending himawari sync: {e}")
 
 
 class ProgressBar:
@@ -69,15 +152,17 @@ class ProgressBar:
         sys.stdout.flush()
 
 
-class HimawariDataSync:
+class SyncProcessor:
     """Synchronizes Himawari-9 data from NOAA S3 to local MinIO"""
 
-    def __init__(self):
+    def __init__(self, sync_client: SyncClient):
         # Initialize NOAA S3 filesystem (anonymous access)
         self.noaa_fs = s3fs.S3FileSystem(anon=True)
 
         # Initialize local MinIO client
         self.client = get_minio_client()
+
+        self.sync_client = sync_client
 
         # Ensure local bucket exists
         if not self.client.bucket_exists(local_bucket):
@@ -168,38 +253,46 @@ class HimawariDataSync:
 
             stream.close()
 
+            return file_size
+
         except Exception as e:
             logger.error(f"Error syncing {object_name}: {e}")
+            return 0
     
     def sync(self, target_time):
         """Sync specific time folder"""
         # Build time folder path
         time_folder = f"AHI-L1b-FLDK/{target_time.strftime('%Y/%m/%d/%H%M')}"
 
+        # Get current progress from server to maintain cumulative data
+        current_progress = self.sync_client.get_sync(target_time)
+        total_size = current_progress['size']
+        status = 'pending'
+
         # List files in NOAA S3
         noaa_files = self.list_files(self.noaa_fs, noaa_bucket, time_folder)
         if not noaa_files:
             logger.warning(f"No files found in NOAA S3 for {time_folder}")
-            return 'missing'
+            return status
 
         existing_files = set(self.list_files(self.client, local_bucket, time_folder))
+        file_count = len(existing_files)
 
         # Find files that need to be synced
         files_to_sync = [f for f in noaa_files if f not in existing_files]
 
         if files_to_sync:
             logger.info(f"Need to sync {len(files_to_sync)} files for {time_folder}")
-
             # Sync missing files
-            for object_name in files_to_sync:
-                self.sync_file(object_name)
+            for i, object_name in enumerate(files_to_sync):
+                file_size = self.sync_file(object_name)
+                total_size += file_size
+                file_count += 1
+                status = 'running'
+                self.sync_client.update_sync(target_time, status=status, files=file_count, size=total_size)
 
-        # Check if we have 160 files locally
-        local_count = self.count_local_files(time_folder)
-        logger.info(f"Local file count for {time_folder}: {local_count}")
-
-        if local_count >= 160:
-            return 'done'
-        else:
-            return 'pending'
-
+        if file_count >= 160:
+            status = 'done'
+            
+        self.sync_client.update_sync(target_time, status=status)
+        return status

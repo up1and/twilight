@@ -93,7 +93,7 @@ def parse_iso_timestamp(timestamp_str):
     return timestamp
 
 # Task management
-class Task:
+class TaskModel:
     def __init__(self, composite, timestamp, priority='normal'):
         self.task_id = f"{composite}_{timestamp.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
         self.composite = composite
@@ -102,13 +102,13 @@ class Task:
         self.status = 'pending'  # pending, processing, completed, failed
         self.created = datetime.datetime.now(datetime.timezone.utc)
         self.started = None
-        self.completed = None
+        self.ended = None
         self.worker_id = None
         self.message = None
 
     def __eq__(self, other):
         """Compare tasks based on composite and timestamp"""
-        if not isinstance(other, Task):
+        if not isinstance(other, TaskModel):
             return False
         return (self.composite == other.composite and
                 self.timestamp == other.timestamp)
@@ -120,8 +120,8 @@ class Task:
     @property
     def duration(self):
         """Calculate task duration in seconds"""
-        if self.started and self.completed:
-            return (self.completed - self.started).total_seconds()
+        if self.started and self.ended:
+            return (self.ended - self.started).total_seconds()
         return None
 
     def to_dict(self):
@@ -133,7 +133,7 @@ class Task:
             'status': self.status,
             'created': self.created,
             'started': self.started if self.started else None,
-            'completed': self.completed if self.completed else None,
+            'ended': self.ended if self.ended else None,
             'duration': self.duration,
             'worker_id': self.worker_id,
             'message': self.message
@@ -143,7 +143,7 @@ class Task:
         """Serialize task to JSON string for Redis storage"""
         data = self.to_dict()
         # Convert datetime objects to ISO format strings
-        for key in ['timestamp', 'created', 'started', 'completed']:
+        for key in ['timestamp', 'created', 'started', 'ended']:
             if data[key] is not None:
                 data[key] = data[key].isoformat()
         return json.dumps(data)
@@ -166,7 +166,7 @@ class Task:
         task.timestamp = datetime.datetime.fromisoformat(data['timestamp'])
         task.created = datetime.datetime.fromisoformat(data['created'])
         task.started = datetime.datetime.fromisoformat(data['started']) if data['started'] else None
-        task.completed = datetime.datetime.fromisoformat(data['completed']) if data['completed'] else None
+        task.ended = datetime.datetime.fromisoformat(data['ended']) if data['ended'] else None
 
         return task
 
@@ -195,7 +195,7 @@ class TaskManager:
         """Create a new task with deduplication and optional priority promotion"""
         with self.lock:
             # Create a temporary task for comparison
-            temp_task = Task(composite, timestamp, priority)
+            temp_task = TaskModel(composite, timestamp, priority)
 
             # Check for existing task using __eq__ method
             existing_tasks = self._get_all_tasks()
@@ -227,7 +227,7 @@ class TaskManager:
         task_data = self.redis.hgetall(self.tasks_key)
         tasks = []
         for task_json in task_data.values():
-            tasks.append(Task.from_json(task_json))
+            tasks.append(TaskModel.from_json(task_json))
         return tasks
 
     def _promote_tasks_in_queue(self, reference_timestamp):
@@ -242,7 +242,7 @@ class TaskManager:
         for task_id in task_ids:
             task_json = self.redis.hget(self.tasks_key, task_id)
             if task_json:
-                task = Task.from_json(task_json)
+                task = TaskModel.from_json(task_json)
                 if (task.priority == 'normal' and
                     task.timestamp < reference_timestamp):
                     task.priority = 'high'
@@ -260,7 +260,7 @@ class TaskManager:
         """Get task by ID"""
         task_json = self.redis.hget(self.tasks_key, task_id)
         if task_json:
-            return Task.from_json(task_json)
+            return TaskModel.from_json(task_json)
         return None
 
     def peek_next_task(self):
@@ -280,7 +280,7 @@ class TaskManager:
                 self.redis.zrem(self.queue_key, task_id)
                 return None
 
-            task = Task.from_json(task_json)
+            task = TaskModel.from_json(task_json)
             return task
 
     def claim_task(self, task_id, worker_id):
@@ -297,7 +297,7 @@ class TaskManager:
                 self.redis.zrem(self.queue_key, task_id)
                 return None
 
-            task = Task.from_json(task_json)
+            task = TaskModel.from_json(task_json)
             task.status = 'processing'
             task.started = datetime.datetime.now(datetime.timezone.utc)
             task.worker_id = worker_id
@@ -315,12 +315,12 @@ class TaskManager:
             if not task_json:
                 return False
 
-            task = Task.from_json(task_json)
+            task = TaskModel.from_json(task_json)
             task.status = status
             if message:
                 task.message = message
             if status in ['completed', 'failed']:
-                task.completed = datetime.datetime.now(datetime.timezone.utc)
+                task.ended = datetime.datetime.now(datetime.timezone.utc)
 
             # Update task in Redis
             self.redis.hset(self.tasks_key, task.task_id, task.to_json())
@@ -346,6 +346,185 @@ class TaskManager:
 
 # Global task manager
 task_manager = TaskManager(redis_client)
+
+class HimawariRawModel:
+    def __init__(self, timestamp):
+        self.timestamp = timestamp
+        self.status = 'pending'  # pending, running, done
+        self.files = 0
+        self.size = 0
+        self.started = None
+        self.ended = None
+        self.created = datetime.datetime.now(datetime.timezone.utc)
+
+    @property
+    def duration(self):
+        """Calculate sync duration in seconds"""
+        if self.started and self.ended:
+            return int((self.ended - self.started).total_seconds())
+        return None
+        
+    @property
+    def speed(self):
+        """Calculate download speed in KB/s"""
+        if self.duration and self.duration > 0 and self.size > 0:
+            # Convert bytes to kilobytes and divide by duration
+            return int(self.size / 1024 / self.duration)
+        return None
+
+    def to_dict(self):
+        return {
+            'timestamp': self.timestamp,
+            'status': self.status,
+            'files': self.files,
+            'size': self.size,
+            'started': self.started if self.started else None,
+            'ended': self.ended if self.ended else None,
+            'duration': self.duration,
+            'speed': self.speed,
+            'created': self.created
+        }
+
+    def to_json(self):
+        """Serialize raw to JSON string for Redis storage"""
+        data = {
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'status': self.status,
+            'files': self.files,
+            'size': self.size,
+            'started': self.started.isoformat() if self.started else None,
+            'ended': self.ended.isoformat() if self.ended else None,
+            'created': self.created.isoformat() if self.created else None
+        }
+        return json.dumps(data)
+
+    @classmethod
+    def from_json(cls, json_str):
+        """Deserialize raw from JSON string"""
+        data = json.loads(json_str)
+
+        # Create raw instance
+        raw = cls.__new__(cls)
+        raw.status = data['status']
+        raw.files = data['files']
+        raw.size = data['size']
+
+        # Convert ISO format strings back to datetime objects
+        raw.timestamp = datetime.datetime.fromisoformat(data['timestamp'])
+        raw.created = datetime.datetime.fromisoformat(data['created'])
+        raw.started = datetime.datetime.fromisoformat(data['started']) if data['started'] else None
+        raw.ended = datetime.datetime.fromisoformat(data['ended']) if data['ended'] else None
+
+        return raw
+
+class HimawariRawManager:
+    def __init__(self, redis_client):
+        self.redis = redis_client
+        # Redis keys
+        self.raws_key = 'himawari_raws'  # Hash: timestamp_key -> raw_json
+        self.timestamps_key = 'raws_timestamps'  # Sorted Set: timestamp_key with unix timestamp score
+        self.expire_time = 3600 * 24 * 30  # 30 days
+
+    def _get_timestamp_key(self, timestamp):
+        """Get timestamp key for Redis storage"""
+        return timestamp.strftime('%Y%m%d_%H%M')
+
+    def create_sync(self, timestamp):
+        """Create a pending sync record for a timestamp"""
+        timestamp_key = self._get_timestamp_key(timestamp)
+        
+        # Check if already exists
+        if self.redis.hexists(self.raws_key, timestamp_key):
+            return
+            
+        # Create new raw
+        raw = HimawariRawModel(timestamp)
+        
+        # Store raw in Redis hash
+        self.redis.hset(self.raws_key, timestamp_key, raw.to_json())
+        
+        # Add to sorted set with unix timestamp as score
+        score = int(timestamp.timestamp())
+        self.redis.zadd(self.timestamps_key, {timestamp_key: score})
+        
+        # Set expiration
+        self.redis.expire(self.raws_key, self.expire_time)
+        self.redis.expire(self.timestamps_key, self.expire_time)
+        
+    def update_progress(self, timestamp, status=None, files=None, size=None):
+        """Update sync progress for a timestamp with partial updates
+        
+        Args:
+            timestamp: Target datetime
+            status: Status to update (optional)
+            files: Number of files to update (optional)
+            size: Total size to update (optional)
+        """
+        timestamp_key = self._get_timestamp_key(timestamp)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        
+        # Get existing sync
+        raw_json = self.redis.hget(self.raws_key, timestamp_key)
+        if raw_json:
+            raw = HimawariRawModel.from_json(raw_json)
+        else:
+            # Create new sync if doesn't exist
+            raw = HimawariRawModel(timestamp)
+        
+        # Update only provided fields
+        if status is not None:
+            raw.status = status
+            # Set started time when status becomes running
+            if status == 'running' and raw.started is None:
+                raw.started = now
+        
+        if files is not None:
+            raw.files = files
+            
+        if size is not None:
+            raw.size = size
+            
+        # Always update ended time when any field is updated
+        raw.ended = now
+            
+        # Store updated
+        self.redis.hset(self.raws_key, timestamp_key, raw.to_json())
+        
+        # Ensure it's in sorted set
+        score = int(timestamp.timestamp())
+        self.redis.zadd(self.timestamps_key, {timestamp_key: score})
+        
+        # Set expiration
+        self.redis.expire(self.raws_key, self.expire_time)
+        self.redis.expire(self.timestamps_key, self.expire_time)
+        
+    def get_raw(self, timestamp):
+        """Get raw status for a timestamp"""
+        timestamp_key = self._get_timestamp_key(timestamp)
+        raw_json = self.redis.hget(self.raws_key, timestamp_key)
+        if not raw_json:
+            return None
+        return HimawariRawModel.from_json(raw_json).to_dict()
+        
+    def get_raws(self, limit=20, offset=0):
+        """Get all raw records with pagination"""
+        # Get total count
+        total = self.redis.zcard(self.timestamps_key)
+        
+        # Get timestamp keys from sorted set (latest first) with offset and limit
+        timestamp_keys = self.redis.zrevrange(self.timestamps_key, offset, offset + limit - 1)
+        results = []
+        
+        for timestamp_key in timestamp_keys:
+            raw_json = self.redis.hget(self.raws_key, timestamp_key)
+            if raw_json:
+                raw = HimawariRawModel.from_json(raw_json)
+                results.append(raw.to_dict())
+                
+        return results, total
+
+# Global himawari raw manager
+himawari_raw_manager = HimawariRawManager(redis_client)
 
 def extract_timestamp_from_object_name(object_name):
     """
@@ -913,6 +1092,148 @@ def update_task_status(task_id):
 
     except Exception as e:
         app.logger.error(f"Error updating task status: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), 500
+
+
+@app.route('/api/raws', methods=['POST', 'PUT'])
+def manage_himawari_raw():
+    """Create or update himawari sync record for a timestamp"""
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data or 'timestamp' not in data:
+            return jsonify({
+                'error': 'Bad Request',
+                'message': 'Missing required field: timestamp'
+            }), 400
+            
+        # Parse timestamp
+        try:
+            timestamp = parse_iso_timestamp(data['timestamp'])
+        except ValueError:
+            return jsonify({
+                'error': 'Bad Request',
+                'message': 'Invalid timestamp format. Use ISO 8601 format'
+            }), 400
+        
+        # Handle POST request (create pending)
+        if request.method == 'POST':
+            # Create pending sync record
+            himawari_raw_manager.create_sync(timestamp)
+            
+            return jsonify({
+                'message': 'Himawari sync created successfully',
+                'timestamp': timestamp.isoformat(),
+                'status': 'pending'
+            }), 201
+        
+        # Handle PUT request (update progress)
+        else:  # PUT
+            # Extract optional fields
+            status = data.get('status')
+            files = data.get('files')
+            size = data.get('size')
+            
+            # Validate that at least one field is provided
+            if status is None and files is None and size is None:
+                return jsonify({
+                    'error': 'Bad Request',
+                    'message': 'At least one of status, files, or size must be provided'
+                }), 400
+            
+            # Validate status if provided
+            if status is not None:
+                valid_statuses = ['pending', 'running', 'done']
+                if status not in valid_statuses:
+                    return jsonify({
+                        'error': 'Bad Request',
+                        'message': f'Invalid status. Valid values: {valid_statuses}'
+                    }), 400
+                
+            # Update progress with partial data
+            himawari_raw_manager.update_progress(timestamp, status, files, size)
+            
+            # Build response message
+            updated_fields = []
+            if status is not None:
+                updated_fields.append(f'status={status}')
+            if files is not None:
+                updated_fields.append(f'files={files}')
+            if size is not None:
+                updated_fields.append(f'size={size}')
+            
+            return jsonify({
+                'message': f'Himawari sync updated successfully ({", ".join(updated_fields)})',
+                'timestamp': timestamp.isoformat()
+            })
+        
+    except Exception as e:
+        app.logger.error(f"Error managing himawari sync: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), 500
+
+
+@app.route('/api/raws/<timestamp>', methods=['GET'])
+def get_himawari_raw(timestamp):
+    """Get himawari sync progress for a specific timestamp"""
+    try:
+        # Parse timestamp
+        try:
+            parsed_time = parse_iso_timestamp(timestamp)
+        except ValueError:
+            return jsonify({
+                'error': 'Bad Request',
+                'message': 'Invalid timestamp format. Use ISO 8601 format'
+            }), 400
+            
+        raw_data = himawari_raw_manager.get_raw(parsed_time)
+        if not raw_data:
+            return jsonify({
+                'error': 'Not Found',
+                'message': f'No himawari sync found for {timestamp}'
+            }), 404
+            
+        return jsonify(raw_data)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting himawari sync: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), 500
+
+
+@app.route('/api/raws', methods=['GET'])
+def get_himawari_raws():
+    """Get all himawari sync records with pagination"""
+    try:
+        page = int(request.args.get('page', 1))
+        per_page = min(int(request.args.get('per_page', 20)), 100)  # Max 100 per page
+
+        offset = (page - 1) * per_page
+        raws, total = himawari_raw_manager.get_raws(per_page, offset)
+        
+        return jsonify({
+            'raws': raws,
+            'total': total,
+            'page': page,
+            'per_page': per_page,
+            'pages': (total + per_page - 1) // per_page if total > 0 else 0
+        })
+        
+    except ValueError:
+        return jsonify({
+            'error': 'Bad Request',
+            'message': 'Invalid page or per_page parameter'
+        }), 400
+    except Exception as e:
+        app.logger.error(f"Error getting all himawari raws: {str(e)}", exc_info=True)
         return jsonify({
             'error': 'Internal Server Error',
             'message': str(e)
