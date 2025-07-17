@@ -47,7 +47,7 @@ def resolve_data_source(server_url, timestamp):
             data = response.json()
             status = data.get('status', 'pending')
             
-            if status == 'done':
+            if status == 'completed':
                 # Raw data is complete, use local MinIO
                 return 'local'
             elif status == 'running':
@@ -172,7 +172,7 @@ def run_himawari_sync(shutdown_event=None):
         try:
             # Try to sync current target time
             sync_status = sync_processor.sync(current_target_time)
-            if sync_status == 'done':
+            if sync_status == 'completed':
                 # Successfully synced files, move to next 10-minute interval
                 current_target_time, target_start_time = move_to_next(current_target_time)
                 logger.info(f"Sync completed, moving to next time: {current_target_time.strftime('%Y-%m-%d %H:%M')} UTC")
@@ -182,7 +182,7 @@ def run_himawari_sync(shutdown_event=None):
                 elapsed_time = current_time - target_start_time
                 if elapsed_time > datetime.timedelta(minutes=timeout_minutes):
                     logger.warning(f"Target time {current_target_time.strftime('%Y-%m-%d %H:%M')} exceeded {timeout_minutes}-minute limit, moving to next")
-                    sync_client.update_sync(current_target_time, status='pending')
+                    sync_client.update_sync(current_target_time, status='failed')
                     current_target_time, target_start_time = move_to_next(current_target_time)
                 else:
                     # Still within time limit, wait and retry

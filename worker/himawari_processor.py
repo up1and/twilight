@@ -157,7 +157,7 @@ def ahi_s3_files(time, data_source='remote', cache=True):
 def process_composite(composite_name, target_time, data_source='remote'):
     """Process a single composite for the given time"""
     try:
-        logger.info(f"Processing composite '{composite_name}' for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC")
+        logger.info(f"Processing composite '{composite_name}' for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC from {data_source}")
 
         # Check if the file already exists in Minio
         name = 'himawari_{}_{}.tif'.format(composite_name, target_time.strftime('%Y%m%d_%H%M'))
@@ -173,8 +173,6 @@ def process_composite(composite_name, target_time, data_source='remote'):
         satpy_composite_name = composite_mapping.get(composite_name, composite_name)      
         files = ahi_s3_files(time=target_time, data_source=data_source, cache=True)
         reader_kwargs = get_reader_kwargs(data_source, cache=True)
-
-        print(files, reader_kwargs)
 
         china_bbox = [75, 0, 160, 55]  # lon: 75°-160°，lat 0°-55°
 

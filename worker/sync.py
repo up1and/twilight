@@ -292,7 +292,7 @@ class SyncProcessor:
                 self.sync_client.update_sync(target_time, status=status, files=file_count, size=total_size)
 
         if file_count >= 160:
-            status = 'done'
+            status = 'completed'
             
         self.sync_client.update_sync(target_time, status=status)
         return status

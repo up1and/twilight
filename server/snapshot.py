@@ -249,7 +249,7 @@ def create_single_snapshot(client, composite, timestamp, bbox, task_manager=None
                 # Create a low priority task for COG generation
                 task = task_manager.create_task(composite, timestamp, 'low')
                 return {
-                    'status': 'processing',
+                    'status': 'pending',
                     'message': 'COG file not found. Task created for processing.',
                     'task_id': task.task_id
                 }
@@ -334,7 +334,7 @@ def create_series_snapshot(client, composite, start_time, end_time, bbox, task_m
                 created_tasks.append(task.task_id)
 
             return {
-                'status': 'processing',
+                'status': 'pending',
                 'message': f'Missing {len(missing_cogs)} files. Tasks created for processing.',
                 'missing_count': len(missing_cogs),
                 'total_count': len(time_intervals),

@@ -99,7 +99,7 @@ class TaskModel:
         self.composite = composite
         self.timestamp = timestamp
         self.priority = priority
-        self.status = 'pending'  # pending, processing, completed, failed
+        self.status = 'pending'  # pending, running, completed, failed
         self.created = datetime.datetime.now(datetime.timezone.utc)
         self.started = None
         self.ended = None
@@ -201,7 +201,7 @@ class TaskManager:
             existing_tasks = self._get_all_tasks()
             for existing_task in existing_tasks:
                 if (existing_task == temp_task and
-                    existing_task.status in ['pending', 'processing']):
+                    existing_task.status in ['pending', 'running']):
                     # Task already exists, return existing task
                     return existing_task
 
@@ -298,7 +298,7 @@ class TaskManager:
                 return None
 
             task = TaskModel.from_json(task_json)
-            task.status = 'processing'
+            task.status = 'running'
             task.started = datetime.datetime.now(datetime.timezone.utc)
             task.worker_id = worker_id
 
@@ -350,7 +350,7 @@ task_manager = TaskManager(redis_client)
 class HimawariRawModel:
     def __init__(self, timestamp):
         self.timestamp = timestamp
-        self.status = 'pending'  # pending, running, done
+        self.status = 'pending'  # pending, running, completed, failed
         self.files = 0
         self.size = 0
         self.started = None
@@ -1052,10 +1052,10 @@ def update_task_status(task_id):
             }), 400
 
         status = data['status']
-        if status not in ['pending', 'processing', 'completed', 'failed']:
+        if status not in ['pending', 'running', 'completed', 'failed']:
             return jsonify({
                 'error': 'Bad Request',
-                'message': 'Invalid status. Must be: pending, processing, completed, failed'
+                'message': 'Invalid status. Must be: pending, running, completed, failed'
             }), 400
 
         message = data.get('message')
@@ -1147,7 +1147,7 @@ def manage_himawari_raw():
             
             # Validate status if provided
             if status is not None:
-                valid_statuses = ['pending', 'running', 'done']
+                valid_statuses = ['pending', 'running', 'completed', 'failed']
                 if status not in valid_statuses:
                     return jsonify({
                         'error': 'Bad Request',
@@ -1308,7 +1308,7 @@ def create_snapshot():
             # Create single snapshot
             result = create_single_snapshot(client, composite, start_time, bbox, task_manager)
 
-        if result['status'] == 'processing':
+        if result['status'] == 'pending':
             return jsonify(result), 202
         else:
             return jsonify(result)
