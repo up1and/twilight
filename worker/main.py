@@ -26,17 +26,45 @@ def check_files(target_time):
         logger.error(f"Error checking files for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC: {e}")
         return []
     
-def get_source_priorty(timestamp):
-    from config import data_source
-    if data_source == 'auto':
-        # Check if it's old data (>1 month), if so, allow remote processing
-        one_month_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=30)
-        if timestamp > one_month_ago:
-            data_source = 'local'
+def resolve_data_source(server_url, timestamp):
+    """
+    Check raw data status to determine data source and processing decision
+    
+    Args:
+        server_url: Server endpoint URL
+        timestamp: Target datetime
+        
+    Returns:
+        string: data_source ('local', 'remote' or 'pending')
+    """
+    try:
+        response = requests.get(
+            f"{server_url}/api/raws/{timestamp.isoformat()}",
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            status = data.get('status', 'pending')
+            
+            if status == 'done':
+                # Raw data is complete, use local MinIO
+                return 'local'
+            elif status == 'running':
+                # Raw data is still syncing, wait
+                return 'pending'
+            else:  # status == 'pending' or other
+                # Raw data not available, use NOAA remote
+                return 'remote'
         else:
-            data_source = 'remote'
-
-    return data_source
+            logger.warning(f"Failed to check raw data status: {response.status_code} {response.text}")
+            # Default to remote on error
+            return 'remote'
+            
+    except Exception as e:
+        logger.error(f"Error checking raw data status: {e}")
+        # Default to remote on error
+        return 'remote'
 
 def run_task_generator(server_url, shutdown_event=None):
     """
@@ -198,10 +226,11 @@ def run_task_manager(server_url, worker_id=None, poll_interval=10, shutdown_even
             if task_data:
                 task_id = task_data['task_id']
                 timestamp = task_data['timestamp']
-                source = get_source_priorty(timestamp)
                 
-                # Check if we can process this task
-                if source == 'remote' or (source == 'local' and check_local_files(timestamp)):
+                # Check raw data status to determine data source
+                source = resolve_data_source(server_url, timestamp)
+                
+                if source != 'pending':
                     # Claim the task before processing
                     claimed_task = task_client.claim_task(task_id)
                     if claimed_task:
@@ -212,7 +241,9 @@ def run_task_manager(server_url, worker_id=None, poll_interval=10, shutdown_even
                         logger.debug("Task %s was claimed by another worker, trying next task...", task_id)
                         continue
                 else:
-                    logger.debug("Task skipped, %s files not exist, waiting %s seconds...", source, poll_interval)
+                    # Sync raw data is still running, wait before checking again
+                    logger.debug("Sync raw data for %s is still running, waiting %s seconds...", 
+                               timestamp.strftime('%Y-%m-%d %H:%M'), poll_interval)
                     shutdown_event.wait(poll_interval)
             else:
                 # No tasks available, wait with shutdown awareness

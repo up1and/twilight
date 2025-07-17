@@ -4,6 +4,3 @@ access_key = 'minioadmin'
 secret_key = 'minioadmin'
 
 server_url = 'http://127.0.0.1:5000'
-
-# Data source preference: 'auto' (local first) or 'remote'
-data_source = 'remote'

@@ -121,8 +121,6 @@ class TaskProcessor:
             # Report completion
             self.task_client.update_task_status(task_id, 'completed')
             logger.info(f"Task {task_id} completed successfully")
-            return True
         except Exception as e:
             logger.error(f"Error processing task {task_id}: {e}", exc_info=True)
             self.task_client.update_task_status(task_id, 'failed', message=str(e))
-            return False
