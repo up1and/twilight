@@ -89,7 +89,6 @@ def create_snapshot_image(presigned_url, bbox):
 def upload_to_minio(client, data, filename):
     """
     Upload file (image buffer or video file) to MinIO
-    Returns presigned URL for download
     """
     try:
         # Ensure snapshot bucket exists
@@ -122,15 +121,6 @@ def upload_to_minio(client, data, filename):
                 length=data.getbuffer().nbytes,
                 content_type=content_type
             )
-
-        # Generate presigned URL for download
-        presigned_url = client.presigned_get_object(
-            bucket_name='snapshot',
-            object_name=filename,
-            expires=datetime.timedelta(hours=24)
-        )
-
-        return presigned_url
 
     except Exception as e:
         print(f"Error uploading to MinIO: {str(e)}")
@@ -272,12 +262,12 @@ def create_single_snapshot(client, composite, timestamp, bbox, task_manager=None
         # Create the snapshot image
         image_buffer = create_snapshot_image(presigned_url, bbox)
 
-        # Upload to minio and get download URL
-        download_url = upload_to_minio(client, image_buffer, filename)
+        # Upload to minio and get object name
+        upload_to_minio(client, image_buffer, filename)
 
         return {
             'status': 'completed',
-            'download_url': download_url,
+            'object_name': filename,
             'filename': os.path.basename(filename)
         }
 
@@ -349,17 +339,15 @@ def create_series_snapshot(client, composite, start_time, end_time, bbox, task_m
         for timestamp in time_intervals:
             result = create_single_snapshot(client, composite, timestamp, bbox)
             if result['status'] == 'completed':
-                # Download the image to get buffer
-                import requests
-                response = requests.get(result['download_url'])
-                if response.status_code == 200:
-                    from io import BytesIO
-                    image_buffer = BytesIO(response.content)
+                # Get the image from MinIO using object_name
+                try:
+                    response = client.get_object('snapshot', result['object_name'])
+                    image_buffer = BytesIO(response.read())
                     image_buffers.append(image_buffer)
-                else:
+                except Exception as e:
                     return {
                         'status': 'error',
-                        'message': f'Failed to download image for {timestamp}'
+                        'message': f'Failed to get image for {timestamp}: {str(e)}'
                     }
             else:
                 return {
@@ -382,11 +370,11 @@ def create_series_snapshot(client, composite, start_time, end_time, bbox, task_m
             }
 
         # Upload video to MinIO
-        download_url = upload_to_minio(client, video_buffer, filename)
+        upload_to_minio(client, video_buffer, filename)
 
         return {
             'status': 'completed',
-            'download_url': download_url,
+            'object_name': filename,
             'filename': os.path.basename(filename),
             'frame_count': len(image_buffers),
             'time_range': {

@@ -7,7 +7,7 @@ import json
 
 import redis
 
-from flask import Flask, Response, request, jsonify
+from flask import Flask, Response, request, jsonify, url_for
 from flask_caching import Cache
 
 from rio_tiler.io import Reader
@@ -1342,6 +1342,9 @@ def create_snapshot():
             # Create single snapshot
             result = create_single_snapshot(client, composite, start_time, bbox, task_manager)
 
+        object_name = result.pop('object_name') 
+        result['download_url'] = url_for('serve_snapshot', object_name=object_name, _external=True)
+
         if result['status'] == 'pending':
             return jsonify(result), 202
         else:
@@ -1349,6 +1352,44 @@ def create_snapshot():
 
     except Exception as e:
         app.logger.error(f"Error in create_snapshot: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), 500
+
+
+@app.route('/snapshots/<path:object_name>')
+def serve_snapshot(object_name):
+    """Get snapshot file from MinIO by object name"""
+    try:
+        # Get object from MinIO snapshot bucket
+        response = client.get_object('snapshot', object_name)
+        
+        # Determine content type based on file extension
+        if object_name.endswith('.mp4'):
+            content_type = 'video/mp4'
+        elif object_name.endswith('.png'):
+            content_type = 'image/png'
+        else:
+            content_type = 'application/octet-stream'
+        
+        # Return file data as response
+        return Response(
+            response.read(),
+            mimetype=content_type,
+            headers={
+                'Content-Disposition': f'inline; filename="{os.path.basename(object_name)}"'
+            }
+        )
+        
+    except S3Error as e:
+        app.logger.error(f"S3 error getting snapshot {object_name}: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': 'S3 Error',
+            'message': f'Error accessing snapshot: {str(e)}'
+        }), 500
+    except Exception as e:
+        app.logger.error(f"Error getting snapshot {object_name}: {str(e)}", exc_info=True)
         return jsonify({
             'error': 'Internal Server Error',
             'message': str(e)
