@@ -214,11 +214,6 @@ class TaskManager:
             # Add to sorted set with calculated score
             score = self._calculate_score(task)
             self.redis.zadd(self.queue_key, {task.task_id: score})
-
-            # If this is a monitor mode task with normal priority, promote older pending normal tasks
-            if priority == 'normal':
-                self._promote_tasks_in_queue(timestamp)
-
             self.redis.expire(self.tasks_key, self.expire_time)
             return task
 
@@ -230,31 +225,30 @@ class TaskManager:
             tasks.append(TaskModel.from_json(task_json))
         return tasks
 
-    def _promote_tasks_in_queue(self, reference_timestamp):
-        """Promote pending normal priority tasks in queue older than reference timestamp to high priority"""
-        # Note: This method is called within the create_task lock, so no additional locking needed
-
-        # Get all task IDs from the queue
-        task_ids = self.redis.zrange(self.queue_key, 0, -1)
-
-        # Process tasks that need promotion
-        promoted_tasks = []
-        for task_id in task_ids:
-            task_json = self.redis.hget(self.tasks_key, task_id)
-            if task_json:
-                task = TaskModel.from_json(task_json)
-                if (task.priority == 'normal' and
-                    task.timestamp < reference_timestamp):
-                    task.priority = 'high'
-                    promoted_tasks.append(task)
-
-        # Update promoted tasks
-        for task in promoted_tasks:
-            # Update task data
-            self.redis.hset(self.tasks_key, task.task_id, task.to_json())
-            # Update score in sorted set
-            new_score = self._calculate_score(task)
-            self.redis.zadd(self.queue_key, {task.task_id: new_score})
+    def promote_tasks(self, timestamp):
+        """Promote pending normal priority tasks with matching timestamp to high priority"""
+        with self.lock:
+            # Get all task IDs from the queue (only pending tasks are in queue)
+            task_ids = self.redis.zrange(self.queue_key, 0, -1)
+            
+            # Process tasks that need promotion
+            promoted_tasks = []
+            for task_id in task_ids:
+                task_json = self.redis.hget(self.tasks_key, task_id)
+                if task_json:
+                    task = TaskModel.from_json(task_json)
+                    # Check if task timestamp matches and priority is not already high
+                    if (task.priority == 'normal' and task.timestamp == timestamp):
+                        task.priority = 'high'
+                        promoted_tasks.append(task)
+            
+            # Update promoted tasks
+            for task in promoted_tasks:
+                # Update task data
+                self.redis.hset(self.tasks_key, task.task_id, task.to_json())
+                # Update score in sorted set
+                new_score = self._calculate_score(task)
+                self.redis.zadd(self.queue_key, {task.task_id: new_score})
 
     def get_task(self, task_id):
         """Get task by ID"""
@@ -418,12 +412,16 @@ class HimawariRawModel:
         return raw
 
 class HimawariRawManager:
-    def __init__(self, redis_client):
+    def __init__(self, redis_client, task_manager=None):
         self.redis = redis_client
+        self.task_manager = task_manager
         # Redis keys
         self.raws_key = 'himawari_raws'  # Hash: timestamp_key -> raw_json
         self.timestamps_key = 'raws_timestamps'  # Sorted Set: timestamp_key with unix timestamp score
         self.expire_time = 3600 * 24 * 30  # 30 days
+
+        # Redis lock for distributed locking
+        self.lock = self.redis.lock('raws_lock', timeout=10, blocking_timeout=10)
 
     def _get_timestamp_key(self, timestamp):
         """Get timestamp key for Redis storage"""
@@ -432,24 +430,24 @@ class HimawariRawManager:
     def create_sync(self, timestamp):
         """Create a pending sync record for a timestamp"""
         timestamp_key = self._get_timestamp_key(timestamp)
-        
-        # Check if already exists
-        if self.redis.hexists(self.raws_key, timestamp_key):
-            return
+        with self.lock:
+            # Check if already exists
+            if self.redis.hexists(self.raws_key, timestamp_key):
+                return
+                
+            # Create new raw
+            raw = HimawariRawModel(timestamp)
             
-        # Create new raw
-        raw = HimawariRawModel(timestamp)
-        
-        # Store raw in Redis hash
-        self.redis.hset(self.raws_key, timestamp_key, raw.to_json())
-        
-        # Add to sorted set with unix timestamp as score
-        score = int(timestamp.timestamp())
-        self.redis.zadd(self.timestamps_key, {timestamp_key: score})
-        
-        # Set expiration
-        self.redis.expire(self.raws_key, self.expire_time)
-        self.redis.expire(self.timestamps_key, self.expire_time)
+            # Store raw in Redis hash
+            self.redis.hset(self.raws_key, timestamp_key, raw.to_json())
+            
+            # Add to sorted set with unix timestamp as score
+            score = int(timestamp.timestamp())
+            self.redis.zadd(self.timestamps_key, {timestamp_key: score})
+            
+            # Set expiration
+            self.redis.expire(self.raws_key, self.expire_time)
+            self.redis.expire(self.timestamps_key, self.expire_time)
         
     def update_progress(self, timestamp, status=None, files=None, size=None):
         """Update sync progress for a timestamp with partial updates
@@ -463,40 +461,45 @@ class HimawariRawManager:
         timestamp_key = self._get_timestamp_key(timestamp)
         now = datetime.datetime.now(datetime.timezone.utc)
         
-        # Get existing sync
-        raw_json = self.redis.hget(self.raws_key, timestamp_key)
-        if raw_json:
-            raw = HimawariRawModel.from_json(raw_json)
-        else:
-            # Create new sync if doesn't exist
-            raw = HimawariRawModel(timestamp)
-        
-        # Update only provided fields
-        if status is not None:
-            raw.status = status
-            # Set started time when status becomes running
-            if status == 'running' and raw.started is None:
-                raw.started = now
-        
-        if files is not None:
-            raw.files = files
+        with self.lock:
+            # Get existing sync
+            raw_json = self.redis.hget(self.raws_key, timestamp_key)
+            if raw_json:
+                raw = HimawariRawModel.from_json(raw_json)
+            else:
+                # Create new sync if doesn't exist
+                raw = HimawariRawModel(timestamp)
             
-        if size is not None:
-            raw.size = size
+            # Update only provided fields
+            if status is not None:
+                # If status changed to 'completed', promote related tasks to high priority
+                if self.task_manager and status == 'completed' and raw.status != 'completed':
+                    self.task_manager.promote_tasks(timestamp)
+
+                raw.status = status
+                # Set started time when status becomes running
+                if status == 'running' and raw.started is None:
+                    raw.started = now
             
-        # Always update ended time when any field is updated
-        raw.ended = now
+            if files is not None:
+                raw.files = files
+                
+            if size is not None:
+                raw.size = size
+                
+            # Always update ended time when any field is updated
+            raw.ended = now
+                
+            # Store updated
+            self.redis.hset(self.raws_key, timestamp_key, raw.to_json())
             
-        # Store updated
-        self.redis.hset(self.raws_key, timestamp_key, raw.to_json())
-        
-        # Ensure it's in sorted set
-        score = int(timestamp.timestamp())
-        self.redis.zadd(self.timestamps_key, {timestamp_key: score})
-        
-        # Set expiration
-        self.redis.expire(self.raws_key, self.expire_time)
-        self.redis.expire(self.timestamps_key, self.expire_time)
+            # Ensure it's in sorted set
+            score = int(timestamp.timestamp())
+            self.redis.zadd(self.timestamps_key, {timestamp_key: score})
+            
+            # Set expiration
+            self.redis.expire(self.raws_key, self.expire_time)
+            self.redis.expire(self.timestamps_key, self.expire_time)
         
     def get_raw(self, timestamp):
         """Get raw status for a timestamp"""
