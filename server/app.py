@@ -257,25 +257,48 @@ class TaskManager:
             return TaskModel.from_json(task_json)
         return None
 
-    def peek_next_task(self):
-        """Peek at the next pending task without removing it from queue"""
+    def peek_next_task(self, priorities=None, composites=None):
+        """Peek at the next pending task without removing it from queue
+        
+        Args:
+            priorities: Priority filter - list of priorities, empty list means all
+            composites: Composite filter - list of composite names, empty list means all
+            
+        Returns:
+            TaskModel or None: Next matching task or None if no tasks match
+        """
         with self.lock:
-            # Get the task with lowest score (highest priority)
-            task_ids = self.redis.zrange(self.queue_key, 0, 0)
+            # Get all task IDs from queue (ordered by priority)
+            task_ids = self.redis.zrange(self.queue_key, 0, -1)
             if not task_ids:
                 return None
 
-            task_id = task_ids[0]
+            for task_id in task_ids:
+                task_json = self.redis.hget(self.tasks_key, task_id)
+                if not task_json:
+                    # Task was deleted, remove from queue
+                    self.redis.zrem(self.queue_key, task_id)
+                    continue
 
-            # Check if task still exists
-            task_json = self.redis.hget(self.tasks_key, task_id)
-            if not task_json:
-                # Task was deleted, remove from queue
-                self.redis.zrem(self.queue_key, task_id)
-                return None
+                task = TaskModel.from_json(task_json)
+                
+                # Filter by priority
+                if not self._matches(task.priority, priorities):
+                    continue
 
-            task = TaskModel.from_json(task_json)
-            return task
+                # Filter by composite
+                if not self._matches(task.composite, composites):
+                    continue
+                
+                # Found a matching task
+                return task
+            
+            # No matching tasks found
+            return None
+        
+    def _matches(self, filter, filters):
+        """Filter tasks based on criteria"""
+        return not filters or filter in filters
 
     def claim_task(self, task_id, worker_id):
         """Claim a specific task and mark it as processing"""
@@ -1000,17 +1023,25 @@ def get_tasks():
 
 @app.route('/api/tasks/next', methods=['GET'])
 def peek_next_task():
-    """Peek next pending task for worker"""
-    task = task_manager.peek_next_task()
+    """Peek next pending task for worker with optional filtering"""
+    priority = request.args.get('priority')
+    composite = request.args.get('composite')
+    
+    # Parse parameter into list
+    priorities = [p.strip() for p in priority.split(',')] if priority else []
+    composites = [p.strip() for p in composite.split(',')] if composite else []
+    
+    task = task_manager.peek_next_task(priorities, composites)
     if not task:
         return jsonify({
-            'message': 'No pending tasks'
+            'message': 'No pending tasks matching criteria'
         }), 204  # No Content
 
     return jsonify({
         'task_id': task.task_id,
         'composite': task.composite,
-        'timestamp': task.timestamp
+        'timestamp': task.timestamp,
+        'priority': task.priority
     })
 
 

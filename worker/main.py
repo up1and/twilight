@@ -220,8 +220,14 @@ def run_task_manager(server_url, worker_id=None, poll_interval=10, shutdown_even
 
     while not shutdown_event.is_set():
         try:
-            # Peek at next task
-            task_data = task_client.peek_next_task()
+            # Import worker config for task filtering
+            from config import processing_profile
+            
+            # Peek at next task with filtering
+            task_data = task_client.peek_next_task(
+                priorities=processing_profile.get('priorities', []),
+                composites=processing_profile.get('composites', [])
+            )
 
             if task_data:
                 task_id = task_data['task_id']

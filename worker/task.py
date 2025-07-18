@@ -15,11 +15,25 @@ class TaskClient:
         self.worker_id = worker_id or f"worker_{socket.gethostname()}_{os.getpid()}"
         self.session = requests.Session()
 
-    def peek_next_task(self):
-        """Peek next pending task from server"""
+    def peek_next_task(self, priorities=None, composites=None):
+        """Peek next pending task from server with optional filtering
+        
+        Args:
+            priority: Priority filter - list of priorities, empty list means all
+            composite: Composite filter - list of composite names, empty list means all
+        """
         try:
+            # Build query parameters
+            params = {}
+            if priorities and len(priorities) > 0:
+                params['priority'] = ','.join(priorities)
+            
+            if composites and len(composites) > 0:
+                params['composite'] = ','.join(composites)
+            
             response = self.session.get(
                 f"{self.server_url}/api/tasks/next",
+                params=params,
                 timeout=10
             )
 
