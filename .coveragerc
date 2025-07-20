@@ -1,0 +1,23 @@
+[run]
+source = .
+omit =
+    tests/*
+    */tests/*
+    test_*.py
+    */__pycache__/*
+    */venv/*
+    */.venv/*
+    run_tests.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __(repr|str)__
+    if (self\.debug|settings\.DEBUG):
+    raise (Assertion|NotImplemented)Error
+    if 0:
+    if __name__ == .__main__.:
+    class .*\bProtocol\):
+    @(abc\.)?abstractmethod
+
+show_missing = true
