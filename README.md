@@ -1,6 +1,6 @@
 # Twilight - Himawari Satellite Data Visualization System
 
-A real-time satellite data visualization system that processes and displays Himawari-8/9 satellite imagery through an interactive web interface. The system consists of three main components: a React-based frontend application, a Flask backend server, and a Python worker for satellite data processing.
+A real-time satellite data visualization system that processes and displays Himawari-8/9 satellite imagery through an interactive web interface. The system consists of three main components: a React-based frontend application, a Flask backend server, and Python worker processes for satellite data processing.
 
 ![twilight](docs/images/twilight.png)
 
@@ -10,12 +10,13 @@ This system provides real-time visualization of Himawari-8/9 satellite data with
 
 - **Real-time Data Processing**: Automatically downloads and processes Himawari-8/9 satellite data from NOAA S3 buckets
 - **Interactive Web Interface**: React-based frontend with Leaflet maps for satellite imagery visualization
-- **Multiple Composite Types**: Support for various satellite composites (True Color, IR Clouds, Ash, Night Microphysics etc.)
+- **Multiple Composite Types**: Support for various satellite composites (True Color, IR Clouds, Ash, Night Microphysics, etc.)
 - **Time-based Navigation**: Browse satellite imagery across different time periods
 - **Side-by-side Comparison**: Compare two different satellite composites simultaneously
 - **Task-based Architecture**: Distributed processing system with priority-based task management
+- **Data Synchronization**: Automatic synchronization of raw satellite data to local storage
 
-## Architecture
+## System Architecture
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
@@ -46,6 +47,7 @@ React-based web application built with TypeScript and Vite.
 - Multi-composite selection and side-by-side comparison
 - Responsive design for desktop and mobile devices
 - Settings management for API configuration
+- Coordinate display and snapshot functionality
 
 **Main Components:**
 
@@ -55,6 +57,8 @@ React-based web application built with TypeScript and Vite.
   - `multi-select-composite.tsx` - Composite type selector
   - `side-by-side.tsx` - Split-screen comparison tool
   - `settings-button.tsx` - Configuration interface
+  - `coordinates-display.tsx` - Coordinate display
+  - `snapshot-button.tsx` - Snapshot functionality
 - `utils/api-client.ts` - API communication layer
 - `utils/types.ts` - TypeScript type definitions
 
@@ -72,16 +76,24 @@ Flask-based REST API server that serves satellite tile data and manages processi
 
 **Key Features:**
 
-- Tile server with time-based URL patterns (`/{composite}/tiles/{time}/{z}/{x}/{y}.png`)
+- Time-based tile server (`/{composite}/tiles/{time}/{z}/{x}/{y}.png`)
 - TileJSON endpoint for map configuration
 - Task management API for distributed processing
 - Flask-Caching for performance optimization
 - MinIO integration for tile storage
+- Raw data synchronization status management
 
 **Main Components:**
 
 - `app.py` - Main Flask application with tile serving and task management
 - `config.py` - Configuration settings for MinIO and other services
+- `services.py` - Business logic services (TaskManager, HimawariRawManager)
+- `models.py` - Data models (TaskModel, HimawariRawModel)
+- `extensions.py` - Flask extensions initialization
+- `utils.py` - Utility functions
+- `views/` - View layer
+  - `api.py` - API routes
+  - `main.py` - Main routes
 
 **API Endpoints:**
 
@@ -91,6 +103,9 @@ Flask-based REST API server that serves satellite tile data and manages processi
 - `POST /api/tasks` - Create new processing tasks
 - `GET /api/tasks` - List and filter tasks
 - `PUT /api/tasks/{task_id}` - Update task status
+- `POST /api/raws` - Create raw data sync records
+- `GET /api/raws/{timestamp}` - Get raw data sync status
+- `PUT /api/raws` - Update raw data sync progress
 
 **Technologies:**
 
@@ -98,7 +113,7 @@ Flask-based REST API server that serves satellite tile data and manages processi
 - Flask-Caching for memory-based caching
 - Rio-Tiler for raster tile generation
 - MinIO client for object storage
-- Threading for concurrent task management
+- Redis for task queue and state management
 
 ### `/worker` - Satellite Data Processor
 
@@ -107,25 +122,35 @@ Python worker system for downloading, processing, and uploading Himawari satelli
 **Key Features:**
 
 - Automatic monitoring of NOAA Himawari S3 buckets
-- Multi-composite processing (True Color, IR Clouds, Ash, Night Microphysics etc.)
+- Multi-composite processing (True Color, IR Clouds, Ash, Night Microphysics, etc.)
 - Task-based architecture with priority management
 - Distributed processing across multiple machines
 - Real-time status reporting to backend server
+- Raw data synchronization to local MinIO
 
 **Main Components:**
 
-- `main.py` - Entry point with task generator and worker management
+- `main.py` - Entry point with task generator and worker process management
 - `himawari_processor.py` - Core satellite data processing logic
-- `task_manager.py` - Task queue management and server communication
+- `task.py` - Task queue management and server communication
+- `sync.py` - Raw data synchronization processing
 - `utils.py` - Utility functions and logging configuration
+- `client.py` - Local file checking utilities
 
 **Processing Pipeline:**
 
 1. **Data Monitoring**: Continuously checks NOAA S3 for new Himawari data (160 files per 10-minute interval)
-2. **Data Download**: Downloads HSD format files from S3 when complete datasets are available
-3. **Composite Generation**: Uses SatPy to generate various satellite composites
-4. **Tile Generation**: Converts composites to Cloud Optimized GeoTIFF (COG) format
-5. **Upload**: Stores processed tiles in MinIO for serving by the backend
+2. **Data Synchronization**: Syncs raw HSD format files from NOAA S3 to local MinIO
+3. **Task Generation**: Creates processing tasks when complete datasets are available
+4. **Composite Generation**: Uses SatPy to generate various satellite composites
+5. **Tile Generation**: Converts composites to Cloud Optimized GeoTIFF (COG) format
+6. **Upload**: Stores processed tiles in MinIO for serving by the backend
+
+**Operation Modes:**
+
+- `--task` - Enable task generator (monitors data availability and creates tasks)
+- `--sync` - Enable Himawari data synchronization (from NOAA S3 to local MinIO)
+- `--worker` - Enable composite worker (processes tasks from the queue)
 
 **Technologies:**
 
@@ -134,6 +159,7 @@ Python worker system for downloading, processing, and uploading Himawari satelli
 - Rasterio for raster data manipulation
 - MinIO client for tile storage
 - Threading for concurrent processing
+- Boto3 for S3 operations
 
 ## Installation and Setup
 
@@ -142,6 +168,7 @@ Python worker system for downloading, processing, and uploading Himawari satelli
 - Python 3.12
 - Node.js 18+
 - MinIO server (for tile storage)
+- Redis server (for task queue)
 
 ### Backend Setup
 
@@ -150,11 +177,11 @@ Python worker system for downloading, processing, and uploading Himawari satelli
 pdm install
 
 # Copy and configure settings
-cp config.sample.py config.py
-# Edit config.py with your MinIO credentials
+cp server/config.sample.py server/config.py
+# Edit config.py with your MinIO and Redis credentials
 
 # Run the server
-python app.py
+cd server && python app.py
 ```
 
 ### Client Setup
@@ -177,14 +204,16 @@ npm run build
 pdm install
 
 # Copy and configure settings
-cp config.sample.py config.py
+cp worker/config.sample.py worker/config.py
 # Edit config.py with your MinIO and server settings
 
-# Run worker in hybrid mode (monitor + worker)
-python main.py --mode hybrid --server-url http://localhost:5000
+# Run task generator + data sync + worker
+cd worker && python main.py --task --sync --worker
 
-# Run worker in worker-only mode
-python main.py --mode worker --server-url http://localhost:5000
+# Or run different components separately
+python main.py --task      # Task generator only
+python main.py --sync      # Data sync only
+python main.py --worker    # Worker only
 ```
 
 ## Configuration
@@ -199,6 +228,16 @@ access_key = "your-access-key"
 secret_key = "your-secret-key"
 ```
 
+### Redis Setup
+
+The system requires Redis for task queue and state management. Configure in `server/config.py`:
+
+```python
+redis_host = "localhost"
+redis_port = 6379
+redis_db = 0
+```
+
 ### Client Configuration
 
 The client can be configured through the settings interface or by modifying localStorage:
@@ -208,14 +247,26 @@ localStorage.setItem("endpoint", "http://localhost:5000");
 localStorage.setItem("token", "your-api-token");
 ```
 
+### Worker Configuration
+
+Configure processing profile in `worker/config.py`:
+
+```python
+processing_profile = {
+    'priorities': ['high', 'normal'],  # Task priorities to process
+    'composites': ['true_color', 'ir_clouds']  # Composite types to process
+}
+```
+
 ## Usage
 
 ### Starting the System
 
 1. Start MinIO server
-2. Start the Flask backend server
-3. Start one or more worker processes
-4. Start the client development server or serve the built application
+2. Start Redis server
+3. Start the Flask backend server
+4. Start one or more worker processes
+5. Start the client development server or serve the built application
 
 ### Accessing the Interface
 
@@ -226,10 +277,11 @@ localStorage.setItem("token", "your-api-token");
 
 ### Processing Modes
 
-The worker supports two operational modes:
+The worker supports multiple operational modes:
 
-- **Hybrid Mode** (`--mode hybrid`): Monitors for new data and processes tasks
-- **Worker Mode** (`--mode worker`): Only processes existing tasks from the queue
+- **Task Generation Mode** (`--task`): Monitors for new data and creates tasks
+- **Sync Mode** (`--sync`): Synchronizes raw data from NOAA S3 to local MinIO
+- **Worker Mode** (`--worker`): Only processes existing tasks from the queue
 
 ## API Reference
 
@@ -237,7 +289,7 @@ The worker supports two operational modes:
 
 - `GET /{composite}/tiles/{time}/{z}/{x}/{y}.png`
   - Returns PNG tile for specified composite, time, and tile coordinates
-  - Time format: ISO 8601 (e.g., `2025-04-20T04:00:00`)
+  - Time format: ISO 8601 (e.g., `2025-01-20T04:00:00`)
 
 ### Data Endpoints
 
@@ -249,6 +301,12 @@ The worker supports two operational modes:
 - `POST /api/tasks` - Create new processing task
 - `GET /api/tasks` - List tasks with optional filtering
 - `PUT /api/tasks/{task_id}` - Update task status
+
+### Raw Data Management
+
+- `POST /api/raws` - Create raw data sync records
+- `GET /api/raws/{timestamp}` - Get raw data sync status
+- `PUT /api/raws` - Update raw data sync progress
 
 ## Development
 
@@ -263,14 +321,43 @@ npm run lint    # Run ESLint
 ### Backend Development
 
 ```bash
-python app.py   # Start Flask development server
+cd server && python app.py   # Start Flask development server
 ```
 
 ### Worker Development
 
 ```bash
-python main.py --mode hybrid  # Start in development mode
+cd worker && python main.py --task --sync --worker  # Start in development mode
 ```
+
+### Testing
+
+```bash
+# Run all tests
+pdm run test
+
+# Run tests with coverage report
+pdm run test-cov
+
+# Run verbose tests
+pdm run test-verbose
+```
+
+## Available Composite Types
+
+- `true_color` - True Color composite
+- `ir_clouds` - Infrared Clouds
+- `ash` - Volcanic Ash detection
+- `night_microphysics` - Night Microphysics
+
+## Data Flow
+
+1. **Data Monitoring**: Worker processes monitor NOAA S3 for new Himawari data
+2. **Data Synchronization**: Raw data is synced from NOAA S3 to local MinIO
+3. **Task Creation**: Processing tasks are created when data is complete
+4. **Task Processing**: Workers process tasks, generating composite images and tiles
+5. **Data Serving**: Backend server serves tile data through HTTP API
+6. **User Interface**: Frontend application displays interactive maps and satellite imagery
 
 ## Contributing
 
