@@ -1,8 +1,9 @@
 """
 Tests for service classes
 """
-from unittest.mock import Mock
-from server.services import TaskManager, HimawariRawManager
+import datetime
+from unittest.mock import Mock, patch
+from server.services import TaskManager, HimawariRawManager, CompositeStateManager
 from server.models import TaskModel, HimawariRawModel
 
 
@@ -490,3 +491,156 @@ class TestHimawariRawManager:
         # Verify Redis operations still work
         mock_redis.hset.assert_called()
         mock_redis.zadd.assert_called()
+
+
+class TestCompositeStateManager:
+    """Test CompositeStateManager functionality"""
+    
+    def setup_method(self):
+        """Setup test fixtures"""
+        self.mock_redis = Mock()
+        self.test_timestamp = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        self.test_timestamp_str = self.test_timestamp.isoformat()
+        
+        # Mock composite states for initialization
+        self.composite_states = {
+            'ir_clouds': self.test_timestamp,
+            'true_color': None,
+            'ash': self.test_timestamp
+        }
+    
+    def test_init_with_composite_states(self):
+        """Test CompositeStateManager initialization with composite states"""
+        # Mock get method to return None (no existing data)
+        with patch.object(CompositeStateManager, 'get', return_value=None):
+            with patch.object(CompositeStateManager, 'update') as mock_update:
+                manager = CompositeStateManager(self.mock_redis, self.composite_states)
+                
+                assert manager.redis_client == self.mock_redis
+                assert manager.key == "composite_state"
+                
+                # Should call update for each composite with non-None timestamp
+                expected_calls = [
+                    (('ir_clouds', self.test_timestamp), {}),
+                    (('true_color', None), {}),
+                    (('ash', self.test_timestamp), {})
+                ]
+                assert mock_update.call_count == 3
+    
+    def test_init_with_existing_redis_data(self):
+        """Test initialization when Redis already has data"""
+        existing_timestamp = datetime.datetime(2025, 1, 15, 10, 0, 0, tzinfo=datetime.timezone.utc)
+        
+        def mock_get_side_effect(composite):
+            if composite == 'ir_clouds':
+                return existing_timestamp  # Different from composite_states
+            return None
+        
+        with patch.object(CompositeStateManager, 'get', side_effect=mock_get_side_effect):
+            with patch.object(CompositeStateManager, 'update') as mock_update:
+                manager = CompositeStateManager(self.mock_redis, self.composite_states)
+                
+                # Should update ir_clouds because timestamps are different
+                # Should update true_color and ash because Redis has None
+                assert mock_update.call_count == 3
+    
+    def test_get_specific_composite_exists(self):
+        """Test getting a specific composite that exists"""
+        mock_states = {
+            'ir_clouds': self.test_timestamp_str,
+            'true_color': self.test_timestamp_str
+        }
+        self.mock_redis.hgetall.return_value = mock_states
+        
+        manager = CompositeStateManager(self.mock_redis, {})
+        result = manager.get('ir_clouds')
+        
+        assert result == self.test_timestamp
+        self.mock_redis.hgetall.assert_called_with("composite_state")
+    
+    def test_get_specific_composite_not_exists(self):
+        """Test getting a specific composite that doesn't exist"""
+        self.mock_redis.hgetall.return_value = {}
+        
+        manager = CompositeStateManager(self.mock_redis, {})
+        result = manager.get('ir_clouds')
+        
+        assert result is None
+        self.mock_redis.hgetall.assert_called_with("composite_state")
+    
+    def test_get_specific_composite_invalid_timestamp(self):
+        """Test getting a specific composite with invalid timestamp format"""
+        mock_states = {
+            'ir_clouds': 'invalid_timestamp'
+        }
+        self.mock_redis.hgetall.return_value = mock_states
+        
+        manager = CompositeStateManager(self.mock_redis, {})
+        result = manager.get('ir_clouds')
+        
+        assert result is None
+        self.mock_redis.hgetall.assert_called_with("composite_state")
+    
+    def test_get_all_composites(self):
+        """Test getting all composites"""
+        mock_states = {
+            'ir_clouds': self.test_timestamp_str,
+            'true_color': self.test_timestamp_str,
+            'ash': None,
+            'night_microphysics': 'invalid_timestamp'
+        }
+        self.mock_redis.hgetall.return_value = mock_states
+        
+        manager = CompositeStateManager(self.mock_redis, {})
+        result = manager.get()
+        
+        expected = {
+            'ir_clouds': self.test_timestamp,
+            'true_color': self.test_timestamp,
+            'ash': None,
+            'night_microphysics': None
+        }
+        assert result == expected
+        self.mock_redis.hgetall.assert_called_with("composite_state")
+    
+    def test_get_all_composites_empty(self):
+        """Test getting all composites when none exist"""
+        self.mock_redis.hgetall.return_value = {}
+        
+        manager = CompositeStateManager(self.mock_redis, {})
+        result = manager.get()
+        
+        assert result == {}
+        self.mock_redis.hgetall.assert_called_with("composite_state")
+    
+    def test_update_composite(self):
+        """Test updating a composite"""
+        manager = CompositeStateManager(self.mock_redis, {})
+        
+        # Mock the lock context manager
+        mock_lock = Mock()
+        manager.lock = mock_lock
+        mock_lock.__enter__ = Mock(return_value=mock_lock)
+        mock_lock.__exit__ = Mock(return_value=None)
+        
+        manager.update('ir_clouds', self.test_timestamp)
+        
+        self.mock_redis.hset.assert_called_once_with("composite_state", "ir_clouds", self.test_timestamp_str)
+        mock_lock.__enter__.assert_called_once()
+        mock_lock.__exit__.assert_called_once()
+    
+    def test_update_with_none_timestamp(self):
+        """Test updating a composite with None timestamp"""
+        manager = CompositeStateManager(self.mock_redis, {})
+        
+        # Mock the lock context manager
+        mock_lock = Mock()
+        manager.lock = mock_lock
+        mock_lock.__enter__ = Mock(return_value=mock_lock)
+        mock_lock.__exit__ = Mock(return_value=None)
+        
+        manager.update('ir_clouds', None)
+        
+        self.mock_redis.hset.assert_called_once_with("composite_state", "ir_clouds", "")
+        mock_lock.__enter__.assert_called_once()
+        mock_lock.__exit__.assert_called_once()

@@ -95,42 +95,6 @@ class TestNaturalEarthTile:
         assert 'mbtiles file not found' in result['message']
 
 
-class TestMinioEvent:
-    """Test MinIO event endpoint"""
-    
-    def test_minio_event_get(self, client):
-        response = client.get('/minio/events')
-        
-        assert response.status_code == 200
-        result = json.loads(response.data)
-        assert 'live' in result
-    
-    def test_minio_event_post_invalid_key(self, client):
-        event_data = {
-            'Key': 'invalid-key'  # No slash separator
-        }
-        
-        response = client.post('/minio/events',
-                             data=json.dumps(event_data),
-                             content_type='application/json')
-        
-        assert response.status_code == 400
-        result = json.loads(response.data)
-        assert 'Invalid Key format' in result['error']
-    
-    def test_minio_event_post_success(self, client):
-        event_data = {
-            'Key': 'himawari/ir_clouds/2025/01/15/himawari_ir_clouds_20250115_1200.tif'
-        }
-        
-        response = client.post('/minio/events',
-                             data=json.dumps(event_data),
-                             content_type='application/json')
-        
-        assert response.status_code == 201
-        result = json.loads(response.data)
-        assert result['Key'] == event_data['Key']
-
 
 class TestLatestCompositeState:
     """Test latest composite state endpoint"""
@@ -252,36 +216,6 @@ class TestNaturalEarthTileExtended:
         assert response.status_code in [200, 204, 400, 404]
 
 
-class TestMinioEventExtended:
-    """Extended tests for MinIO event endpoint"""
-    
-    def test_minio_event_post_valid_composite_update(self, client):
-        # Test with a valid composite that should update state
-        event_data = {
-            'Key': 'himawari/ir_clouds/2025/01/15/himawari_ir_clouds_20250115_1200.tif'
-        }
-        
-        response = client.post('/minio/events',
-                             data=json.dumps(event_data),
-                             content_type='application/json')
-        
-        assert response.status_code == 201
-        result = json.loads(response.data)
-        assert result['Key'] == event_data['Key']
-    
-    def test_minio_event_post_invalid_composite(self, client):
-        # Test with an invalid composite that shouldn't update state
-        event_data = {
-            'Key': 'himawari/invalid_composite/2025/01/15/himawari_invalid_composite_20250115_1200.tif'
-        }
-        
-        response = client.post('/minio/events',
-                             data=json.dumps(event_data),
-                             content_type='application/json')
-        
-        assert response.status_code == 201
-        result = json.loads(response.data)
-        assert result['Key'] == event_data['Key']
 
 
 class TestFindTileFunction:
@@ -379,18 +313,11 @@ class TestCompositeStateEndpoint:
         
         # Should be a dictionary (might be empty)
         assert isinstance(result, dict)
-    
-    def test_minio_event_get_structure(self, client):
-        response = client.get('/minio/events')
         
-        assert response.status_code == 200
-        result = json.loads(response.data)
-        
-        # Should contain 'live' timestamp
-        assert 'live' in result
-        
-        # 'live' should be a timestamp string
-        assert isinstance(result['live'], str)
+        # If there are any composites, their values should be timestamp strings or None
+        for composite_name, timestamp_value in result.items():
+            assert isinstance(composite_name, str)
+            assert timestamp_value is None or isinstance(timestamp_value, str)
 
 
 class TestSnapshotEndpointBasic:

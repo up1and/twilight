@@ -9,6 +9,7 @@ class TestCreateApp:
     """Test Flask app creation"""
     
     @patch('server.app.initialize_composite_state')
+    @patch('server.app.CompositeStateManager')
     @patch('server.app.HimawariRawManager')
     @patch('server.app.TaskManager')
     @patch('server.app.init_extensions')
@@ -16,15 +17,17 @@ class TestCreateApp:
     @patch('server.app.client')
     def test_create_app(self, mock_client, mock_redis, mock_init_extensions, 
                        mock_task_manager_class, mock_himawari_manager_class, 
-                       mock_initialize_state):
+                       mock_composite_state_class, mock_initialize_state):
         # Mock the manager instances
         mock_task_manager = Mock()
         mock_himawari_manager = Mock()
-        mock_composite_state = {'ir_clouds': None}
+        mock_composite_state = Mock()
+        mock_composite_states = {'ir_clouds': None, 'true_color': None}
         
         mock_task_manager_class.return_value = mock_task_manager
         mock_himawari_manager_class.return_value = mock_himawari_manager
-        mock_initialize_state.return_value = mock_composite_state
+        mock_composite_state_class.return_value = mock_composite_state
+        mock_initialize_state.return_value = mock_composite_states
         
         app = create_app()
         
@@ -47,8 +50,10 @@ class TestCreateApp:
         mock_initialize_state.assert_called_once_with(mock_client, [
             'ir_clouds', 'true_color', 'ash', 'night_microphysics'
         ])
+        mock_composite_state_class.assert_called_once_with(mock_redis, mock_composite_states)
     
     @patch('server.app.initialize_composite_state')
+    @patch('server.app.CompositeStateManager')
     @patch('server.app.HimawariRawManager')
     @patch('server.app.TaskManager')
     @patch('server.app.init_extensions')
@@ -56,10 +61,11 @@ class TestCreateApp:
     @patch('server.app.client')
     def test_app_configuration(self, mock_client, mock_redis, mock_init_extensions,
                               mock_task_manager_class, mock_himawari_manager_class,
-                              mock_initialize_state):
+                              mock_composite_state_class, mock_initialize_state):
         """Test app configuration and JSON encoder"""
         mock_task_manager_class.return_value = Mock()
         mock_himawari_manager_class.return_value = Mock()
+        mock_composite_state_class.return_value = Mock()
         mock_initialize_state.return_value = {}
         
         app = create_app()
@@ -73,6 +79,7 @@ class TestCreateApp:
         assert 'main' in blueprint_names
     
     @patch('server.app.initialize_composite_state')
+    @patch('server.app.CompositeStateManager')
     @patch('server.app.HimawariRawManager')
     @patch('server.app.TaskManager')
     @patch('server.app.init_extensions')
@@ -80,10 +87,11 @@ class TestCreateApp:
     @patch('server.app.client')
     def test_error_handler_registration(self, mock_client, mock_redis, mock_init_extensions,
                                        mock_task_manager_class, mock_himawari_manager_class,
-                                       mock_initialize_state):
+                                       mock_composite_state_class, mock_initialize_state):
         """Test that error handlers are registered"""
         mock_task_manager_class.return_value = Mock()
         mock_himawari_manager_class.return_value = Mock()
+        mock_composite_state_class.return_value = Mock()
         mock_initialize_state.return_value = {}
         
         app = create_app()
@@ -222,6 +230,7 @@ class TestAppHelperFunctions:
     
     @patch('server.app.register_blueprints')
     @patch('server.app.initialize_composite_state')
+    @patch('server.app.CompositeStateManager')
     @patch('server.app.HimawariRawManager')
     @patch('server.app.TaskManager')
     @patch('server.app.init_extensions')
@@ -229,10 +238,11 @@ class TestAppHelperFunctions:
     @patch('server.app.client')
     def test_register_blueprints_called(self, mock_client, mock_redis, mock_init_extensions,
                                        mock_task_manager_class, mock_himawari_manager_class,
-                                       mock_initialize_state, mock_register_blueprints):
+                                       mock_composite_state_class, mock_initialize_state, mock_register_blueprints):
         """Test that register_blueprints is called during app creation"""
         mock_task_manager_class.return_value = Mock()
         mock_himawari_manager_class.return_value = Mock()
+        mock_composite_state_class.return_value = Mock()
         mock_initialize_state.return_value = {}
         
         app = create_app()

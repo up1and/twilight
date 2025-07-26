@@ -208,47 +208,12 @@ def index():
     return jsonify(info)
 
 
-@main.route('/minio/events', methods=['GET', 'POST'])
-def minio_event():
-    """
-    Handle MinIO events for object creation/update (legacy fallback)
-    """
-    if request.method == 'POST':
-        event = request.get_json()
-        object_key = event.get('Key', '')
-        # Split bucket name and object name
-        parts = object_key.split('/', 1)
-        if len(parts) < 2:
-            return jsonify({"error": "Invalid Key format"}), 400
-
-        _, object_name = parts
-
-        composite_name = extract_composite_from_object_name(object_name, current_app.config['AVAILABLE_COMPOSITES'])
-        timestamp = extract_timestamp_from_object_name(object_name)
-        if composite_name and timestamp:
-            # Only update if the timestamp is newer than what we have
-            current_timestamp = current_app.composite_state.get(composite_name)
-            if current_timestamp is None or timestamp > current_timestamp:
-                # Update composite_state with the new timestamp
-                current_app.composite_state[composite_name] = timestamp
-                current_app.logger.info(f"Updated state via MinIO event for {composite_name}: {timestamp}")
-
-        return jsonify(event), 201
-
-    else:
-        # GET request - return service status and composite state
-        result = {
-            'live': datetime.datetime.now(datetime.timezone.utc),
-        }
-        return jsonify(result)
-
-
 @main.route('/composites/latest', methods=['GET'])
 def latest_composite_state():
     """
     Get the latest update time for all composites
     """
-    return jsonify(current_app.composite_state)
+    return jsonify(current_app.composite_state.get())
 
 
 @main.route('/snapshots/<path:object_name>')

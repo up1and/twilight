@@ -5,7 +5,6 @@ import datetime
 
 from models import TaskModel, HimawariRawModel
 
-
 class TaskManager:
     def __init__(self, redis_client):
         self.redis = redis_client
@@ -313,3 +312,54 @@ class HimawariRawManager:
                 results.append(raw.to_dict())
                 
         return results, total
+
+
+class CompositeStateManager:
+    """
+    Manages composite state in Redis for multi-worker consistency
+    """
+    
+    def __init__(self, redis_client, composite_states):
+        self.key = "composite_state"
+        self.redis_client = redis_client
+        
+        # Redis lock for distributed locking
+        self.lock = self.redis_client.lock('composite_state_lock', timeout=10, blocking_timeout=10)
+
+        for composite, timestamp in composite_states.items():
+            # During initialization, always update to ensure all states are properly set in Redis
+            # This ensures consistency even when both current and new values are None
+            self.update(composite, timestamp)
+    
+    def get(self, composite=None):
+        """
+        Get composite state(s). If composite is None, return all states.
+        """
+        # All composite states
+        result = {}
+        composite_states = self.redis_client.hgetall(self.key)
+        for composite_name, timestamp_str in composite_states.items():
+            if timestamp_str:  # Empty string is falsy
+                try:
+                    result[composite_name] = datetime.datetime.fromisoformat(timestamp_str)
+                except ValueError:
+                    result[composite_name] = None
+            else:
+                result[composite_name] = None
+
+        if composite:
+            return result.get(composite)
+        
+        return result
+    
+    def update(self, composite, timestamp):
+        """
+        Update composite state with distributed locking.
+        Returns True if updated, False if not.
+        """
+        with self.lock:
+            if timestamp is None:
+                timestamp_str = ""  # Store empty string
+            else:
+                timestamp_str = timestamp.isoformat()
+            self.redis_client.hset(self.key, composite, timestamp_str)

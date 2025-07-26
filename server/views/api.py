@@ -163,15 +163,33 @@ def update_task_status(task_id):
             'error': 'Bad Request',
             'message': 'Invalid status. Must be: pending, processing, completed, failed'
         }), 400
+    
+    # Get task details before updating status
+    task = current_app.task_manager.get_task(task_id)
+    if not task:
+        return jsonify({
+            'error': 'Not Found',
+            'message': f'Task {task_id} not found'
+        }), 404
 
     message = data.get('message')
-
     success = current_app.task_manager.update_task_status(task_id, status, message)
     if not success:
         return jsonify({
             'error': 'Not Found',
             'message': f'Task {task_id} not found'
         }), 404
+    
+    # Update composite_state when task is completed
+    if status == 'completed':
+        composite_name = task.composite
+        timestamp = task.timestamp
+
+        # Only update if this timestamp is newer than what we have
+        current_timestamp = current_app.composite_state.get(composite_name)
+        if current_timestamp is None or timestamp > current_timestamp:
+            current_app.composite_state.update(composite_name, timestamp)
+            current_app.logger.info(f"Updated composite state via task completion: {composite_name} -> {timestamp}")
 
     return jsonify({
         'message': 'Task status updated successfully'
