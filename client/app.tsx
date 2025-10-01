@@ -430,6 +430,7 @@ export default function MapView() {
           maxBoundsViscosity={1.0}
           crs={CRS.EPSG3857}
           keyboard={false}
+          fadeAnimation={false}
         >
           {/* Map bounds updater */}
           <MapBoundsUpdater bounds={compositeBounds} />
