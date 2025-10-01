@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 import datetime
@@ -63,3 +64,64 @@ def createLogger(debug=False):
 
 
 logger = createLogger(debug=True)
+
+
+class CacheManager:
+    """Simple cache manager with size limit functionality"""
+    
+    def __init__(self, cache_dir, max_size=10):
+        self.cache_dir = cache_dir
+        self.max_size_bytes = int(max_size * 1024**3)
+    
+    def get_cache_size(self):
+        """Get the size of cache directory in bytes"""
+        total_size = 0
+        for dirpath, _, filenames in os.walk(self.cache_dir):
+            for filename in filenames:
+                filepath = os.path.join(dirpath, filename)
+                try:
+                    total_size += os.path.getsize(filepath)
+                except (OSError, FileNotFoundError):
+                    # Skip files that can't be accessed
+                    continue
+        return total_size
+    
+    def cleanup_cache(self):
+        """Clean up cache directory to maintain size under limit using LRU strategy"""
+        current_size = self.get_cache_size()
+        if current_size <= self.max_size_bytes:
+            return  # No cleanup needed
+
+        # Get all files with their modification time
+        files_with_mtime = []
+        for dirpath, _, filenames in os.walk(self.cache_dir):
+            for filename in filenames:
+                filepath = os.path.join(dirpath, filename)
+                try:
+                    mtime = os.path.getmtime(filepath)
+                    files_with_mtime.append((filepath, mtime))
+                except (OSError, FileNotFoundError):
+                    continue
+
+        # Sort by modification time (oldest first)
+        files_with_mtime.sort(key=lambda x: x[1])
+
+        bytes_removed = 0
+        files_removed = 0
+
+        for file_path, _ in files_with_mtime:
+            if current_size <= self.max_size_bytes:
+                break
+            try:
+                file_size = os.path.getsize(file_path)
+                os.remove(file_path)
+                current_size -= file_size
+                bytes_removed += file_size
+                files_removed += 1
+            except (OSError, FileNotFoundError):
+                # Skip files that can't be removed
+                continue
+
+        if bytes_removed > 0:
+            logger.info(f"Cache cleanup: Removed {bytes_removed} bytes from {files_removed} files "
+                        f"(current: {current_size/(1024**3):.2f}GB")

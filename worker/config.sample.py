@@ -15,3 +15,7 @@ processing_profile = {
     # Available composites: 'ir_clouds', 'true_color', 'ash', 'night_microphysics'
     'composites': []
 }
+
+# Cache management settings
+# Maximum cache size in GB (default 200GB)
+cache_size_limit = 200

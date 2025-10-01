@@ -6,12 +6,11 @@ import requests
 
 import s3fs
 
-from himawari_processor import available_composites
+from himawari_processor import available_composites, cache_dir
 from task import TaskClient, TaskProcessor
 from sync import SyncClient, SyncProcessor
-from utils import logger, _available_latest_time, generate_worker_id
-from client import check_local_files
-from config import server_url
+from utils import logger, _available_latest_time, generate_worker_id, CacheManager
+from config import server_url, cache_size_limit
 
 
 def check_files(target_time):
@@ -209,7 +208,8 @@ def run_task_manager(server_url, worker_id=None, poll_interval=10, shutdown_even
     """
     # Initialize components
     task_client = TaskClient(server_url, worker_id)
-    task_processor = TaskProcessor(task_client)
+    cache_manager = CacheManager(cache_dir, cache_size_limit)
+    task_processor = TaskProcessor(task_client, cache_manager)
     
     logger.info("Starting task manager (Worker ID: %s)", task_client.worker_id)
     logger.info("Server URL: %s", task_client.server_url)

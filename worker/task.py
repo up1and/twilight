@@ -116,8 +116,9 @@ class TaskClient:
 class TaskProcessor:
     """Processes individual tasks"""
 
-    def __init__(self, task_client: TaskClient):
+    def __init__(self, task_client: TaskClient, cache_manager):
         self.task_client = task_client
+        self.cache_manager = cache_manager
 
     def process_task(self, task_data, data_source='remote'):
         """Process a single task"""
@@ -130,6 +131,9 @@ class TaskProcessor:
 
             # Import here to avoid circular imports
             from himawari_processor import process_composite
+            # Clean up cache before processing
+            self.cache_manager.cleanup_cache()
+
             # Process the composite
             process_composite(composite, timestamp, data_source)
             # Report completion
