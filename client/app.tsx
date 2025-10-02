@@ -1,5 +1,17 @@
 import { useState, useRef, useEffect } from "react";
-import { MapContainer, TileLayer, useMapEvents, useMap } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  GeoJSON,
+  useMapEvents,
+  useMap,
+} from "react-leaflet";
+import type L from "leaflet";
+import { CRS } from "leaflet";
+import "leaflet.vectorgrid";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+
 import TimeRangeSelector from "./components/time-range-selector";
 import SettingsButton from "./components/settings-button";
 import MultiSelectComposite from "./components/multi-select-composite";
@@ -12,15 +24,13 @@ import {
   fetchLatestComposites,
   fetchTileJSON,
 } from "./utils/api-client";
-import "leaflet/dist/leaflet.css";
-import "./app.css";
-import type L from "leaflet";
-import { CRS } from "leaflet";
-import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
+
 import type { CompositeType, MapConfig } from "./utils/types";
 
-import "leaflet.vectorgrid";
+import firs from "./firs.json";
+
+import "leaflet/dist/leaflet.css";
+import "./app.css";
 
 // Extend dayjs with UTC plugin
 dayjs.extend(utc);
@@ -465,6 +475,17 @@ export default function MapView() {
                 fillOpacity: 0,
               },
             }}
+          />
+
+          <GeoJSON
+            data={firs as GeoJSON.GeoJsonObject}
+            style={{
+              color: "#c8c8c8",
+              weight: 2,
+              opacity: 1,
+              fillOpacity: 0,
+            }}
+            interactive={false}
           />
 
           {/* Side-by-side control - only show if two layers are selected */}
