@@ -72,10 +72,17 @@
   background-color: var(--background);
   border-radius: 4px;
   box-shadow: 0 2px 10px var(--shadow-heavy);
-  width: 100%;
-  max-width: 400px;
-  max-height: 90vh;
-  overflow-y: auto;
+  width: 500px;
+  max-width: 90vw;
+  height: 400px;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-modal-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
 }
 
 .settings-modal-header {
@@ -100,7 +107,7 @@
 }
 
 .settings-modal-body {
-  padding: 15px;
+  padding: 8px 15px;
 }
 
 .settings-modal-footer {
@@ -108,6 +115,43 @@
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.settings-sidebar {
+  width: auto;
+  min-width: 100px;
+  border-right: 1px solid var(--border);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-sidebar-item {
+  background: none;
+  border: none;
+  padding: 6px 10px;
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-secondary);
+  transition: none;
+  border-radius: 0;
+  margin: 2px 6px;
+}
+
+.settings-sidebar-item:hover {
+  color: var(--text);
+}
+
+.settings-sidebar-item.active {
+  background-color: var(--background-hover);
+  color: var(--primary);
+  font-weight: 500;
+  border-radius: 6px;
+}
+
+.settings-content {
+  flex: 1;
 }
 
 .settings-form-group {
@@ -131,4 +175,91 @@
   box-sizing: border-box;
   text-align: left;
   line-height: 16px; /* Adjust line height for better vertical centering */
+}
+
+/* Custom switch toggle replacing checkbox */
+.settings-switch-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-switch-label {
+  font-size: 12px;
+  color: var(--text);
+  font-weight: normal;
+  margin: 0; /* Explicitly set margin to 0 */
+  margin-bottom: 0 !important; /* Override parent label margin-bottom for horizontal layout */
+  white-space: nowrap;
+  line-height: 20px;
+}
+
+.settings-switch {
+  position: relative;
+  width: 40px;
+  height: 20px;
+  background-color: var(--border);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: none;
+}
+
+.settings-switch.active {
+  background-color: var(--primary);
+}
+
+.settings-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background-color: var(--white);
+  border-radius: 50%;
+  transition: transform 0.2s;
+  display: block;
+}
+
+.settings-switch.active .settings-switch-thumb {
+  transform: translateX(20px);
+}
+
+/* About page styles */
+.settings-about {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  text-align: center;
+  font-size: 13px;
+}
+
+.about-title {
+  margin: 5px 0;
+  font-size: 18px;
+  color: var(--text);
+}
+
+.about-description {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.about-version {
+  margin: 5px 0;
+}
+
+.about-version a,
+.about-copyright a {
+  text-decoration: none;
+  color: var(--primary);
+}
+
+.about-copyright {
+  margin-top: 25px;
+  color: var(--text-secondary);
 }

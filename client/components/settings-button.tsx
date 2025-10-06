@@ -10,8 +10,15 @@ export default function SettingsButton({
   onSettingsChange,
 }: SettingsButtonProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<
+    "connection" | "layer" | "about"
+  >("connection");
   const [endpoint, setEndpoint] = useState(getApiConfig().endpoint);
   const [token, setToken] = useState(getApiConfig().token);
+  const [firBoundary, setFirBoundary] = useState(() => {
+    const saved = localStorage.getItem("fir-boundary");
+    return saved ? JSON.parse(saved) : false;
+  });
   const modalRef = useRef<HTMLDivElement>(null);
 
   // Close modal when clicking outside
@@ -41,6 +48,9 @@ export default function SettingsButton({
       endpoint,
       token,
     });
+
+    // Save fir-boundary to local storage
+    localStorage.setItem("fir-boundary", JSON.stringify(firBoundary));
 
     // Call the callback function if provided to notify the parent component
     if (onSettingsChange) {
@@ -86,35 +96,108 @@ export default function SettingsButton({
                 ×
               </button>
             </div>
-            <div className="settings-modal-body">
-              <div className="settings-form-group">
-                <label htmlFor="endpoint">Endpoint</label>
-                <input
-                  id="endpoint"
-                  type="text"
-                  value={endpoint}
-                  onChange={(e) => setEndpoint(e.target.value)}
-                  placeholder="https://example.com"
-                />
+            <div className="settings-modal-layout">
+              <div className="settings-sidebar">
+                <button
+                  className={`settings-sidebar-item ${
+                    activeSection === "connection" ? "active" : ""
+                  }`}
+                  onClick={() => setActiveSection("connection")}
+                >
+                  Connection
+                </button>
+                <button
+                  className={`settings-sidebar-item ${
+                    activeSection === "layer" ? "active" : ""
+                  }`}
+                  onClick={() => setActiveSection("layer")}
+                >
+                  Layer
+                </button>
+                <button
+                  className={`settings-sidebar-item ${
+                    activeSection === "about" ? "active" : ""
+                  }`}
+                  onClick={() => setActiveSection("about")}
+                >
+                  About
+                </button>
               </div>
-              <div className="settings-form-group">
-                <label htmlFor="token">Token</label>
-                <input
-                  id="token"
-                  type="password"
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
-                  placeholder="Enter your token"
-                />
+              <div className="settings-content">
+                {activeSection === "connection" && (
+                  <div className="settings-modal-body">
+                    <div className="settings-form-group">
+                      <label htmlFor="endpoint">Endpoint</label>
+                      <input
+                        id="endpoint"
+                        type="text"
+                        value={endpoint}
+                        onChange={(e) => setEndpoint(e.target.value)}
+                        placeholder="https://example.com/api"
+                      />
+                    </div>
+                    <div className="settings-form-group">
+                      <label htmlFor="token">Token</label>
+                      <input
+                        id="token"
+                        type="password"
+                        value={token}
+                        onChange={(e) => setToken(e.target.value)}
+                        placeholder="Enter your token"
+                        disabled={true}
+                      />
+                    </div>
+                  </div>
+                )}
+                {activeSection === "layer" && (
+                  <div className="settings-modal-body">
+                    <div className="settings-form-group settings-switch-group">
+                      <label
+                        htmlFor="fir-boundary"
+                        className="settings-switch-label"
+                      >
+                        FIR Boundary
+                      </label>
+                      <button
+                        id="fir-boundary"
+                        className={`settings-switch ${
+                          firBoundary ? "active" : ""
+                        }`}
+                        onClick={() => setFirBoundary(!firBoundary)}
+                        role="switch"
+                        aria-checked={firBoundary}
+                      >
+                        <span className="settings-switch-thumb" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {activeSection === "about" && (
+                  <div className="settings-modal-body settings-about">
+                    <div className="about-content">
+                      <h2 className="about-title">Twilight</h2>
+                      <p className="about-description">
+                        A Himawari Satellite Data Visualization System
+                      </p>
+                      <p className="about-version">
+                        <a
+                          href="https://github.com/up1and/twilight"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          v0.1
+                        </a>
+                      </p>
+                      <p className="about-copyright">
+                        Copyright © 2025{" "}
+                        <a href="mailto:piratecb@gmail.com">up1and</a>
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             <div className="settings-modal-footer">
-              <button
-                className="settings-button-action secondary"
-                onClick={() => setIsModalOpen(false)}
-              >
-                Cancel
-              </button>
               <button
                 className="settings-button-action primary"
                 onClick={handleSave}
