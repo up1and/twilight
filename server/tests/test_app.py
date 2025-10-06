@@ -162,7 +162,7 @@ class TestCacheHeaders:
                 assert result.headers['Cache-Control'] == 'public, max-age=43200'
                 assert 'Expires' in result.headers
     
-    def test_add_cache_headers_natural_earth_tile_endpoint(self):
+    def test_add_cache_headers_vector_tile_endpoint(self):
         """Test cache headers for natural earth tile endpoint"""
         from flask import Flask, Response
         
@@ -172,7 +172,7 @@ class TestCacheHeaders:
         # Mock natural earth tile endpoint
         with app.test_request_context('/test'):
             with patch('server.app.request') as mock_request:
-                mock_request.endpoint = 'main.natural_earth_tile'
+                mock_request.endpoint = 'main.vector_tile'
                 result = add_cache_headers(response)
                 
                 assert 'Cache-Control' in result.headers

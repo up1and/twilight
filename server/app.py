@@ -25,7 +25,7 @@ def add_cors_headers(response):
 def add_cache_headers(response):
     # Add HTTP cache headers for tile and tilejson responses
     if request.endpoint == 'main.tile' and response.mimetype == 'image/png' or \
-        request.endpoint == 'main.natural_earth_tile' and response.mimetype == 'application/x-protobuf':
+        request.endpoint == 'main.vector_tile' and response.mimetype == 'application/x-protobuf':
         # Cache pbf tiles for 12 hours (43200 seconds)
         response.headers['Cache-Control'] = 'public, max-age=43200'
         response.headers['Expires'] = (datetime.datetime.now(datetime.timezone.utc) +

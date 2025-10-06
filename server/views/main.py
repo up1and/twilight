@@ -131,12 +131,25 @@ def tilejson(composite):
         return jsonify(error_msg), 500
 
 
-@main.route('/lands/<int:z>/<int:x>/<int:y>.pbf')
+@main.route('/<map_type>/<int:z>/<int:x>/<int:y>.pbf')
 @cache.cached(timeout=43200)  # Cache for 12 hours
-def natural_earth_tile(z, x, y):
+def vector_tile(map_type,z, x, y):
     """
-    Serve vector tiles from natural_earth.mbtiles
+    Serve vector tiles
     """
+    # Map type to filename mapping
+    file_mapping = {
+        'lands': 'natural_earth.mbtiles',
+        'firs': 'firs.mbtiles'
+    }
+
+    # Validate map type
+    if map_type not in file_mapping:
+        return jsonify({
+            'error': 'Bad Request',
+            'message': 'Invalid map type. Must be either "lands" or "firs"'
+        }), 400
+
     # Validate tile coordinates
     if not (0 <= z <= 18):
         return jsonify({
@@ -150,13 +163,14 @@ def natural_earth_tile(z, x, y):
             'error': 'Bad Request',
             'message': f'Invalid tile coordinates for zoom level {z}'
         }), 400
-
-    mbtiles_path = os.path.join(os.path.dirname(__file__), '..', 'natural_earth.mbtiles')
+    
+    filename = file_mapping[map_type]
+    mbtiles_path = os.path.join(os.path.dirname(__file__), '..', 'data', filename)
 
     if not os.path.exists(mbtiles_path):
         return jsonify({
             'error': 'Not Found',
-            'message': 'natural_earth.mbtiles file not found'
+            'message': 'mbtiles file not found'
         }), 404
 
     conn = sqlite3.connect(mbtiles_path)

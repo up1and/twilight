@@ -1,11 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import {
-  MapContainer,
-  TileLayer,
-  GeoJSON,
-  useMapEvents,
-  useMap,
-} from "react-leaflet";
+import { MapContainer, TileLayer, useMapEvents, useMap } from "react-leaflet";
 import type L from "leaflet";
 import { CRS } from "leaflet";
 import "leaflet.vectorgrid";
@@ -26,8 +20,6 @@ import {
 } from "./utils/api-client";
 
 import type { CompositeType, MapConfig } from "./utils/types";
-
-import firs from "./firs.json";
 
 import "leaflet/dist/leaflet.css";
 import "./app.css";
@@ -214,12 +206,8 @@ export default function MapView() {
 
   const [selectedComposites, setSelectedComposites] = useState<CompositeType[]>(
     () => {
-      try {
-        const saved = localStorage.getItem("selected-composites");
-        return saved ? JSON.parse(saved) : ["true_color"];
-      } catch {
-        return ["true_color"];
-      }
+      const saved = localStorage.getItem("selected-composites");
+      return saved ? JSON.parse(saved) : ["true_color"];
     }
   );
 
@@ -371,7 +359,11 @@ export default function MapView() {
   // Callback function when settings change
   const handleSettingsChange = () => {
     // Add any logic that needs to run after settings are updated
-    console.log("settings updated:", getApiConfig());
+    console.log("settings updated:", {
+      endpoint: localStorage.getItem("endpoint"),
+      token: localStorage.getItem("token"),
+      firBoundary: localStorage.getItem("fir-boundary"),
+    });
   };
 
   // Handle mouse position change
@@ -436,6 +428,8 @@ export default function MapView() {
       ? mapConfigs[selectedComposites[0]].bounds
       : null;
 
+  const showFirBoundary = localStorage.getItem("fir-boundary") === "true";
+
   return (
     <main style={{ height: "100vh", width: "100vw", overflow: "hidden" }}>
       <div className="map-container">
@@ -486,16 +480,19 @@ export default function MapView() {
             }}
           />
 
-          <GeoJSON
-            data={firs as GeoJSON.GeoJsonObject}
-            style={{
-              color: "#c8c8c8",
-              weight: 2,
-              opacity: 1,
-              fillOpacity: 0,
-            }}
-            interactive={false}
-          />
+          {showFirBoundary && (
+            <VectorGridLayer
+              url={`${getApiConfig().endpoint}/firs/{z}/{x}/{y}.pbf`}
+              styles={{
+                fir: {
+                  color: "#a1a1a1",
+                  weight: 1,
+                  fillOpacity: 0,
+                  opacity: 0.5,
+                },
+              }}
+            />
+          )}
 
           {/* Side-by-side control - only show if two layers are selected */}
           {selectedComposites.length > 1 &&
