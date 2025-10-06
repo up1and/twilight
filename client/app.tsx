@@ -213,7 +213,14 @@ export default function MapView() {
   const [composites, setComposites] = useState<Record<string, string>>({});
 
   const [selectedComposites, setSelectedComposites] = useState<CompositeType[]>(
-    ["true_color"]
+    () => {
+      try {
+        const saved = localStorage.getItem("selected-composites");
+        return saved ? JSON.parse(saved) : ["true_color"];
+      } catch {
+        return ["true_color"];
+      }
+    }
   );
 
   const [selectedTime, setSelectedTime] = useState<dayjs.Dayjs>(dayjs());
@@ -392,6 +399,8 @@ export default function MapView() {
       return;
     }
     setSelectedComposites(selected);
+    // Save selected composites to local storage
+    localStorage.setItem("selected-composites", JSON.stringify(selected));
     console.log(tileUrl(selectedComposites[0]));
   };
 
