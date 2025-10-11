@@ -212,7 +212,7 @@ export default function MapView() {
   );
 
   const [selectedTime, setSelectedTime] = useState<dayjs.Dayjs>(dayjs());
-  const [timeRangeEnd, setTimeRangeEnd] = useState<dayjs.Dayjs>(dayjs());
+  const [timelineTime, setTimelineTime] = useState<dayjs.Dayjs>(dayjs());
   const [viewportBounds, setViewportBounds] = useState<
     [number, number, number, number] | null
   >(null);
@@ -341,12 +341,12 @@ export default function MapView() {
     _startTime: dayjs.Dayjs,
     endTime: dayjs.Dayjs
   ) => {
-    setTimeRangeEnd(endTime);
+    setTimelineTime(endTime);
   };
 
   // Calculate timedelta for video generation
   const calculateTimedelta = (): number => {
-    return timeRangeEnd.diff(selectedTime, "minute");
+    return timelineTime.diff(selectedTime, "minute");
   };
 
   // Handle current viewport bounds change
@@ -540,8 +540,8 @@ export default function MapView() {
         {/* TimeRangeSelector at the bottom */}
         <div className={`time-selector-container ${isMobile ? "mobile" : ""}`}>
           <TimeRangeSelector
-            onTimeChange={handleTimeChange}
             selectedTime={selectedTime}
+            onSelectedTimeChange={handleTimeChange}
             onTimeRangeChange={handleTimeRangeChange}
           />
         </div>

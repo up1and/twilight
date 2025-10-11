@@ -1,20 +1,43 @@
 import type React from "react";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import dayjs from "dayjs";
 import { useIsMobile } from "../hooks/use-mobile";
 import "./time-range-selector.css";
 
+// Format time as HH:MM
+const formatTime = (date: dayjs.Dayjs): string => {
+  return date.format("HH:mm");
+};
+
+// Format date only as MM-DD (shorter format)
+const formatDate = (date: dayjs.Dayjs): string => {
+  return date.format("MM-DD");
+};
+
+// Format full date and time as YYYY-MM-DD HH:MM
+const formatFullDateTime = (date: dayjs.Dayjs): string => {
+  return date.format("YYYY-MM-DD HH:mm");
+};
+
+// Format date for datetime-local input
+const formatDateTimeInput = (date: dayjs.Dayjs): string => {
+  return date.format("YYYY-MM-DDTHH:mm");
+};
+
+// Parse datetime-local input value
+const parseDateTimeInput = (value: string): dayjs.Dayjs => {
+  return dayjs(value);
+};
+
 interface TimeRangeSelectorProps {
-  initialTime?: Date | string | dayjs.Dayjs;
-  selectedTime?: dayjs.Dayjs | null;
-  onTimeChange?: (time: dayjs.Dayjs) => void;
+  selectedTime: dayjs.Dayjs;
+  onSelectedTimeChange?: (time: dayjs.Dayjs) => void;
   onTimeRangeChange?: (startTime: dayjs.Dayjs, endTime: dayjs.Dayjs) => void;
 }
 
 export default function TimeRangeSelector({
-  initialTime = dayjs().utc(),
-  selectedTime = null,
-  onTimeChange,
+  selectedTime,
+  onSelectedTimeChange,
   onTimeRangeChange,
 }: TimeRangeSelectorProps) {
   // Initialize time, ensuring minutes are rounded to the nearest 10
@@ -27,11 +50,8 @@ export default function TimeRangeSelector({
     return dayjsDate.minute(roundedMinutes).second(0).millisecond(0);
   };
 
-  const [currentTime, setCurrentTime] = useState<dayjs.Dayjs>(
+  const [timelineTime, setTimelineTime] = useState<dayjs.Dayjs>(
     roundToNearestTenMinutes(dayjs().utc())
-  );
-  const [selectedTimeState, setSelectedTime] = useState<dayjs.Dayjs>(
-    roundToNearestTenMinutes(initialTime)
   );
   const [lookbackHours, setLookbackHours] = useState<number>(6); // Default to 6 hours lookback
   const [isDraggingMarker, setIsDraggingMarker] = useState<boolean>(false);
@@ -46,46 +66,20 @@ export default function TimeRangeSelector({
   const [isCtrlPressed, setIsCtrlPressed] = useState<boolean>(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<HTMLDivElement>(null);
-  const [timeIntervals, setTimeIntervals] = useState<any[]>([]);
   const isMobile = useIsMobile();
-
-  // Format time as HH:MM
-  const formatTime = (date: dayjs.Dayjs): string => {
-    return date.format("HH:mm");
-  };
-
-  // Format date only as MM-DD (shorter format)
-  const formatDate = (date: dayjs.Dayjs): string => {
-    return date.format("MM-DD");
-  };
-
-  // Format full date and time as YYYY-MM-DD HH:MM
-  const formatFullDateTime = (date: dayjs.Dayjs): string => {
-    return date.format("YYYY-MM-DD HH:mm");
-  };
-
-  // Format date for datetime-local input
-  const formatDateTimeInput = (date: dayjs.Dayjs): string => {
-    return date.format("YYYY-MM-DDTHH:mm");
-  };
-
-  // Parse datetime-local input value
-  const parseDateTimeInput = (value: string): dayjs.Dayjs => {
-    return dayjs(value);
-  };
 
   // Calculate start time based on current time and lookback hours
   const getStartTime = (): dayjs.Dayjs => {
-    return currentTime.subtract(lookbackHours, "hour");
+    return timelineTime.subtract(lookbackHours, "hour");
   };
 
   // Calculate end time (always current time)
   const getEndTime = (): dayjs.Dayjs => {
-    return currentTime;
+    return timelineTime;
   };
 
   // Generate time intervals for the timeline
-  const generateTimeIntervals = () => {
+  const timeIntervals = useMemo(() => {
     const intervals = [];
     const startTime = getStartTime();
     const endTime = getEndTime();
@@ -114,26 +108,7 @@ export default function TimeRangeSelector({
     }
 
     return intervals;
-  };
-
-  // Update time intervals when lookback hours or current time changes
-  useEffect(() => {
-    const newIntervals = generateTimeIntervals();
-    setTimeIntervals(newIntervals);
-
-    // Ensure selected time is within the new range
-    const startTime = getStartTime();
-    const endTime = getEndTime();
-
-    if (selectedTimeState.isBefore(startTime)) {
-      updateSelectedTime(startTime);
-    } else if (selectedTimeState.isAfter(endTime)) {
-      updateSelectedTime(endTime);
-    }
-
-    // Notify parent component of time range change
-    onTimeRangeChange?.(startTime, endTime);
-  }, [lookbackHours, currentTime]);
+  }, [timelineTime, lookbackHours]);
 
   // Find the closest time interval index for a given time
   const findClosestIntervalIndex = (targetTime: dayjs.Dayjs): number => {
@@ -163,14 +138,24 @@ export default function TimeRangeSelector({
     return closestIndex;
   };
 
+  // Calculate marker position using useMemo
+  const markerPosition = useMemo(() => {
+    if (timeIntervals.length === 0) return 0;
+
+    const index = findClosestIntervalIndex(selectedTime);
+
+    if (index === -1) return 0;
+
+    return (index / (timeIntervals.length - 1)) * 100;
+  }, [timeIntervals, selectedTime]);
+
   // Update selected time and ensure it's rounded to nearest 10 minutes
   const updateSelectedTime = useCallback(
     (time: dayjs.Dayjs) => {
       const roundedTime = roundToNearestTenMinutes(time);
-      setSelectedTime(roundedTime);
-      onTimeChange?.(roundedTime);
+      onSelectedTimeChange?.(roundedTime);
     },
-    [onTimeChange]
+    [onSelectedTimeChange]
   );
 
   // Handle timeline click
@@ -226,8 +211,8 @@ export default function TimeRangeSelector({
       "touches" in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
 
     setDragStartX(startX);
-    setDragStartTime(currentTime);
-    setDragStartSelectedTime(selectedTimeState);
+    setDragStartTime(timelineTime);
+    setDragStartSelectedTime(selectedTime);
     setHasMoved(false); // Reset movement tracking
 
     // Pause playback if dragging
@@ -307,7 +292,7 @@ export default function TimeRangeSelector({
       window.removeEventListener("mouseup", handleDragEnd);
       window.removeEventListener("touchend", handleDragEnd);
     };
-  }, [isDraggingMarker, timeIntervals, onTimeChange]);
+  }, [isDraggingMarker, timeIntervals, updateSelectedTime]);
 
   // Handle timeline drag
   useEffect(() => {
@@ -350,7 +335,7 @@ export default function TimeRangeSelector({
       );
 
       // Update both times
-      setCurrentTime(roundToNearestTenMinutes(newEndTime));
+      setTimelineTime(roundToNearestTenMinutes(newEndTime));
       updateSelectedTime(newSelectedTime);
     };
 
@@ -394,7 +379,7 @@ export default function TimeRangeSelector({
       );
 
       // Update both times
-      setCurrentTime(roundToNearestTenMinutes(newEndTime));
+      setTimelineTime(roundToNearestTenMinutes(newEndTime));
       updateSelectedTime(newSelectedTime);
     };
 
@@ -432,6 +417,7 @@ export default function TimeRangeSelector({
     dragStartTime,
     dragStartSelectedTime,
     lookbackHours,
+    updateSelectedTime,
   ]);
 
   // Toggle play/pause
@@ -440,16 +426,16 @@ export default function TimeRangeSelector({
       setIsPlaying(false);
     } else {
       // If at the end, restart from beginning
-      if (selectedTimeState.format() === currentTime.format()) {
+      if (selectedTime.format() === timelineTime.format()) {
         updateSelectedTime(getStartTime());
       } else {
         // Ensure the selected time is in the timeIntervals array
-        const currentIndex = findClosestIntervalIndex(selectedTimeState);
+        const currentIndex = findClosestIntervalIndex(selectedTime);
 
         // If current time is not found in intervals, snap to the closest one
         if (currentIndex !== -1 && timeIntervals[currentIndex]) {
           const exactIndex = timeIntervals.findIndex(
-            (interval) => interval.time.format() === selectedTimeState.format()
+            (interval) => interval.time.format() === selectedTime.format()
           );
 
           // If not exact match, update to the closest valid time before starting playback
@@ -460,7 +446,13 @@ export default function TimeRangeSelector({
       }
       setIsPlaying(true);
     }
-  }, [isPlaying, selectedTimeState, currentTime, timeIntervals]);
+  }, [
+    isPlaying,
+    selectedTime,
+    timelineTime,
+    timeIntervals,
+    updateSelectedTime,
+  ]);
 
   // Handle keyboard navigation and playback control
   useEffect(() => {
@@ -482,7 +474,7 @@ export default function TimeRangeSelector({
 
         // Find current index
         const currentIndex = timeIntervals.findIndex(
-          (interval) => interval.time.format() === selectedTimeState.format()
+          (interval) => interval.time.format() === selectedTime.format()
         );
 
         if (currentIndex === -1) return;
@@ -502,14 +494,14 @@ export default function TimeRangeSelector({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedTimeState, timeIntervals, togglePlayback]);
+  }, [selectedTime, timeIntervals, togglePlayback, updateSelectedTime]);
 
   // Handle playback
   useEffect(() => {
     if (!isPlaying || timeIntervals.length === 0) return;
 
     const currentIndex = timeIntervals.findIndex(
-      (interval) => interval.time.format() === selectedTimeState.format()
+      (interval) => interval.time.format() === selectedTime.format()
     );
 
     // If at the end or not found, stop playback
@@ -533,18 +525,7 @@ export default function TimeRangeSelector({
     }, 500); // Fixed speed of 500ms per step
 
     return () => clearTimeout(timer);
-  }, [isPlaying, selectedTimeState, timeIntervals]);
-
-  // Calculate marker position based on time intervals
-  const getMarkerPosition = () => {
-    if (timeIntervals.length === 0) return 0;
-
-    const index = findClosestIntervalIndex(selectedTimeState);
-
-    if (index === -1) return 0;
-
-    return (index / (timeIntervals.length - 1)) * 100;
-  };
+  }, [isPlaying, selectedTime, timeIntervals, updateSelectedTime]);
 
   // Handle lookback hours change
   const handleLookbackChange = (hours: number) => {
@@ -564,15 +545,13 @@ export default function TimeRangeSelector({
       updatedEndTime = roundToNearestTenMinutes(newEndTime);
     }
 
-    setCurrentTime(updatedEndTime);
+    setTimelineTime(updatedEndTime);
   };
 
   // Add an effect to handle changes to selectedTime prop
   useEffect(() => {
     if (selectedTime) {
       // Update the selected time without changing the time range
-      setSelectedTime(roundToNearestTenMinutes(selectedTime));
-
       // If the selected time is outside the current range, update the range
       const startTime = getStartTime();
       const endTime = getEndTime();
@@ -584,18 +563,18 @@ export default function TimeRangeSelector({
 
         if (earliestTime.isAfter(selectedTime)) {
           // selectedTime is too old, we need to extend the timeline to include it
-          const newCurrentTime = roundToNearestTenMinutes(
+          const newtimelineTime = roundToNearestTenMinutes(
             selectedTime.add(lookbackHours, "hour")
           );
-          setCurrentTime(newCurrentTime);
+          setTimelineTime(newtimelineTime);
         } else {
           // selectedTime can be included in current timeline, use current real time as end
-          const newCurrentTime = roundToNearestTenMinutes(currentRealTime);
-          setCurrentTime(newCurrentTime);
+          const newtimelineTime = roundToNearestTenMinutes(currentRealTime);
+          setTimelineTime(newtimelineTime);
         }
       }
     }
-  }, [selectedTime]);
+  }, [selectedTime, lookbackHours, timelineTime]);
 
   // Track Ctrl key state
   useEffect(() => {
@@ -620,12 +599,12 @@ export default function TimeRangeSelector({
     };
   }, []);
 
-  // Ensure timeIntervals is initialized before rendering
+  // Notify parent component of time range change
   useEffect(() => {
-    if (timeIntervals.length === 0) {
-      setTimeIntervals(generateTimeIntervals());
-    }
-  }, []);
+    const startTime = getStartTime();
+    const endTime = getEndTime();
+    onTimeRangeChange?.(startTime, endTime);
+  }, [timelineTime, lookbackHours, onTimeRangeChange]);
 
   return (
     <div className={`time-range-selector ${isMobile ? "mobile" : ""}`}>
@@ -670,7 +649,7 @@ export default function TimeRangeSelector({
           <div className="datetime-picker">
             <input
               type="datetime-local"
-              value={formatDateTimeInput(currentTime)}
+              value={formatDateTimeInput(timelineTime)}
               onChange={handleEndTimeChange}
               max={formatDateTimeInput(dayjs().utc())}
             />
@@ -729,7 +708,7 @@ export default function TimeRangeSelector({
               className="timeline-overlay"
               style={{
                 left: "0%",
-                width: `${getMarkerPosition()}%`,
+                width: `${markerPosition}%`,
               }}
             />
           )}
@@ -741,13 +720,13 @@ export default function TimeRangeSelector({
               className={`time-marker ${isPlaying ? "playing" : ""} ${
                 isDraggingMarker ? "dragging" : ""
               }`}
-              style={{ left: `${getMarkerPosition()}%` }}
+              style={{ left: `${markerPosition}%` }}
               onMouseDown={handleMarkerDragStart}
               onTouchStart={handleMarkerDragStart}
             >
               {/* Time display above the marker */}
               <div className="marker-label">
-                {formatFullDateTime(selectedTimeState)}
+                {formatFullDateTime(selectedTime)}
               </div>
 
               {/* Triangle pointer */}
