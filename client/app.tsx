@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { MapContainer, TileLayer, useMapEvents, useMap } from "react-leaflet";
 import type L from "leaflet";
 import { CRS } from "leaflet";
@@ -239,58 +239,43 @@ export default function MapView() {
 
   const isMobile = useIsMobile();
 
-  // Fetch latest composites on component mount and every minute
-  useEffect(() => {
-    // Function to fetch composites
-    const fetchComposites = async () => {
-      const now = dayjs();
-      const diff = now.diff(selectedTime);
-      if (diff > 3600000) {
-        return;
-      }
-      try {
-        const data = await fetchLatestComposites();
-
-        // Filter selected composites that have valid (non-null) timestamps
-        const selectedTimestamps = selectedComposites
-          .filter((composite) => composite in data && data[composite] !== null)
-          .map((composite) => dayjs(data[composite]));
-
-        let timeToSet: dayjs.Dayjs | null = null;
-
-        if (selectedTimestamps.length > 0) {
-          // Use earliest time from selected composites if available
-          timeToSet = selectedTimestamps.reduce((earliest, current) =>
-            current.isBefore(earliest) ? current : earliest
-          );
-        }
-
-        setComposites(data);
-        if (timeToSet) {
-          setSelectedTime(timeToSet);
-        }
-        console.log("latest composites:", data);
-      } catch (error) {
-        console.error("error fetching composites:", error);
-      }
-    };
-
-    // Fetch immediately on mount
-    fetchComposites();
-
-    // Set up interval to fetch every minute
-    const intervalId = setInterval(fetchComposites, 60000);
-
-    // Clean up interval on component unmount
-    return () => clearInterval(intervalId);
-  }, []);
-
   // References to the tile layers
   const leftLayerRef = useRef<L.TileLayer | null>(null);
   const rightLayerRef = useRef<L.TileLayer | null>(null);
 
   // Track if we need to reset layer clipping
   const [resetClipping, setResetClipping] = useState(false);
+
+  const showFirBoundary = localStorage.getItem("fir-boundary") === "true";
+
+  // Get the composite's bounds
+  const compositeBounds = useMemo(() => {
+    return selectedComposites.length > 0 && mapConfigs[selectedComposites[0]]
+      ? mapConfigs[selectedComposites[0]].bounds
+      : null;
+  }, [selectedComposites, mapConfigs]);
+
+  // Calculate timedelta for video generation
+  const videoTimedelta = useMemo(() => {
+    return timelineTime.diff(selectedTime, "minute");
+  }, [timelineTime, selectedTime]);
+
+  // Get the latest update time for selected composites
+  const latestCompositeTime = useMemo(() => {
+    // Filter selected composites that have valid (non-null) timestamps
+    const selectedTimestamps = selectedComposites
+      .filter(
+        (composite) => composite in composites && composites[composite] !== null
+      )
+      .map((composite) => dayjs(composites[composite]));
+
+    if (selectedTimestamps.length > 0) {
+      // Use earliest time from selected composites if available
+      return selectedTimestamps.reduce((earliest, current) =>
+        current.isBefore(earliest) ? current : earliest
+      );
+    }
+  }, [composites, selectedComposites]);
 
   // Fetch TileJSON data for a specific composite
   const fetchTileJSONForComposite = async (composite: CompositeType) => {
@@ -349,11 +334,6 @@ export default function MapView() {
     setTimelineTime(endTime);
   };
 
-  // Calculate timedelta for video generation
-  const calculateTimedelta = (): number => {
-    return timelineTime.diff(selectedTime, "minute");
-  };
-
   // Handle current viewport bounds change
   const handleViewportBoundsChange = (
     bbox: [number, number, number, number]
@@ -401,6 +381,42 @@ export default function MapView() {
     console.log(tileUrl(selectedComposites[0]));
   };
 
+  // Fetch latest composites on component mount and every minute
+  useEffect(() => {
+    // Function to fetch composites
+    const fetchComposites = async () => {
+      try {
+        const data = await fetchLatestComposites();
+        setComposites(data);
+        console.log("latest composites:", data);
+      } catch (error) {
+        console.error("error fetching composites:", error);
+      }
+    };
+
+    // Fetch immediately on mount
+    fetchComposites();
+
+    // Set up interval to fetch every minute
+    const intervalId = setInterval(fetchComposites, 60000);
+
+    // Clean up interval on component unmount
+    return () => clearInterval(intervalId);
+  }, []);
+
+  useEffect(() => {
+    if (latestCompositeTime && !latestCompositeTime.isSame(selectedTime)) {
+      const diffMinutes = selectedTime.diff(latestCompositeTime, "minute");
+
+      if (diffMinutes > -30) {
+        console.log(
+          `selected time is ${diffMinutes} minutes behind latest data, resetting to latest composite time.`
+        );
+        setSelectedTime(latestCompositeTime);
+      }
+    }
+  }, [latestCompositeTime]);
+
   // Reset clipping when going from 2 layers to 1 layer
   useEffect(() => {
     if (resetClipping && leftLayerRef.current) {
@@ -426,14 +442,6 @@ export default function MapView() {
 
     updateMapConfigs();
   }, [selectedComposites, composites]);
-
-  // Get the composite's bounds
-  const compositeBounds =
-    selectedComposites.length > 0 && mapConfigs[selectedComposites[0]]
-      ? mapConfigs[selectedComposites[0]].bounds
-      : null;
-
-  const showFirBoundary = localStorage.getItem("fir-boundary") === "true";
 
   return (
     <main style={{ height: "100vh", width: "100vw", overflow: "hidden" }}>
@@ -537,7 +545,7 @@ export default function MapView() {
             composites={selectedComposites}
             selectedTime={selectedTime}
             bbox={viewportBounds}
-            timedelta={calculateTimedelta()}
+            timedelta={videoTimedelta}
           />
           <SettingsButton onSettingsChange={handleSettingsChange} />
         </div>
