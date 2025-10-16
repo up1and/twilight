@@ -18,6 +18,14 @@ from snapshot import find_composite_object
 # Create blueprint
 main = Blueprint("main", __name__)
 
+def cache_filter(response):
+    if isinstance(response, tuple) and len(response) >= 2:
+        status_code = response[1]
+    
+    if hasattr(response, 'status_code'):
+        status_code = response.status_code
+
+    return status_code == 200
 
 def find_tile(composite, z, x, y, timestamp=None):
     """
@@ -65,11 +73,11 @@ def find_tile(composite, z, x, y, timestamp=None):
             "message": f"Error reading raster data: {str(e)}",
             "tile": {"z": z, "x": x, "y": y}
         }
-        return jsonify(error_msg), 500
+        return jsonify(error_msg), 404
 
 
 @main.route("/<composite>/tiles/<timestamp>/<int:z>/<int:x>/<int:y>.png")
-@cache.cached(timeout=43200)  # Cache for 12 hours
+@cache.cached(timeout=43200, response_filter=cache_filter)  # Cache for 12 hours
 def tile(composite, timestamp, z, x, y):
     """
     Tile request with ISO 8601 time format
@@ -88,7 +96,7 @@ def tile(composite, timestamp, z, x, y):
 
 
 @main.route("/<composite>.tilejson")
-@cache.cached(timeout=3600)  # Cache for 1 hour
+@cache.cached(timeout=43200, response_filter=cache_filter)  # Cache for 1 hour
 def tilejson(composite):
     if composite not in current_app.config['AVAILABLE_COMPOSITES']:
         error_msg = {
@@ -132,7 +140,7 @@ def tilejson(composite):
 
 
 @main.route("/<map_type>/<int:z>/<int:x>/<int:y>.pbf")
-@cache.cached(timeout=43200)  # Cache for 12 hours
+@cache.cached(timeout=43200, response_filter=cache_filter)  # Cache for 12 hours
 def vector_tile(map_type,z, x, y):
     """
     Serve vector tiles
