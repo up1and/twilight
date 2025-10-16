@@ -26,10 +26,10 @@ def init_extensions(app):
     """Initialize Flask extensions"""
     # Configure Flask-Caching with RedisCache
     cache_config = {
-        'CACHE_TYPE': 'RedisCache',
-        'CACHE_REDIS_URL': redis_url,
-        'CACHE_DEFAULT_TIMEOUT': 3600,  # 1 hour default cache timeout
-        'CACHE_KEY_PREFIX': 'twilight_cache_'
+        "CACHE_TYPE": "RedisCache",
+        "CACHE_REDIS_URL": redis_url,
+        "CACHE_DEFAULT_TIMEOUT": 3600,  # 1 hour default cache timeout
+        "CACHE_KEY_PREFIX": "twilight_cache_"
     }
     app.config.update(cache_config)
     cache.init_app(app)

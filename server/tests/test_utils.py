@@ -83,13 +83,13 @@ class TestExtractCompositeFromObjectName:
     
     def test_valid_composite(self):
         object_name = "ir_clouds/2025/01/15/himawari_ir_clouds_20250115_1200.tif"
-        available_composites = ['ir_clouds', 'true_color', 'ash']
+        available_composites = ["ir_clouds", "true_color", "ash"]
         result = extract_composite_from_object_name(object_name, available_composites)
         assert result == "ir_clouds"
     
     def test_different_composite(self):
         object_name = "true_color/2025/01/15/himawari_true_color_20250115_1200.tif"
-        available_composites = ['ir_clouds', 'true_color', 'ash']
+        available_composites = ["ir_clouds", "true_color", "ash"]
         result = extract_composite_from_object_name(object_name, available_composites)
         assert result == "true_color"
     
@@ -145,15 +145,15 @@ class TestInitializeCompositeState:
         
         mock_client.list_objects.return_value = [mock_obj1, mock_obj2, mock_obj3]
         
-        available_composites = ['ir_clouds', 'true_color']
+        available_composites = ["ir_clouds", "true_color"]
         result = initialize_composite_state(mock_client, available_composites)
         
         # Should pick the latest timestamp for each composite
         expected_ir_clouds = datetime.datetime(2025, 1, 15, 12, 0, tzinfo=datetime.timezone.utc)
         expected_true_color = datetime.datetime(2025, 1, 15, 8, 0, tzinfo=datetime.timezone.utc)
         
-        assert result['ir_clouds'] == expected_ir_clouds
-        assert result['true_color'] == expected_true_color
+        assert result["ir_clouds"] == expected_ir_clouds
+        assert result["true_color"] == expected_true_color
     
     def test_unknown_composite_ignored(self):
         mock_client = Mock()

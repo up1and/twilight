@@ -38,14 +38,14 @@ class TestExtensions:
     def test_redis_client_type(self):
         """Test Redis client type"""
         # Test that redis_client has expected attributes
-        assert hasattr(redis_client, 'get')
-        assert hasattr(redis_client, 'set')
-        assert hasattr(redis_client, 'hget')
-        assert hasattr(redis_client, 'hset')
+        assert hasattr(redis_client, "get")
+        assert hasattr(redis_client, "set")
+        assert hasattr(redis_client, "hget")
+        assert hasattr(redis_client, "hset")
     
     def test_minio_client_type(self):
         """Test MinIO client type"""
         # Test that client has expected attributes
-        assert hasattr(client, 'get_object')
-        assert hasattr(client, 'put_object')
-        assert hasattr(client, 'list_objects')
+        assert hasattr(client, "get_object")
+        assert hasattr(client, "put_object")
+        assert hasattr(client, "list_objects")

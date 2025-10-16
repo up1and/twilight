@@ -12,8 +12,8 @@ from server.models import TaskModel, HimawariRawModel
 def app():
     """Create test app instance"""
     app = create_app()
-    app.config['TESTING'] = True
-    app.config['AVAILABLE_COMPOSITES'] = ['ir_clouds', 'true_color', 'ash', 'night_microphysics']
+    app.config["TESTING"] = True
+    app.config["AVAILABLE_COMPOSITES"] = ["ir_clouds", "true_color", "ash", "night_microphysics"]
     return app
 
 
@@ -60,7 +60,7 @@ def sample_timestamp():
 @pytest.fixture
 def sample_task(sample_timestamp):
     """Sample task for testing"""
-    return TaskModel('ir_clouds', sample_timestamp, 'normal')
+    return TaskModel("ir_clouds", sample_timestamp, "normal")
 
 
 @pytest.fixture
@@ -72,7 +72,7 @@ def sample_raw(sample_timestamp):
 @pytest.fixture
 def mock_task_manager(mock_redis):
     """Mock TaskManager with Redis"""
-    with patch('server.services.TaskManager') as mock_class:
+    with patch("server.services.TaskManager") as mock_class:
         instance = mock_class.return_value
         instance.redis = mock_redis
         yield instance
@@ -81,7 +81,7 @@ def mock_task_manager(mock_redis):
 @pytest.fixture
 def mock_himawari_manager(mock_redis):
     """Mock HimawariRawManager with Redis"""
-    with patch('server.services.HimawariRawManager') as mock_class:
+    with patch("server.services.HimawariRawManager") as mock_class:
         instance = mock_class.return_value
         instance.redis = mock_redis
         yield instance

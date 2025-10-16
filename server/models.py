@@ -7,12 +7,12 @@ import datetime
 
 
 class TaskModel:
-    def __init__(self, composite, timestamp, priority='normal'):
+    def __init__(self, composite, timestamp, priority="normal"):
         self.task_id = f"{composite}_{timestamp.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
         self.composite = composite
         self.timestamp = timestamp
         self.priority = priority
-        self.status = 'pending'  # pending, running, completed, failed
+        self.status = "pending"  # pending, running, completed, failed
         self.created = datetime.datetime.now(datetime.timezone.utc)
         self.started = None
         self.ended = None
@@ -39,24 +39,24 @@ class TaskModel:
 
     def to_dict(self):
         return {
-            'task_id': self.task_id,
-            'composite': self.composite,
-            'timestamp': self.timestamp,
-            'priority': self.priority,
-            'status': self.status,
-            'created': self.created,
-            'started': self.started if self.started else None,
-            'ended': self.ended if self.ended else None,
-            'duration': self.duration,
-            'worker_id': self.worker_id,
-            'message': self.message
+            "task_id": self.task_id,
+            "composite": self.composite,
+            "timestamp": self.timestamp,
+            "priority": self.priority,
+            "status": self.status,
+            "created": self.created,
+            "started": self.started if self.started else None,
+            "ended": self.ended if self.ended else None,
+            "duration": self.duration,
+            "worker_id": self.worker_id,
+            "message": self.message
         }
 
     def to_json(self):
         """Serialize task to JSON string for Redis storage"""
         data = self.to_dict()
         # Convert datetime objects to ISO format strings
-        for key in ['timestamp', 'created', 'started', 'ended']:
+        for key in ["timestamp", "created", "started", "ended"]:
             if data[key] is not None:
                 data[key] = data[key].isoformat()
         return json.dumps(data)
@@ -68,18 +68,18 @@ class TaskModel:
 
         # Create task instance
         task = cls.__new__(cls)
-        task.task_id = data['task_id']
-        task.composite = data['composite']
-        task.priority = data['priority']
-        task.status = data['status']
-        task.worker_id = data['worker_id']
-        task.message = data['message']
+        task.task_id = data["task_id"]
+        task.composite = data["composite"]
+        task.priority = data["priority"]
+        task.status = data["status"]
+        task.worker_id = data["worker_id"]
+        task.message = data["message"]
 
         # Convert ISO format strings back to datetime objects
-        task.timestamp = datetime.datetime.fromisoformat(data['timestamp'])
-        task.created = datetime.datetime.fromisoformat(data['created'])
-        task.started = datetime.datetime.fromisoformat(data['started']) if data['started'] else None
-        task.ended = datetime.datetime.fromisoformat(data['ended']) if data['ended'] else None
+        task.timestamp = datetime.datetime.fromisoformat(data["timestamp"])
+        task.created = datetime.datetime.fromisoformat(data["created"])
+        task.started = datetime.datetime.fromisoformat(data["started"]) if data["started"] else None
+        task.ended = datetime.datetime.fromisoformat(data["ended"]) if data["ended"] else None
 
         return task
 
@@ -87,7 +87,7 @@ class TaskModel:
 class HimawariRawModel:
     def __init__(self, timestamp):
         self.timestamp = timestamp
-        self.status = 'pending'  # pending, running, completed, failed
+        self.status = "pending"  # pending, running, completed, failed
         self.files = 0
         self.size = 0
         self.started = None
@@ -111,27 +111,27 @@ class HimawariRawModel:
 
     def to_dict(self):
         return {
-            'timestamp': self.timestamp,
-            'status': self.status,
-            'files': self.files,
-            'size': self.size,
-            'started': self.started if self.started else None,
-            'ended': self.ended if self.ended else None,
-            'duration': self.duration,
-            'speed': self.speed,
-            'created': self.created
+            "timestamp": self.timestamp,
+            "status": self.status,
+            "files": self.files,
+            "size": self.size,
+            "started": self.started if self.started else None,
+            "ended": self.ended if self.ended else None,
+            "duration": self.duration,
+            "speed": self.speed,
+            "created": self.created
         }
 
     def to_json(self):
         """Serialize raw to JSON string for Redis storage"""
         data = {
-            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
-            'status': self.status,
-            'files': self.files,
-            'size': self.size,
-            'started': self.started.isoformat() if self.started else None,
-            'ended': self.ended.isoformat() if self.ended else None,
-            'created': self.created.isoformat() if self.created else None
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "status": self.status,
+            "files": self.files,
+            "size": self.size,
+            "started": self.started.isoformat() if self.started else None,
+            "ended": self.ended.isoformat() if self.ended else None,
+            "created": self.created.isoformat() if self.created else None
         }
         return json.dumps(data)
 
@@ -142,14 +142,14 @@ class HimawariRawModel:
 
         # Create raw instance
         raw = cls.__new__(cls)
-        raw.status = data['status']
-        raw.files = data['files']
-        raw.size = data['size']
+        raw.status = data["status"]
+        raw.files = data["files"]
+        raw.size = data["size"]
 
         # Convert ISO format strings back to datetime objects
-        raw.timestamp = datetime.datetime.fromisoformat(data['timestamp'])
-        raw.created = datetime.datetime.fromisoformat(data['created'])
-        raw.started = datetime.datetime.fromisoformat(data['started']) if data['started'] else None
-        raw.ended = datetime.datetime.fromisoformat(data['ended']) if data['ended'] else None
+        raw.timestamp = datetime.datetime.fromisoformat(data["timestamp"])
+        raw.created = datetime.datetime.fromisoformat(data["created"])
+        raw.started = datetime.datetime.fromisoformat(data["started"]) if data["started"] else None
+        raw.ended = datetime.datetime.fromisoformat(data["ended"]) if data["ended"] else None
 
         return raw

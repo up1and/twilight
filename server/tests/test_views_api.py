@@ -9,150 +9,150 @@ class TestCreateTask:
     
     def test_create_task_missing_fields(self, client):
         # Missing required fields
-        data = {'composite': 'ir_clouds'}
+        data = {"composite": "ir_clouds"}
         
-        response = client.post('/api/tasks',
+        response = client.post("/api/tasks",
                              data=json.dumps(data),
-                             content_type='application/json')
+                             content_type="application/json")
         
         assert response.status_code == 400
         result = json.loads(response.data)
-        assert 'Missing required fields' in result['message']
+        assert "Missing required fields" in result["message"]
     
     def test_create_task_invalid_priority_defaults_to_normal(self, client):
         data = {
-            'composite': 'ir_clouds',
-            'timestamp': '2025-01-15T12:00:00Z',
-            'priority': 'invalid_priority'  # Invalid priority should default to normal
+            "composite": "ir_clouds",
+            "timestamp": "2025-01-15T12:00:00Z",
+            "priority": "invalid_priority"  # Invalid priority should default to normal
         }
         
-        response = client.post('/api/tasks',
+        response = client.post("/api/tasks",
                              data=json.dumps(data),
-                             content_type='application/json')
+                             content_type="application/json")
         
         assert response.status_code == 201
         result = json.loads(response.data)
-        assert 'task_id' in result
+        assert "task_id" in result
     
     def test_create_task_invalid_composite(self, client):
         data = {
-            'composite': 'invalid_composite',
-            'timestamp': '2025-01-15T12:00:00Z'
+            "composite": "invalid_composite",
+            "timestamp": "2025-01-15T12:00:00Z"
         }
         
-        response = client.post('/api/tasks',
+        response = client.post("/api/tasks",
                              data=json.dumps(data),
-                             content_type='application/json')
+                             content_type="application/json")
         
         assert response.status_code == 400
         result = json.loads(response.data)
-        assert 'Invalid composite' in result['message']
+        assert "Invalid composite" in result["message"]
     
     def test_create_task_invalid_timestamp(self, client):
         data = {
-            'composite': 'ir_clouds',
-            'timestamp': 'invalid-timestamp'
+            "composite": "ir_clouds",
+            "timestamp": "invalid-timestamp"
         }
         
-        response = client.post('/api/tasks',
+        response = client.post("/api/tasks",
                              data=json.dumps(data),
-                             content_type='application/json')
+                             content_type="application/json")
         
         assert response.status_code == 400
         result = json.loads(response.data)
-        assert 'Invalid timestamp format' in result['message']
+        assert "Invalid timestamp format" in result["message"]
     
     def test_create_task_success(self, client):
         data = {
-            'composite': 'ir_clouds',
-            'timestamp': '2025-01-15T12:00:00Z',
-            'priority': 'high'
+            "composite": "ir_clouds",
+            "timestamp": "2025-01-15T12:00:00Z",
+            "priority": "high"
         }
         
-        response = client.post('/api/tasks',
+        response = client.post("/api/tasks",
                              data=json.dumps(data),
-                             content_type='application/json')
+                             content_type="application/json")
         
         assert response.status_code == 201
         result = json.loads(response.data)
-        assert 'task_id' in result
-        assert result['status'] == 'pending'
+        assert "task_id" in result
+        assert result["status"] == "pending"
 
 
 class TestGetTask:
     """Test GET /api/tasks/<task_id> endpoint"""
     
     def test_get_task_not_found(self, client):
-        response = client.get('/api/tasks/nonexistent-task')
+        response = client.get("/api/tasks/nonexistent-task")
         
         assert response.status_code == 404
         result = json.loads(response.data)
-        assert 'not found' in result['message']
+        assert "not found" in result["message"]
     
     def test_get_task_success(self, client):
         # First create a task
         data = {
-            'composite': 'ir_clouds',
-            'timestamp': '2025-01-15T12:00:00Z'
+            "composite": "ir_clouds",
+            "timestamp": "2025-01-15T12:00:00Z"
         }
         
-        create_response = client.post('/api/tasks',
+        create_response = client.post("/api/tasks",
                                     data=json.dumps(data),
-                                    content_type='application/json')
+                                    content_type="application/json")
         
         assert create_response.status_code == 201
         create_result = json.loads(create_response.data)
-        task_id = create_result['task_id']
+        task_id = create_result["task_id"]
         
         # Now get the task
-        response = client.get(f'/api/tasks/{task_id}')
+        response = client.get(f"/api/tasks/{task_id}")
         
         assert response.status_code == 200
         result = json.loads(response.data)
-        assert result['task_id'] == task_id
-        assert result['composite'] == 'ir_clouds'
+        assert result["task_id"] == task_id
+        assert result["composite"] == "ir_clouds"
 
 
 class TestGetTasks:
     """Test GET /api/tasks endpoint"""
     
     def test_get_tasks_invalid_pagination(self, client):
-        response = client.get('/api/tasks?page=invalid')
+        response = client.get("/api/tasks?page=invalid")
         
         assert response.status_code == 400
         result = json.loads(response.data)
-        assert 'Invalid page' in result['message']
+        assert "Invalid page" in result["message"]
     
     def test_get_tasks_success(self, client):
-        response = client.get('/api/tasks')
+        response = client.get("/api/tasks")
         
         assert response.status_code == 200
         result = json.loads(response.data)
-        assert 'tasks' in result
-        assert 'total' in result
-        assert result['page'] == 1
-        assert result['per_page'] == 20
+        assert "tasks" in result
+        assert "total" in result
+        assert result["page"] == 1
+        assert result["per_page"] == 20
 
 
 class TestPeekNextTask:
     """Test GET /api/tasks/next endpoint"""
     
     def test_peek_next_task_endpoint_exists(self, client):
-        response = client.get('/api/tasks/next')
+        response = client.get("/api/tasks/next")
         
         # Should return either 200 with task or 204 with no tasks
         assert response.status_code in [200, 204]
     
     def test_peek_next_task_with_filters(self, client):
         # Test with priority and composite filters
-        response = client.get('/api/tasks/next?priority=high,normal&composite=ir_clouds,true_color')
+        response = client.get("/api/tasks/next?priority=high,normal&composite=ir_clouds,true_color")
         
         # Should return either 200 with task or 204 with no tasks
         assert response.status_code in [200, 204]
     
     def test_peek_next_task_empty_filters(self, client):
         # Test with empty filter values
-        response = client.get('/api/tasks/next?priority=&composite=')
+        response = client.get("/api/tasks/next?priority=&composite=")
         
         # Should return either 200 with task or 204 with no tasks
         assert response.status_code in [200, 204]
@@ -164,212 +164,212 @@ class TestClaimTask:
     def test_claim_task_missing_worker_id(self, client):
         data = {}
         
-        response = client.put('/api/tasks/some-task/claim',
+        response = client.put("/api/tasks/some-task/claim",
                             data=json.dumps(data),
-                            content_type='application/json')
+                            content_type="application/json")
         
         assert response.status_code == 400
         result = json.loads(response.data)
-        assert 'Missing required field: worker_id' in result['message']
+        assert "Missing required field: worker_id" in result["message"]
     
     def test_claim_task_not_found(self, client):
-        data = {'worker_id': 'worker-123'}
+        data = {"worker_id": "worker-123"}
         
-        response = client.put('/api/tasks/nonexistent-task/claim',
+        response = client.put("/api/tasks/nonexistent-task/claim",
                             data=json.dumps(data),
-                            content_type='application/json')
+                            content_type="application/json")
         
         assert response.status_code == 404
         result = json.loads(response.data)
-        assert 'not found or already claimed' in result['message']
+        assert "not found or already claimed" in result["message"]
     
     def test_claim_task_success(self, client):
         # First create a task
         data = {
-            'composite': 'ir_clouds',
-            'timestamp': '2025-01-15T12:00:00Z'
+            "composite": "ir_clouds",
+            "timestamp": "2025-01-15T12:00:00Z"
         }
         
-        create_response = client.post('/api/tasks',
+        create_response = client.post("/api/tasks",
                                     data=json.dumps(data),
-                                    content_type='application/json')
+                                    content_type="application/json")
         
         assert create_response.status_code == 201
         create_result = json.loads(create_response.data)
-        task_id = create_result['task_id']
+        task_id = create_result["task_id"]
         
         # Now claim the task
-        claim_data = {'worker_id': 'worker-123'}
-        response = client.put(f'/api/tasks/{task_id}/claim',
+        claim_data = {"worker_id": "worker-123"}
+        response = client.put(f"/api/tasks/{task_id}/claim",
                             data=json.dumps(claim_data),
-                            content_type='application/json')
+                            content_type="application/json")
         
         assert response.status_code == 200
         result = json.loads(response.data)
-        assert result['task_id'] == task_id
-        assert result['worker_id'] == 'worker-123'
-        assert result['status'] == 'running'
+        assert result["task_id"] == task_id
+        assert result["worker_id"] == "worker-123"
+        assert result["status"] == "running"
 
 
 class TestUpdateTaskStatus:
     """Test PUT /api/tasks/<task_id>/status endpoint"""
     
     def test_update_status_missing_status(self, client):
-        data = {'message': 'Some message'}
+        data = {"message": "Some message"}
         
-        response = client.put('/api/tasks/some-task/status',
+        response = client.put("/api/tasks/some-task/status",
                             data=json.dumps(data),
-                            content_type='application/json')
+                            content_type="application/json")
         
         assert response.status_code == 400
         result = json.loads(response.data)
-        assert 'Missing required field: status' in result['message']
+        assert "Missing required field: status" in result["message"]
     
     def test_update_status_invalid_status(self, client):
-        data = {'status': 'invalid_status'}
+        data = {"status": "invalid_status"}
         
-        response = client.put('/api/tasks/some-task/status',
+        response = client.put("/api/tasks/some-task/status",
                             data=json.dumps(data),
-                            content_type='application/json')
+                            content_type="application/json")
         
         assert response.status_code == 400
         result = json.loads(response.data)
-        assert 'Invalid status' in result['message']
+        assert "Invalid status" in result["message"]
     
     def test_update_status_task_not_found(self, client):
-        data = {'status': 'completed'}
+        data = {"status": "completed"}
         
-        response = client.put('/api/tasks/nonexistent-task/status',
+        response = client.put("/api/tasks/nonexistent-task/status",
                             data=json.dumps(data),
-                            content_type='application/json')
+                            content_type="application/json")
         
         assert response.status_code == 404
         result = json.loads(response.data)
-        assert 'not found' in result['message']
+        assert "not found" in result["message"]
     
     def test_update_status_success(self, client):
         # First create and claim a task
         data = {
-            'composite': 'ir_clouds',
-            'timestamp': '2025-01-15T12:00:00Z'
+            "composite": "ir_clouds",
+            "timestamp": "2025-01-15T12:00:00Z"
         }
         
-        create_response = client.post('/api/tasks',
+        create_response = client.post("/api/tasks",
                                     data=json.dumps(data),
-                                    content_type='application/json')
+                                    content_type="application/json")
         
         assert create_response.status_code == 201
         create_result = json.loads(create_response.data)
-        task_id = create_result['task_id']
+        task_id = create_result["task_id"]
         
         # Claim the task
-        claim_data = {'worker_id': 'worker-123'}
-        client.put(f'/api/tasks/{task_id}/claim',
+        claim_data = {"worker_id": "worker-123"}
+        client.put(f"/api/tasks/{task_id}/claim",
                   data=json.dumps(claim_data),
-                  content_type='application/json')
+                  content_type="application/json")
         
         # Now update status
-        status_data = {'status': 'completed', 'message': 'Task completed successfully'}
-        response = client.put(f'/api/tasks/{task_id}/status',
+        status_data = {"status": "completed", "message": "Task completed successfully"}
+        response = client.put(f"/api/tasks/{task_id}/status",
                             data=json.dumps(status_data),
-                            content_type='application/json')
+                            content_type="application/json")
         
         assert response.status_code == 200
         result = json.loads(response.data)
-        assert 'updated successfully' in result['message']
+        assert "updated successfully" in result["message"]
 
 
 class TestManageHimawariRaw:
     """Test POST/PUT /api/raws endpoint"""
     
     def test_manage_raw_missing_timestamp(self, client):
-        data = {'status': 'completed'}
+        data = {"status": "completed"}
         
-        response = client.post('/api/raws',
+        response = client.post("/api/raws",
                              data=json.dumps(data),
-                             content_type='application/json')
+                             content_type="application/json")
         
         assert response.status_code == 400
         result = json.loads(response.data)
-        assert 'Missing required field: timestamp' in result['message']
+        assert "Missing required field: timestamp" in result["message"]
     
     def test_manage_raw_invalid_timestamp(self, client):
-        data = {'timestamp': 'invalid-timestamp'}
+        data = {"timestamp": "invalid-timestamp"}
         
-        response = client.post('/api/raws',
+        response = client.post("/api/raws",
                              data=json.dumps(data),
-                             content_type='application/json')
+                             content_type="application/json")
         
         assert response.status_code == 400
         result = json.loads(response.data)
-        assert 'Invalid timestamp format' in result['message']
+        assert "Invalid timestamp format" in result["message"]
     
     def test_update_raw_no_fields(self, client):
-        data = {'timestamp': '2025-01-15T12:00:00Z'}
+        data = {"timestamp": "2025-01-15T12:00:00Z"}
         
-        response = client.put('/api/raws',
+        response = client.put("/api/raws",
                             data=json.dumps(data),
-                            content_type='application/json')
+                            content_type="application/json")
         
         assert response.status_code == 400
         result = json.loads(response.data)
-        assert 'At least one of status, files, or size must be provided' in result['message']
+        assert "At least one of status, files, or size must be provided" in result["message"]
     
     def test_update_raw_invalid_status(self, client):
         data = {
-            'timestamp': '2025-01-15T12:00:00Z',
-            'status': 'invalid_status'
+            "timestamp": "2025-01-15T12:00:00Z",
+            "status": "invalid_status"
         }
         
-        response = client.put('/api/raws',
+        response = client.put("/api/raws",
                             data=json.dumps(data),
-                            content_type='application/json')
+                            content_type="application/json")
         
         assert response.status_code == 400
         result = json.loads(response.data)
-        assert 'Invalid status' in result['message']
+        assert "Invalid status" in result["message"]
     
     def test_create_raw_success(self, client):
-        data = {'timestamp': '2025-01-15T12:00:00Z'}
+        data = {"timestamp": "2025-01-15T12:00:00Z"}
         
-        response = client.post('/api/raws',
+        response = client.post("/api/raws",
                              data=json.dumps(data),
-                             content_type='application/json')
+                             content_type="application/json")
         
         assert response.status_code == 201
         result = json.loads(response.data)
-        assert 'created successfully' in result['message']
-        assert result['status'] == 'pending'
+        assert "created successfully" in result["message"]
+        assert result["status"] == "pending"
     
     def test_update_raw_success(self, client):
         data = {
-            'timestamp': '2025-01-15T12:00:00Z',
-            'status': 'running',  # Use 'running' instead of 'completed' to avoid promote_tasks call
-            'files': 10,
-            'size': 1024000
+            "timestamp": "2025-01-15T12:00:00Z",
+            "status": "running",  # Use "running" instead of "completed" to avoid promote_tasks call
+            "files": 10,
+            "size": 1024000
         }
         
-        response = client.put('/api/raws',
+        response = client.put("/api/raws",
                             data=json.dumps(data),
-                            content_type='application/json')
+                            content_type="application/json")
         
         assert response.status_code == 200
         result = json.loads(response.data)
-        assert 'updated successfully' in result['message']
+        assert "updated successfully" in result["message"]
 
 
 class TestGetHimawariRaw:
     """Test GET /api/raws/<timestamp> endpoint"""
     
     def test_get_raw_invalid_timestamp(self, client):
-        response = client.get('/api/raws/invalid-timestamp')
+        response = client.get("/api/raws/invalid-timestamp")
         
         assert response.status_code == 400
         result = json.loads(response.data)
-        assert 'Invalid timestamp format' in result['message']
+        assert "Invalid timestamp format" in result["message"]
     
     def test_get_raw_not_found(self, client):
-        response = client.get('/api/raws/2025-01-15T12:00:00Z')
+        response = client.get("/api/raws/2025-01-15T12:00:00Z")
         
         # Should return 404 for non-existent raw or 200 if it exists
         assert response.status_code in [200, 404]
@@ -379,77 +379,77 @@ class TestGetHimawariRaws:
     """Test GET /api/raws endpoint"""
     
     def test_get_raws_invalid_pagination(self, client):
-        response = client.get('/api/raws?page=invalid')
+        response = client.get("/api/raws?page=invalid")
         
         assert response.status_code == 400
         result = json.loads(response.data)
-        assert 'Invalid page' in result['message']
+        assert "Invalid page" in result["message"]
     
     def test_get_raws_success(self, client):
-        response = client.get('/api/raws')
+        response = client.get("/api/raws")
         
         assert response.status_code == 200
         result = json.loads(response.data)
-        assert 'raws' in result
-        assert 'total' in result
-        assert result['page'] == 1
-        assert result['per_page'] == 20
+        assert "raws" in result
+        assert "total" in result
+        assert result["page"] == 1
+        assert result["per_page"] == 20
 
 
 class TestCreateSnapshot:
     """Test POST /api/snapshots endpoint"""
     
     def test_create_snapshot_missing_fields(self, client):
-        data = {'bbox': [100, 20, 140, 50]}
+        data = {"bbox": [100, 20, 140, 50]}
         
-        response = client.post('/api/snapshots',
+        response = client.post("/api/snapshots",
                              data=json.dumps(data),
-                             content_type='application/json')
+                             content_type="application/json")
         
         assert response.status_code == 400
         result = json.loads(response.data)
-        assert 'Missing required field' in result['message']
+        assert "Missing required field" in result["message"]
     
     def test_create_snapshot_invalid_bbox(self, client):
         data = {
-            'bbox': [100, 20, 140],  # Invalid bbox - only 3 values
-            'timestamp': '2025-01-15T12:00:00Z',
-            'composite': 'ir_clouds'
+            "bbox": [100, 20, 140],  # Invalid bbox - only 3 values
+            "timestamp": "2025-01-15T12:00:00Z",
+            "composite": "ir_clouds"
         }
         
-        response = client.post('/api/snapshots',
+        response = client.post("/api/snapshots",
                              data=json.dumps(data),
-                             content_type='application/json')
+                             content_type="application/json")
         
         assert response.status_code == 400
         result = json.loads(response.data)
-        assert 'bbox must be an array of 4 numbers' in result['message']
+        assert "bbox must be an array of 4 numbers" in result["message"]
     
     def test_create_snapshot_invalid_composite(self, client):
         data = {
-            'bbox': [100, 20, 140, 50],
-            'timestamp': '2025-01-15T12:00:00Z',
-            'composite': 'invalid_composite'
+            "bbox": [100, 20, 140, 50],
+            "timestamp": "2025-01-15T12:00:00Z",
+            "composite": "invalid_composite"
         }
         
-        response = client.post('/api/snapshots',
+        response = client.post("/api/snapshots",
                              data=json.dumps(data),
-                             content_type='application/json')
+                             content_type="application/json")
         
         assert response.status_code == 400
         result = json.loads(response.data)
-        assert 'Invalid composite' in result['message']
+        assert "Invalid composite" in result["message"]
     
     def test_create_snapshot_invalid_timestamp(self, client):
         data = {
-            'bbox': [100, 20, 140, 50],
-            'timestamp': 'invalid-timestamp',
-            'composite': 'ir_clouds'
+            "bbox": [100, 20, 140, 50],
+            "timestamp": "invalid-timestamp",
+            "composite": "ir_clouds"
         }
         
-        response = client.post('/api/snapshots',
+        response = client.post("/api/snapshots",
                              data=json.dumps(data),
-                             content_type='application/json')
+                             content_type="application/json")
         
         assert response.status_code == 400
         result = json.loads(response.data)

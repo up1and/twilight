@@ -9,7 +9,7 @@ def upper_case(name):
     """
     Format composite name for display (e.g., "day_convection" to "Day Convection")
     """
-    segments = name.split('_')
+    segments = name.split("_")
     formatted_segments = []
     
     for segment in segments:
@@ -18,7 +18,7 @@ def upper_case(name):
         else:
             formatted_segments.append(segment[0].upper() + segment[1:].lower())
     
-    return ' '.join(formatted_segments)
+    return " ".join(formatted_segments)
 
 
 def parse_iso_timestamp(timestamp_str):
@@ -26,8 +26,8 @@ def parse_iso_timestamp(timestamp_str):
     Parse an ISO 8601 timestamp string into a timezone-aware datetime object.
     """
     # Handle timezone-aware timestamps
-    if timestamp_str.endswith('Z'):
-        timestamp_str = timestamp_str.replace('Z', '+00:00')
+    if timestamp_str.endswith("Z"):
+        timestamp_str = timestamp_str.replace("Z", "+00:00")
     timestamp = datetime.datetime.fromisoformat(timestamp_str)
     # Ensure timezone-aware datetime
     if timestamp.tzinfo is None:
@@ -41,7 +41,7 @@ def extract_timestamp_from_object_name(object_name):
     Extract timestamp from object name
     Expected format: composite/YYYY/MM/DD/himawari_composite_YYYYMMDD_HHMM.tif
     """
-    match = re.search(r'_(\d{8})_(\d{4})\.tif$', object_name)
+    match = re.search(r"_(\d{8})_(\d{4})\.tif$", object_name)
     if match:
         date_str = match.group(1)
         time_str = match.group(2)
@@ -78,7 +78,7 @@ def initialize_composite_state(client, available_composites):
     composite_state = {composite: None for composite in available_composites}
 
     # Get all objects from MinIO in one call
-    objects = list(client.list_objects('himawari', recursive=True))
+    objects = list(client.list_objects("himawari", recursive=True))
     # Group objects by composite
     composite_objects = {}
     for obj in objects:

@@ -9,15 +9,15 @@ class TaskManager:
     def __init__(self, redis_client):
         self.redis = redis_client
         # Redis keys
-        self.tasks_key = 'tasks'  # Hash: task_id -> task_json
-        self.queue_key = 'task_queue'  # Sorted Set: task_id with priority+timestamp score
+        self.tasks_key = "tasks"  # Hash: task_id -> task_json
+        self.queue_key = "task_queue"  # Sorted Set: task_id with priority+timestamp score
         self.expire_time = 3600 * 24 * 7  # 1 week
 
         # Redis lock for distributed locking
-        self.lock = self.redis.lock('task_lock', timeout=10, blocking_timeout=10)
+        self.lock = self.redis.lock("task_lock", timeout=10, blocking_timeout=10)
 
         # Priority weights for scoring (lower score = higher priority)
-        self.priority_weights = {'high': 0, 'normal': 1000000, 'low': 2000000}
+        self.priority_weights = {"high": 0, "normal": 1000000, "low": 2000000}
 
     def _calculate_score(self, task):
         """Calculate score for sorted set (lower score = higher priority)"""
@@ -26,7 +26,7 @@ class TaskManager:
         timestamp_score = int(task.timestamp.timestamp())
         return priority_weight + timestamp_score
 
-    def create_task(self, composite, timestamp, priority='normal'):
+    def create_task(self, composite, timestamp, priority="normal"):
         """Create a new task with deduplication and optional priority promotion"""
         with self.lock:
             # Create a temporary task for comparison
@@ -36,7 +36,7 @@ class TaskManager:
             existing_tasks = self._get_all_tasks()
             for existing_task in existing_tasks:
                 if (existing_task == temp_task and
-                    existing_task.status in ['pending', 'running']):
+                    existing_task.status in ["pending", "running"]):
                     # Task already exists, return existing task
                     return existing_task
 
@@ -74,8 +74,8 @@ class TaskManager:
                 if task_json:
                     task = TaskModel.from_json(task_json)
                     # Check if task timestamp matches and priority is not already high
-                    if (task.priority == 'normal' and task.timestamp == timestamp):
-                        task.priority = 'high'
+                    if (task.priority == "normal" and task.timestamp == timestamp):
+                        task.priority = "high"
                         promoted_tasks.append(task)
 
             # Update promoted tasks
@@ -151,7 +151,7 @@ class TaskManager:
                 return None
 
             task = TaskModel.from_json(task_json)
-            task.status = 'running'
+            task.status = "running"
             task.started = datetime.datetime.now(datetime.timezone.utc)
             task.worker_id = worker_id
 
@@ -172,7 +172,7 @@ class TaskManager:
             task.status = status
             if message:
                 task.message = message
-            if status in ['completed', 'failed']:
+            if status in ["completed", "failed"]:
                 task.ended = datetime.datetime.now(datetime.timezone.utc)
 
             # Update task in Redis
@@ -203,16 +203,16 @@ class HimawariRawManager:
         self.redis = redis_client
         self.task_manager = task_manager
         # Redis keys
-        self.raws_key = 'himawari_raws'  # Hash: timestamp_key -> raw_json
-        self.timestamps_key = 'raws_timestamps'  # Sorted Set: timestamp_key with unix timestamp score
+        self.raws_key = "himawari_raws"  # Hash: timestamp_key -> raw_json
+        self.timestamps_key = "raws_timestamps"  # Sorted Set: timestamp_key with unix timestamp score
         self.expire_time = 3600 * 24 * 30  # 30 days
 
         # Redis lock for distributed locking
-        self.lock = self.redis.lock('raws_lock', timeout=10, blocking_timeout=10)
+        self.lock = self.redis.lock("raws_lock", timeout=10, blocking_timeout=10)
 
     def _get_timestamp_key(self, timestamp):
         """Get timestamp key for Redis storage"""
-        return timestamp.strftime('%Y%m%d_%H%M')
+        return timestamp.strftime("%Y%m%d_%H%M")
 
     def create_sync(self, timestamp):
         """Create a pending sync record for a timestamp"""
@@ -259,13 +259,13 @@ class HimawariRawManager:
             
             # Update only provided fields
             if status is not None:
-                # If status changed to 'completed', promote related tasks to high priority
-                if self.task_manager and status == 'completed' and raw.status != 'completed':
+                # If status changed to "completed", promote related tasks to high priority
+                if self.task_manager and status == "completed" and raw.status != "completed":
                     self.task_manager.promote_tasks(timestamp)
 
                 raw.status = status
                 # Set started time when status becomes running
-                if status == 'running' and raw.started is None:
+                if status == "running" and raw.started is None:
                     raw.started = now
             
             if files is not None:
@@ -324,7 +324,7 @@ class CompositeStateManager:
         self.redis_client = redis_client
         
         # Redis lock for distributed locking
-        self.lock = self.redis_client.lock('composite_state_lock', timeout=10, blocking_timeout=10)
+        self.lock = self.redis_client.lock("composite_state_lock", timeout=10, blocking_timeout=10)
 
         for composite, timestamp in composite_states.items():
             # During initialization, always update to ensure all states are properly set in Redis

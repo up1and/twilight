@@ -14,13 +14,13 @@ from utils import logger, timing
 
 # Set cache directory based on OS
 cache_dir = (
-    os.path.join(os.environ['TEMP'], 'satpy_cache')
-    if os.name == 'nt'
+    os.path.join(os.environ["TEMP"], "satpy_cache")
+    if os.name == "nt"
     else "/tmp/satpy_cache"
 )
 
 
-def memory_profiler(chunk_size='256mb', save_profile=True):
+def memory_profiler(chunk_size="256mb", save_profile=True):
     """
     Decorator for memory profiling with Dask diagnostics
 
@@ -36,10 +36,10 @@ def memory_profiler(chunk_size='256mb', save_profile=True):
 
             # Try to extract composite_name and target_time from args for naming
             composite_name, target_time, *_ = args
-            time_str = target_time.strftime('%Y%m%d_%H%M')
+            time_str = target_time.strftime("%Y%m%d_%H%M")
 
             # Set memory limit for this operation
-            with dask.config.set({'array.chunk-size': chunk_size}):
+            with dask.config.set({"array.chunk-size": chunk_size}):
                 # Initialize diagnostics
                 resource_prof = ResourceProfiler(dt=0.25)  # Sample every 250ms
                 progress = ProgressBar()
@@ -51,7 +51,7 @@ def memory_profiler(chunk_size='256mb', save_profile=True):
                 # Log detailed resource usage
                 try:
                     # Extract memory usage from resource profiler
-                    memory_usage = [entry['memory'] for entry in resource_prof.results if 'memory' in entry]
+                    memory_usage = [entry["memory"] for entry in resource_prof.results if "memory" in entry]
                     peak_memory = max(memory_usage) / 1e9 if memory_usage else 0
                     logger.info(f"[{func_name}] Peak memory usage: {peak_memory:.2f} GB")
                 except Exception as e:
@@ -72,15 +72,15 @@ def memory_profiler(chunk_size='256mb', save_profile=True):
 
 
 available_composites = [
-    'true_color', 'ir_clouds', 'ash', 'night_microphysics'
+    "true_color", "ir_clouds", "ash", "night_microphysics"
 ]
 
 # Mapping from our naming to satpy composite names
 composite_mapping = {
-    'true_color': 'true_color',
-    'night_microphysics': 'night_microphysics',
-    'ir_clouds': 'B13',
-    'ash': 'ash'
+    "true_color": "true_color",
+    "night_microphysics": "night_microphysics",
+    "ir_clouds": "B13",
+    "ash": "ash"
 }
 
 
@@ -89,7 +89,7 @@ def get_reader_kwargs(data_source, cache=True):
     Get reader kwargs based on data source
     
     Args:
-        data_source: 'local' or 'remote'
+        data_source: "local" or "remote"
         cache: whether to use simplecache
     
     Returns:
@@ -97,75 +97,75 @@ def get_reader_kwargs(data_source, cache=True):
     """
     from config import endpoint, access_key, secret_key
     
-    if data_source == 'remote':
+    if data_source == "remote":
         # Use remote S3 configuration (anonymous access)
         reader_kwargs = {
-            'storage_options': {
-                's3': {'anon': True}
+            "storage_options": {
+                "s3": {"anon": True}
             }
         }
 
     else:  # local
         # Use local minio configuration
         reader_kwargs = {
-            'storage_options': {
-                's3': {
-                    'key': access_key,
-                    'secret': secret_key,
-                    'client_kwargs': {
-                        'endpoint_url': f'http://{endpoint}'
+            "storage_options": {
+                "s3": {
+                    "key": access_key,
+                    "secret": secret_key,
+                    "client_kwargs": {
+                        "endpoint_url": f"http://{endpoint}"
                     }
                 }
             }
         }
     
     if cache:
-        reader_kwargs['storage_options']['simplecache'] = {
-            'cache_storage': cache_dir,
-            'cache_check': 600,
+        reader_kwargs["storage_options"]["simplecache"] = {
+            "cache_storage": cache_dir,
+            "cache_check": 600,
         }
     
     return reader_kwargs
 
 
-def ahi_s3_files(time, data_source='remote', cache=True):
+def ahi_s3_files(time, data_source="remote", cache=True):
     """
     Get AHI data files based on data source preference
     
     Args:
         time: target datetime
-        data_source: 'local' or 'remote'
+        data_source: "local" or "remote"
         cache: whether to use simplecache
     
     Returns:
         list: file paths for satpy scene
     """
-    if data_source == 'remote':
+    if data_source == "remote":
         # Server has already checked data availability, use local first
-        base_path = 's3://noaa-himawari9/AHI-L1b-FLDK/{}/*'.format(time.strftime('%Y/%m/%d/%H%M'))
+        base_path = "s3://noaa-himawari9/AHI-L1b-FLDK/{}/*".format(time.strftime("%Y/%m/%d/%H%M"))
     else:
-        base_path = 's3://raw/AHI-L1b-FLDK/{}/*'.format(time.strftime('%Y/%m/%d/%H%M'))
+        base_path = "s3://raw/AHI-L1b-FLDK/{}/*".format(time.strftime("%Y/%m/%d/%H%M"))
     
     if cache:
-        base_path = 'simplecache::' + base_path
+        base_path = "simplecache::" + base_path
     
     return [base_path]
 
 
 @timing
 @memory_profiler()
-def process_composite(composite_name, target_time, data_source='remote'):
+def process_composite(composite_name, target_time, data_source="remote"):
     """Process a single composite for the given time"""
     try:
         logger.info(f"Processing composite '{composite_name}' for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC from {data_source}")
 
         # Check if the file already exists in Minio
-        name = 'himawari_{}_{}.tif'.format(composite_name, target_time.strftime('%Y%m%d_%H%M'))
-        object_name = '{}/{}/{}'.format(
-            composite_name, target_time.strftime('%Y/%m/%d'), name
+        name = "himawari_{}_{}.tif".format(composite_name, target_time.strftime("%Y%m%d_%H%M"))
+        object_name = "{}/{}/{}".format(
+            composite_name, target_time.strftime("%Y/%m/%d"), name
         )
 
-        if check_object_exists('himawari', object_name):
+        if check_object_exists("himawari", object_name):
             logger.info(f"Composite '{composite_name}' for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC already exists in Minio, skipping processing")
             return
 
@@ -184,34 +184,34 @@ def process_composite(composite_name, target_time, data_source='remote'):
         height = int(lat_span / pixel_resolution) # 55° / 0.02° = 2750
 
         china_area = create_area_def(
-            area_id='china',
-            projection='EPSG:4326',
+            area_id="china",
+            projection="EPSG:4326",
             width=width,
             height=height,
             area_extent=china_bbox,  # [min_lon, min_lat, max_lon, max_lat]
         )
 
-        scn = Scene(filenames=files, reader='ahi_hsd', reader_kwargs=reader_kwargs)
+        scn = Scene(filenames=files, reader="ahi_hsd", reader_kwargs=reader_kwargs)
         scn.load([satpy_composite_name])
 
         dims = len(scn[satpy_composite_name].data.shape)
-        chunks = (512, 512) if dims == 2 else ('auto', 512, 512)
+        chunks = (512, 512) if dims == 2 else ("auto", 512, 512)
 
         # Resample with chunking for memory efficiency
-        scn_china = scn.resample(china_area, resampler='bilinear', chunks=chunks)
+        scn_china = scn.resample(china_area, resampler="bilinear", chunks=chunks)
         filename = os.path.join(cache_dir, name)
 
         scn_china.save_dataset(
             satpy_composite_name,
             filename=filename,
-            driver='COG',
+            driver="COG",
             tiled=True,
             blockxsize=256,
             blockysize=256,
-            compress='deflate'
+            compress="deflate"
         )
 
-        upload('himawari', object_name, filename, composite_name)
+        upload("himawari", object_name, filename, composite_name)
         logger.info(f"Successfully processed and uploaded composite '{composite_name}' for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC")
 
     except Exception as e:

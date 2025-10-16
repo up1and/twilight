@@ -9,96 +9,96 @@ from utils import parse_iso_timestamp
 from snapshot import create_single_snapshot, create_series_snapshot
 
 # Create blueprint
-api = Blueprint('api', __name__, url_prefix='/api')
+api = Blueprint("api", __name__, url_prefix="/api")
 
 
-@api.route('/tasks', methods=['POST'])
+@api.route("/tasks", methods=["POST"])
 def create_task():
     """Create a new processing task"""
     data = request.get_json()
 
     # Validate required fields
-    if not data or 'composite' not in data or 'timestamp' not in data:
+    if not data or "composite" not in data or "timestamp" not in data:
         return jsonify({
-            'error': 'Bad Request',
-            'message': 'Missing required fields: composite, timestamp'
+            "error": "Bad Request",
+            "message": "Missing required fields: composite, timestamp"
         }), 400
 
-    composite = data['composite']
-    if composite not in current_app.config['AVAILABLE_COMPOSITES']:
+    composite = data["composite"]
+    if composite not in current_app.config["AVAILABLE_COMPOSITES"]:
         return jsonify({
-            'error': 'Bad Request',
-            'message': f'Invalid composite. Available: {current_app.config['AVAILABLE_COMPOSITES']}'
+            "error": "Bad Request",
+            "message": f"Invalid composite. Available: {current_app.config['AVAILABLE_COMPOSITES']}"
         }), 400
 
     # Parse timestamp
     try:
-        timestamp = parse_iso_timestamp(data['timestamp'])
+        timestamp = parse_iso_timestamp(data["timestamp"])
     except ValueError:
         return jsonify({
-            'error': 'Bad Request',
-            'message': 'Invalid timestamp format. Use ISO 8601 format'
+            "error": "Bad Request",
+            "message": "Invalid timestamp format. Use ISO 8601 format"
         }), 400
 
-    priority = data.get('priority', 'normal')
-    if priority not in ['low', 'normal', 'high']:
-        priority = 'normal'
+    priority = data.get("priority", "normal")
+    if priority not in ["low", "normal", "high"]:
+        priority = "normal"
 
     # Create task
     task = current_app.task_manager.create_task(composite, timestamp, priority)
 
     return jsonify({
-        'task_id': task.task_id,
-        'status': task.status,
-        'created': task.created
+        "task_id": task.task_id,
+        "status": task.status,
+        "created": task.created
     }), 201
 
 
-@api.route('/tasks/<task_id>', methods=['GET'])
+@api.route("/tasks/<task_id>", methods=["GET"])
 def get_task(task_id):
     """Get task details by ID"""
     task = current_app.task_manager.get_task(task_id)
     if not task:
         return jsonify({
-            'error': 'Not Found',
-            'message': f'Task {task_id} not found'
+            "error": "Not Found",
+            "message": f"Task {task_id} not found"
         }), 404
 
     return jsonify(task.to_dict())
 
 
-@api.route('/tasks', methods=['GET'])
+@api.route("/tasks", methods=["GET"])
 def get_tasks():
     """Get tasks with optional filtering"""
     try:
-        status = request.args.get('status')
-        composite = request.args.get('composite')
-        page = int(request.args.get('page', 1))
-        per_page = min(int(request.args.get('per_page', 20)), 100)  # Max 100 per page
+        status = request.args.get("status")
+        composite = request.args.get("composite")
+        page = int(request.args.get("page", 1))
+        per_page = min(int(request.args.get("per_page", 20)), 100)  # Max 100 per page
     except ValueError:
         return jsonify({
-            'error': 'Bad Request',
-            'message': 'Invalid page or per_page parameter'
+            "error": "Bad Request",
+            "message": "Invalid page or per_page parameter"
         }), 400
 
     offset = (page - 1) * per_page
     tasks, total = current_app.task_manager.get_tasks(status, composite, per_page, offset)
 
     return jsonify({
-        'tasks': [task.to_dict() for task in tasks],
-        'total': total,
-        'page': page,
-        'per_page': per_page,
-        'pages': (total + per_page - 1) // per_page
+        "tasks": [task.to_dict() for task in tasks],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": (total + per_page - 1) // per_page
     })
 
 
-@api.route('/tasks/next', methods=['GET'])
+@api.route("/tasks/next", methods=["GET"])
 def peek_next_task():
     """Peek next pending task for worker with optional filtering"""
     # Parse query parameters for filtering
-    priorities = request.args.get('priority', '').split(',') if request.args.get('priority') else []
-    composites = request.args.get('composite', '').split(',') if request.args.get('composite') else []
+    priorities = request.args.get("priority", "").split(",") if request.args.get("priority") else []
+    composites = request.args.get("composite", "").split(",") if request.args.get("composite") else []
     
     # Filter out empty strings
     priorities = [p.strip() for p in priorities if p.strip()]
@@ -107,81 +107,81 @@ def peek_next_task():
     task = current_app.task_manager.peek_next_task(priorities=priorities, composites=composites)
     if not task:
         return jsonify({
-            'message': 'No pending tasks'
+            "message": "No pending tasks"
         }), 204  # No Content
 
     return jsonify({
-        'task_id': task.task_id,
-        'composite': task.composite,
-        'timestamp': task.timestamp,
-        'priority': task.priority
+        "task_id": task.task_id,
+        "composite": task.composite,
+        "timestamp": task.timestamp,
+        "priority": task.priority
     })
 
 
-@api.route('/tasks/<task_id>/claim', methods=['PUT'])
+@api.route("/tasks/<task_id>/claim", methods=["PUT"])
 def claim_task(task_id):
     """Claim a specific task for processing"""
     data = request.get_json()
-    if not data or 'worker_id' not in data:
+    if not data or "worker_id" not in data:
         return jsonify({
-            'error': 'Bad Request',
-            'message': 'Missing required field: worker_id'
+            "error": "Bad Request",
+            "message": "Missing required field: worker_id"
         }), 400
 
-    worker_id = data['worker_id']
+    worker_id = data["worker_id"]
     
     # Claim the task
     task = current_app.task_manager.claim_task(task_id, worker_id)
     if not task:
         return jsonify({
-            'error': 'Not Found',
-            'message': f'Task {task_id} not found or already claimed'
+            "error": "Not Found",
+            "message": f"Task {task_id} not found or already claimed"
         }), 404
 
     return jsonify({
-        'task_id': task.task_id,
-        'composite': task.composite,
-        'timestamp': task.timestamp,
-        'status': task.status,
-        'worker_id': task.worker_id
+        "task_id": task.task_id,
+        "composite": task.composite,
+        "timestamp": task.timestamp,
+        "status": task.status,
+        "worker_id": task.worker_id
     })
 
 
-@api.route('/tasks/<task_id>/status', methods=['PUT'])
+@api.route("/tasks/<task_id>/status", methods=["PUT"])
 def update_task_status(task_id):
     """Update task status"""
     data = request.get_json()
-    if not data or 'status' not in data:
+    if not data or "status" not in data:
         return jsonify({
-            'error': 'Bad Request',
-            'message': 'Missing required field: status'
+            "error": "Bad Request",
+            "message": "Missing required field: status"
         }), 400
 
-    status = data['status']
-    if status not in ['pending', 'processing', 'completed', 'failed']:
+    status = data["status"]
+    if status not in ["pending", "processing", "completed", "failed"]:
         return jsonify({
-            'error': 'Bad Request',
-            'message': 'Invalid status. Must be: pending, processing, completed, failed'
+            "error": "Bad Request",
+            "message": "Invalid status. Must be: pending, processing, completed, failed"
         }), 400
     
     # Get task details before updating status
     task = current_app.task_manager.get_task(task_id)
     if not task:
         return jsonify({
-            'error': 'Not Found',
-            'message': f'Task {task_id} not found'
+            "error": "Not Found",
+            "message": f"Task {task_id} not found"
         }), 404
 
-    message = data.get('message')
+    message = data.get("message")
     success = current_app.task_manager.update_task_status(task_id, status, message)
     if not success:
         return jsonify({
-            'error': 'Not Found',
-            'message': f'Task {task_id} not found'
+            "error": "Not Found",
+            "message": f"Task {task_id} not found"
         }), 404
     
     # Update composite_state when task is completed
-    if status == 'completed':
+    if status == "completed":
         composite_name = task.composite
         timestamp = task.timestamp
 
@@ -192,63 +192,63 @@ def update_task_status(task_id):
             current_app.logger.info(f"Updated composite state via task completion: {composite_name} -> {timestamp}")
 
     return jsonify({
-        'message': 'Task status updated successfully'
+        "message": "Task status updated successfully"
     })
 
 
-@api.route('/raws', methods=['POST', 'PUT'])
+@api.route("/raws", methods=["POST", "PUT"])
 def manage_himawari_raw():
     """Create or update himawari sync record for a timestamp"""
     data = request.get_json()
     
     # Validate required fields
-    if not data or 'timestamp' not in data:
+    if not data or "timestamp" not in data:
         return jsonify({
-            'error': 'Bad Request',
-            'message': 'Missing required field: timestamp'
+            "error": "Bad Request",
+            "message": "Missing required field: timestamp"
         }), 400
         
     # Parse timestamp
     try:
-        timestamp = parse_iso_timestamp(data['timestamp'])
+        timestamp = parse_iso_timestamp(data["timestamp"])
     except ValueError:
         return jsonify({
-            'error': 'Bad Request',
-            'message': 'Invalid timestamp format. Use ISO 8601 format'
+            "error": "Bad Request",
+            "message": "Invalid timestamp format. Use ISO 8601 format"
         }), 400
     
     # Handle POST request (create pending)
-    if request.method == 'POST':
+    if request.method == "POST":
         # Create pending sync record
         current_app.himawari_raw_manager.create_sync(timestamp)
         
         return jsonify({
-            'message': 'Himawari sync created successfully',
-            'timestamp': timestamp.isoformat(),
-            'status': 'pending'
+            "message": "Himawari sync created successfully",
+            "timestamp": timestamp.isoformat(),
+            "status": "pending"
         }), 201
     
     # Handle PUT request (update progress)
     else:  # PUT
         # Extract optional fields
-        status = data.get('status')
-        files = data.get('files')
-        size = data.get('size')
+        status = data.get("status")
+        files = data.get("files")
+        size = data.get("size")
         
         # Validate that at least one field is provided
         if status is None and files is None and size is None:
             return jsonify({
-                'error': 'Bad Request',
-                'message': 'At least one of status, files, or size must be provided'
+                "error": "Bad Request",
+                "message": "At least one of status, files, or size must be provided"
             }), 400
         
         # Validate status if provided
         if status is not None:
-            valid_statuses = ['pending', 'running', 'completed', 'failed']
+            valid_statuses = ["pending", "running", "completed", "failed"]
             if status not in valid_statuses:
                 return jsonify({
-                    'error': 'Bad Request',
-                    'message': f'Invalid status. Valid values: {valid_statuses}'
+                    "error": "Bad Request",
+                    "message": f"Invalid status. Valid values: {valid_statuses}"
                 }), 400
             
         # Update progress with partial data
@@ -264,12 +264,12 @@ def manage_himawari_raw():
             updated_fields.append(f'size={size}')
         
         return jsonify({
-            'message': f'Himawari sync updated successfully ({", ".join(updated_fields)})',
-            'timestamp': timestamp.isoformat()
+            "message": f"Himawari sync updated successfully ({', '.join(updated_fields)})",
+            "timestamp": timestamp.isoformat()
         })
 
 
-@api.route('/raws/<timestamp>', methods=['GET'])
+@api.route("/raws/<timestamp>", methods=["GET"])
 def get_himawari_raw(timestamp):
     """Get himawari sync progress for a specific timestamp"""
     # Parse timestamp
@@ -277,45 +277,45 @@ def get_himawari_raw(timestamp):
         parsed_time = parse_iso_timestamp(timestamp)
     except ValueError:
         return jsonify({
-            'error': 'Bad Request',
-            'message': 'Invalid timestamp format. Use ISO 8601 format'
+            "error": "Bad Request",
+            "message": "Invalid timestamp format. Use ISO 8601 format"
         }), 400
         
     raw_data = current_app.himawari_raw_manager.get_raw(parsed_time)
     if not raw_data:
         return jsonify({
-            'error': 'Not Found',
-            'message': f'No himawari sync found for {timestamp}'
+            "error": "Not Found",
+            "message": f"No himawari sync found for {timestamp}"
         }), 404
         
     return jsonify(raw_data)
 
 
-@api.route('/raws', methods=['GET'])
+@api.route("/raws", methods=["GET"])
 def get_himawari_raws():
     """Get all himawari sync records with pagination"""
     try:
-        page = int(request.args.get('page', 1))
-        per_page = min(int(request.args.get('per_page', 20)), 100)  # Max 100 per page
+        page = int(request.args.get("page", 1))
+        per_page = min(int(request.args.get("per_page", 20)), 100)  # Max 100 per page
     except ValueError:
         return jsonify({
-            'error': 'Bad Request',
-            'message': 'Invalid page or per_page parameter'
+            "error": "Bad Request",
+            "message": "Invalid page or per_page parameter"
         }), 400
 
     offset = (page - 1) * per_page
     raws, total = current_app.himawari_raw_manager.get_raws(per_page, offset)
     
     return jsonify({
-        'raws': raws,
-        'total': total,
-        'page': page,
-        'per_page': per_page,
-        'pages': (total + per_page - 1) // per_page if total > 0 else 0
+        "raws": raws,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": (total + per_page - 1) // per_page if total > 0 else 0
     })
 
 
-@api.route('/snapshots', methods=['POST'])
+@api.route("/snapshots", methods=["POST"])
 def create_snapshot():
     """Create a snapshot image or video with geographic bounds and coastlines"""
     from extensions import client
@@ -323,31 +323,31 @@ def create_snapshot():
     data = request.get_json()
 
     # Validate required fields
-    required_fields = ['bbox', 'timestamp', 'composite']
+    required_fields = ["bbox", "timestamp", "composite"]
     for field in required_fields:
         if field not in data:
             return jsonify({
-                'error': 'Bad Request',
-                'message': f'Missing required field: {field}'
+                "error": "Bad Request",
+                "message": f"Missing required field: {field}"
             }), 400
 
-    bbox = data['bbox']
-    timestamp = data['timestamp']
-    composite = data['composite']
-    timedelta_minutes = data.get('timedelta')  # Optional time delta in minutes
+    bbox = data["bbox"]
+    timestamp = data["timestamp"]
+    composite = data["composite"]
+    timedelta_minutes = data.get("timedelta")  # Optional time delta in minutes
 
     # Validate bbox format
     if not isinstance(bbox, list) or len(bbox) != 4:
         return jsonify({
-            'error': 'Bad Request',
-            'message': 'bbox must be an array of 4 numbers [min_lng, min_lat, max_lng, max_lat]'
+            "error": "Bad Request",
+            "message": "bbox must be an array of 4 numbers [min_lng, min_lat, max_lng, max_lat]"
         }), 400
 
     # Validate composite
-    if composite not in current_app.config['AVAILABLE_COMPOSITES']:
+    if composite not in current_app.config["AVAILABLE_COMPOSITES"]:
         return jsonify({
-            'error': 'Bad Request',
-            'message': f'Invalid composite. Available: {current_app.config['AVAILABLE_COMPOSITES']}'
+            "error": "Bad Request",
+            "message": f"Invalid composite. Available: {current_app.config['AVAILABLE_COMPOSITES']}"
         }), 400
 
     # Parse timestamps
@@ -355,23 +355,23 @@ def create_snapshot():
         start_time = parse_iso_timestamp(timestamp)
     except ValueError:
         return jsonify({
-            'error': 'Bad Request',
-            'message': 'Invalid timestamp format. Use ISO 8601 format'
+            "error": "Bad Request",
+            "message": "Invalid timestamp format. Use ISO 8601 format"
         }), 400
 
     if timedelta_minutes:
         # Validate timedelta
         if not isinstance(timedelta_minutes, (int, float)) or timedelta_minutes <= 0:
             return jsonify({
-                'error': 'Bad Request',
-                'message': 'timedelta must be a positive number (minutes)'
+                "error": "Bad Request",
+                "message": "timedelta must be a positive number (minutes)"
             }), 400
 
         # Validate time range (max 24 hours = 1440 minutes)
         if timedelta_minutes > 1440:
             return jsonify({
-                'error': 'Bad Request',
-                'message': 'Time range cannot exceed 24 hours (1440 minutes)'
+                "error": "Bad Request",
+                "message": "Time range cannot exceed 24 hours (1440 minutes)"
             }), 400
 
         # Calculate end time
@@ -385,11 +385,11 @@ def create_snapshot():
         result = create_single_snapshot(client, composite, start_time, bbox, current_app.task_manager)
 
     # Only add download_url if object_name exists (successful completion)
-    if 'object_name' in result:
-        object_name = result.pop('object_name') 
-        result['download_url'] = url_for('main.serve_snapshot', object_name=object_name, _external=True)
+    if "object_name" in result:
+        object_name = result.pop("object_name") 
+        result["download_url"] = url_for("main.serve_snapshot", object_name=object_name, _external=True)
 
-    if result['status'] == 'pending':
+    if result["status"] == "pending":
         return jsonify(result), 202
     else:
         return jsonify(result), 201

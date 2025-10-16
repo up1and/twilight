@@ -15,15 +15,15 @@ from utils import logger
 from config import endpoint, access_key, secret_key
 
 # Configuration
-noaa_bucket = 'noaa-himawari9'
-local_bucket = 'raw'
+noaa_bucket = "noaa-himawari9"
+local_bucket = "raw"
 
 
 class SyncClient:
     """Client for communicating with the himawari sync server"""
 
     def __init__(self, server_url):
-        self.server_url = server_url.rstrip('/')
+        self.server_url = server_url.rstrip("/")
         self.session = requests.Session()
 
     def get_sync(self, target_time):
@@ -37,20 +37,20 @@ class SyncClient:
             if response.status_code == 200:
                 data = response.json()
                 return {
-                    'files': data.get('files', 0),
-                    'size': data.get('size', 0),
-                    'status': data.get('status', 'pending')
+                    "files": data.get("files", 0),
+                    "size": data.get("size", 0),
+                    "status": data.get("status", "pending")
                 }
             elif response.status_code == 404:
                 # No existing record, return defaults
-                return {'files': 0, 'size': 0, 'status': 'pending'}
+                return {"files": 0, "size": 0, "status": "pending"}
             else:
                 logger.warning(f"Failed to get himawari sync progress: {response.status_code} {response.text}")
-                return {'files': 0, 'size': 0, 'status': 'pending'}
+                return {"files": 0, "size": 0, "status": "pending"}
                 
         except Exception as e:
             logger.error(f"Error getting himawari sync progress: {e}")
-            return {'files': 0, 'size': 0, 'status': 'pending'}
+            return {"files": 0, "size": 0, "status": "pending"}
 
     def update_sync(self, target_time, status=None, files=None, size=None):
         """Update himawari sync progress to server"""
@@ -60,14 +60,14 @@ class SyncClient:
                 raise ValueError("At least one of status, files, or size must be provided")
             
             # Build data payload with only non-None values
-            data = {'timestamp': target_time.isoformat()}
+            data = {"timestamp": target_time.isoformat()}
             
             if status is not None:
-                data['status'] = status
+                data["status"] = status
             if files is not None:
-                data['files'] = files
+                data["files"] = files
             if size is not None:
-                data['size'] = size
+                data["size"] = size
                 
             response = self.session.put(
                 f"{self.server_url}/api/raws",
@@ -85,7 +85,7 @@ class SyncClient:
         """Create a pending himawari sync record"""
         try:
             data = {
-                'timestamp': target_time.isoformat()
+                "timestamp": target_time.isoformat()
             }
             
             response = self.session.post(
@@ -121,7 +121,7 @@ class ProgressBar:
 
         # Calculate progress bar
         filled_length = int(self.bar_width * self.downloaded // self.total_size)
-        bar = '#' * filled_length + ' ' * (self.bar_width - filled_length)
+        bar = "#" * filled_length + " " * (self.bar_width - filled_length)
 
         # Calculate speed and ETA
         elapsed_time = time.time() - self.start_time
@@ -149,7 +149,7 @@ class ProgressBar:
         sys.stdout.flush()
 
     def close(self):
-        sys.stdout.write('\n')
+        sys.stdout.write("\n")
         sys.stdout.flush()
 
 
@@ -159,17 +159,17 @@ class SyncProcessor:
     def __init__(self, sync_client: SyncClient):
         # Initialize NOAA S3 client (anonymous access)
         self.noaa_s3 = boto3.client(
-            's3',
+            "s3",
             config=botocore.config.Config(signature_version=botocore.UNSIGNED)
         )
 
         # Initialize local MinIO client using boto3
         self.minio_s3 = boto3.client(
-            's3',
-            endpoint_url=f'http://{endpoint}',
+            "s3",
+            endpoint_url=f"http://{endpoint}",
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
-            region_name='us-east-1'  # MinIO requires a region
+            region_name="us-east-1"  # MinIO requires a region
         )
 
         self.sync_client = sync_client
@@ -184,7 +184,7 @@ class SyncProcessor:
         """List files in a bucket with given prefix and extension"""
         try:
             files = []
-            paginator = s3_client.get_paginator('list_objects_v2')
+            paginator = s3_client.get_paginator("list_objects_v2")
             
             page_iterator = paginator.paginate(
                 Bucket=bucket,
@@ -192,10 +192,10 @@ class SyncProcessor:
             )
             
             for page in page_iterator:
-                if 'Contents' in page:
-                    for obj in page['Contents']:
-                        if obj['Key'].endswith('.DAT.bz2'):
-                            files.append(obj['Key'])
+                if "Contents" in page:
+                    for obj in page["Contents"]:
+                        if obj["Key"].endswith(".DAT.bz2"):
+                            files.append(obj["Key"])
 
             return files
 
@@ -208,9 +208,9 @@ class SyncProcessor:
         try:
             # Get file info from NOAA S3
             response = self.noaa_s3.head_object(Bucket=noaa_bucket, Key=object_name)
-            file_size = response['ContentLength']
+            file_size = response["ContentLength"]
 
-            filename = object_name.split('/')[-1]
+            filename = object_name.split("/")[-1]
 
             # Create progress bar
             progress_bar = ProgressBar(filename, file_size)
@@ -223,7 +223,7 @@ class SyncProcessor:
             
             response = self.noaa_s3.get_object(Bucket=noaa_bucket, Key=object_name)
             
-            with response['Body'] as body:
+            with response["Body"] as body:
                 while True:
                     chunk = body.read(chunk_size)
                     if not chunk:
@@ -260,8 +260,8 @@ class SyncProcessor:
 
         # Get current progress from server to maintain cumulative data
         current_progress = self.sync_client.get_sync(target_time)
-        total_size = current_progress['size']
-        status = 'pending'
+        total_size = current_progress["size"]
+        status = "pending"
 
         # List files in NOAA S3
         noaa_files = self.list_files(self.noaa_s3, noaa_bucket, time_folder)
@@ -282,11 +282,11 @@ class SyncProcessor:
                 file_size = self.sync_file(object_name)
                 total_size += file_size
                 file_count += 1
-                status = 'running'
+                status = "running"
                 self.sync_client.update_sync(target_time, status=status, files=file_count, size=total_size)
 
         if file_count >= 160:
-            status = 'completed'
+            status = "completed"
             
         self.sync_client.update_sync(target_time, status=status)
         return status

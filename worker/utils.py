@@ -49,14 +49,14 @@ def timing(f):
 def createLogger(debug=False):
     logLevel = logging.DEBUG if debug else logging.INFO
 
-    _format = '[%(asctime)s] %(levelname)s %(message)s'
+    _format = "[%(asctime)s] %(levelname)s %(message)s"
     formatter = logging.Formatter(_format)
 
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.DEBUG)
     ch.setFormatter(formatter)
 
-    logger = logging.getLogger('tafor-layer')
+    logger = logging.getLogger("tafor-layer")
     logger.setLevel(logLevel)
     logger.addHandler(ch)
 

@@ -14,23 +14,23 @@ class TestTaskManager:
         manager = TaskManager(mock_redis)
         
         assert manager.redis == mock_redis
-        assert manager.tasks_key == 'tasks'
-        assert manager.queue_key == 'task_queue'
+        assert manager.tasks_key == "tasks"
+        assert manager.queue_key == "task_queue"
         assert manager.expire_time == 3600 * 24 * 7
     
     def test_calculate_score(self, mock_redis, sample_timestamp):
         manager = TaskManager(mock_redis)
         
         # Test high priority
-        task_high = TaskModel('ir_clouds', sample_timestamp, 'high')
+        task_high = TaskModel("ir_clouds", sample_timestamp, "high")
         score_high = manager._calculate_score(task_high)
         
         # Test normal priority
-        task_normal = TaskModel('ir_clouds', sample_timestamp, 'normal')
+        task_normal = TaskModel("ir_clouds", sample_timestamp, "normal")
         score_normal = manager._calculate_score(task_normal)
         
         # Test low priority
-        task_low = TaskModel('ir_clouds', sample_timestamp, 'low')
+        task_low = TaskModel("ir_clouds", sample_timestamp, "low")
         score_low = manager._calculate_score(task_low)
         
         # High priority should have lower score (higher priority)
@@ -42,12 +42,12 @@ class TestTaskManager:
         # Mock no existing tasks
         mock_redis.hgetall.return_value = {}
         
-        task = manager.create_task('ir_clouds', sample_timestamp, 'normal')
+        task = manager.create_task("ir_clouds", sample_timestamp, "normal")
         
-        assert task.composite == 'ir_clouds'
+        assert task.composite == "ir_clouds"
         assert task.timestamp == sample_timestamp
-        assert task.priority == 'normal'
-        assert task.status == 'pending'
+        assert task.priority == "normal"
+        assert task.status == "pending"
         
         # Verify Redis calls
         mock_redis.hset.assert_called()
@@ -58,8 +58,8 @@ class TestTaskManager:
         manager = TaskManager(mock_redis)
         
         # Create existing task
-        existing_task = TaskModel('ir_clouds', sample_timestamp, 'normal')
-        existing_task.status = 'pending'
+        existing_task = TaskModel("ir_clouds", sample_timestamp, "normal")
+        existing_task.status = "pending"
         
         # Mock existing task in Redis
         mock_redis.hgetall.return_value = {
@@ -67,11 +67,11 @@ class TestTaskManager:
         }
         
         # Try to create duplicate
-        result = manager.create_task('ir_clouds', sample_timestamp, 'high')
+        result = manager.create_task("ir_clouds", sample_timestamp, "high")
         
         # Should return existing task
         assert result.task_id == existing_task.task_id
-        assert result.status == 'pending'
+        assert result.status == "pending"
     
     def test_get_task_exists(self, mock_redis, sample_task):
         manager = TaskManager(mock_redis)
@@ -83,7 +83,7 @@ class TestTaskManager:
         
         assert result.task_id == sample_task.task_id
         assert result.composite == sample_task.composite
-        mock_redis.hget.assert_called_with('tasks', sample_task.task_id)
+        mock_redis.hget.assert_called_with("tasks", sample_task.task_id)
     
     def test_get_task_not_exists(self, mock_redis):
         manager = TaskManager(mock_redis)
@@ -91,7 +91,7 @@ class TestTaskManager:
         # Mock task doesn't exist
         mock_redis.hget.return_value = None
         
-        result = manager.get_task('nonexistent-task')
+        result = manager.get_task("nonexistent-task")
         
         assert result is None
     
@@ -105,7 +105,7 @@ class TestTaskManager:
         result = manager.peek_next_task()
         
         assert result.task_id == sample_task.task_id
-        mock_redis.zrange.assert_called_with('task_queue', 0, -1)
+        mock_redis.zrange.assert_called_with("task_queue", 0, -1)
     
     def test_peek_next_task_empty_queue(self, mock_redis):
         manager = TaskManager(mock_redis)
@@ -124,15 +124,15 @@ class TestTaskManager:
         mock_redis.zscore.return_value = 1000  # Task exists in queue
         mock_redis.hget.return_value = sample_task.to_json()
         
-        result = manager.claim_task(sample_task.task_id, 'worker-123')
+        result = manager.claim_task(sample_task.task_id, "worker-123")
         
         assert result.task_id == sample_task.task_id
-        assert result.status == 'running'
-        assert result.worker_id == 'worker-123'
+        assert result.status == "running"
+        assert result.worker_id == "worker-123"
         assert result.started is not None
         
         # Verify Redis operations
-        mock_redis.zrem.assert_called_with('task_queue', sample_task.task_id)
+        mock_redis.zrem.assert_called_with("task_queue", sample_task.task_id)
         mock_redis.hset.assert_called()
     
     def test_claim_task_not_in_queue(self, mock_redis):
@@ -141,7 +141,7 @@ class TestTaskManager:
         # Mock task not in queue
         mock_redis.zscore.return_value = None
         
-        result = manager.claim_task('nonexistent-task', 'worker-123')
+        result = manager.claim_task("nonexistent-task", "worker-123")
         
         assert result is None
     
@@ -151,7 +151,7 @@ class TestTaskManager:
         # Mock task exists
         mock_redis.hget.return_value = sample_task.to_json()
         
-        result = manager.update_task_status(sample_task.task_id, 'completed', 'Success')
+        result = manager.update_task_status(sample_task.task_id, "completed", "Success")
         
         assert result is True
         mock_redis.hset.assert_called()
@@ -163,7 +163,7 @@ class TestTaskManager:
         # Mock task doesn't exist
         mock_redis.hget.return_value = None
         
-        result = manager.update_task_status('nonexistent-task', 'completed')
+        result = manager.update_task_status("nonexistent-task", "completed")
         
         assert result is False
     
@@ -185,11 +185,11 @@ class TestTaskManager:
         manager = TaskManager(mock_redis)
         
         # Create multiple tasks
-        task1 = TaskModel('ir_clouds', sample_timestamp, 'normal')
-        task1.status = 'pending'
+        task1 = TaskModel("ir_clouds", sample_timestamp, "normal")
+        task1.status = "pending"
         
-        task2 = TaskModel('true_color', sample_timestamp, 'high')
-        task2.status = 'completed'
+        task2 = TaskModel("true_color", sample_timestamp, "high")
+        task2.status = "completed"
         
         # Mock tasks in Redis
         mock_redis.hgetall.return_value = {
@@ -198,21 +198,21 @@ class TestTaskManager:
         }
         
         # Filter by status
-        tasks, total = manager.get_tasks(status='pending')
+        tasks, total = manager.get_tasks(status="pending")
         assert len(tasks) == 1
-        assert tasks[0].status == 'pending'
+        assert tasks[0].status == "pending"
         
         # Filter by composite
-        tasks, total = manager.get_tasks(composite='true_color')
+        tasks, total = manager.get_tasks(composite="true_color")
         assert len(tasks) == 1
-        assert tasks[0].composite == 'true_color'
+        assert tasks[0].composite == "true_color"
     
     def test_promote_tasks_in_queue(self, mock_redis, sample_timestamp):
         manager = TaskManager(mock_redis)
         
         # Create tasks for promotion testing - use exact same timestamp for promotion
-        promote_task = TaskModel('ir_clouds', sample_timestamp, 'normal')
-        other_task = TaskModel('true_color', sample_timestamp.replace(hour=13), 'normal')
+        promote_task = TaskModel("ir_clouds", sample_timestamp, "normal")
+        other_task = TaskModel("true_color", sample_timestamp.replace(hour=13), "normal")
         
         # Mock queue with task IDs
         mock_redis.zrange.return_value = [promote_task.task_id, other_task.task_id]
@@ -238,21 +238,21 @@ class TestTaskManager:
         manager = TaskManager(mock_redis)
         
         # Mock task ID in queue but task doesn't exist in hash
-        mock_redis.zrange.return_value = ['deleted-task-id']
+        mock_redis.zrange.return_value = ["deleted-task-id"]
         mock_redis.hget.return_value = None  # Task was deleted
         
         result = manager.peek_next_task()
         
         assert result is None
         # Verify task was removed from queue
-        mock_redis.zrem.assert_called_with('task_queue', 'deleted-task-id')
+        mock_redis.zrem.assert_called_with("task_queue", "deleted-task-id")
     
     def test_peek_next_task_with_priority_filter(self, mock_redis, sample_timestamp):
         manager = TaskManager(mock_redis)
         
         # Create tasks with different priorities
-        high_task = TaskModel('ir_clouds', sample_timestamp, 'high')
-        normal_task = TaskModel('true_color', sample_timestamp, 'normal')
+        high_task = TaskModel("ir_clouds", sample_timestamp, "high")
+        normal_task = TaskModel("true_color", sample_timestamp, "normal")
         
         # Mock queue with both tasks
         mock_redis.zrange.return_value = [high_task.task_id, normal_task.task_id]
@@ -268,17 +268,17 @@ class TestTaskManager:
         mock_redis.hget.side_effect = mock_hget
         
         # Filter by high priority only
-        result = manager.peek_next_task(priorities=['high'])
+        result = manager.peek_next_task(priorities=["high"])
         
         assert result.task_id == high_task.task_id
-        assert result.priority == 'high'
+        assert result.priority == "high"
     
     def test_peek_next_task_with_composite_filter(self, mock_redis, sample_timestamp):
         manager = TaskManager(mock_redis)
         
         # Create tasks with different composites
-        ir_task = TaskModel('ir_clouds', sample_timestamp, 'normal')
-        tc_task = TaskModel('true_color', sample_timestamp, 'normal')
+        ir_task = TaskModel("ir_clouds", sample_timestamp, "normal")
+        tc_task = TaskModel("true_color", sample_timestamp, "normal")
         
         # Mock queue with both tasks
         mock_redis.zrange.return_value = [ir_task.task_id, tc_task.task_id]
@@ -294,23 +294,23 @@ class TestTaskManager:
         mock_redis.hget.side_effect = mock_hget
         
         # Filter by true_color composite only
-        result = manager.peek_next_task(composites=['true_color'])
+        result = manager.peek_next_task(composites=["true_color"])
         
         assert result.task_id == tc_task.task_id
-        assert result.composite == 'true_color'
+        assert result.composite == "true_color"
     
     def test_peek_next_task_no_matching_filters(self, mock_redis, sample_timestamp):
         manager = TaskManager(mock_redis)
         
         # Create task with normal priority
-        normal_task = TaskModel('ir_clouds', sample_timestamp, 'normal')
+        normal_task = TaskModel("ir_clouds", sample_timestamp, "normal")
         
         # Mock queue with task
         mock_redis.zrange.return_value = [normal_task.task_id]
         mock_redis.hget.return_value = normal_task.to_json()
         
         # Filter by high priority only (should not match)
-        result = manager.peek_next_task(priorities=['high'])
+        result = manager.peek_next_task(priorities=["high"])
         
         assert result is None
     
@@ -321,11 +321,11 @@ class TestTaskManager:
         mock_redis.zscore.return_value = 1000  # Task exists in queue
         mock_redis.hget.return_value = None  # But task was deleted from hash
         
-        result = manager.claim_task('deleted-task-id', 'worker-123')
+        result = manager.claim_task("deleted-task-id", "worker-123")
         
         assert result is None
         # Verify task was removed from queue
-        mock_redis.zrem.assert_called_with('task_queue', 'deleted-task-id')
+        mock_redis.zrem.assert_called_with("task_queue", "deleted-task-id")
 
 
 class TestHimawariRawManager:
@@ -335,8 +335,8 @@ class TestHimawariRawManager:
         manager = HimawariRawManager(mock_redis)
         
         assert manager.redis == mock_redis
-        assert manager.raws_key == 'himawari_raws'
-        assert manager.timestamps_key == 'raws_timestamps'
+        assert manager.raws_key == "himawari_raws"
+        assert manager.timestamps_key == "raws_timestamps"
         assert manager.expire_time == 3600 * 24 * 30
     
     def test_get_timestamp_key(self, mock_redis, sample_timestamp):
@@ -344,7 +344,7 @@ class TestHimawariRawManager:
         
         result = manager._get_timestamp_key(sample_timestamp)
         
-        assert result == '20250115_1200'
+        assert result == "20250115_1200"
     
     def test_create_sync_new(self, mock_redis, sample_timestamp):
         manager = HimawariRawManager(mock_redis)
@@ -380,7 +380,7 @@ class TestHimawariRawManager:
         # Mock existing raw in Redis
         mock_redis.hget.return_value = existing_raw.to_json()
         
-        manager.update_progress(sample_timestamp, status='running', files=5, size=1024)
+        manager.update_progress(sample_timestamp, status="running", files=5, size=1024)
         
         # Verify Redis calls
         mock_redis.hset.assert_called()
@@ -393,7 +393,7 @@ class TestHimawariRawManager:
         # Mock no existing raw
         mock_redis.hget.return_value = None
         
-        manager.update_progress(sample_timestamp, status='running')
+        manager.update_progress(sample_timestamp, status="running")
         
         # Should create new raw and update it
         mock_redis.hset.assert_called()
@@ -404,7 +404,7 @@ class TestHimawariRawManager:
         
         # Create sample raw
         raw = HimawariRawModel(sample_timestamp)
-        raw.status = 'completed'
+        raw.status = "completed"
         raw.files = 10
         
         # Mock raw exists in Redis
@@ -412,9 +412,9 @@ class TestHimawariRawManager:
         
         result = manager.get_raw(sample_timestamp)
         
-        assert result['status'] == 'completed'
-        assert result['files'] == 10
-        assert result['timestamp'] == sample_timestamp
+        assert result["status"] == "completed"
+        assert result["files"] == 10
+        assert result["timestamp"] == sample_timestamp
     
     def test_get_raw_not_exists(self, mock_redis, sample_timestamp):
         manager = HimawariRawManager(mock_redis)
@@ -433,7 +433,7 @@ class TestHimawariRawManager:
         mock_redis.zcard.return_value = 5
         
         # Mock timestamp keys
-        mock_redis.zrevrange.return_value = ['20250115_1200', '20250115_1000']
+        mock_redis.zrevrange.return_value = ["20250115_1200", "20250115_1000"]
         
         # Create sample raws
         raw1 = HimawariRawModel(sample_timestamp)
@@ -446,11 +446,11 @@ class TestHimawariRawManager:
         
         assert total == 5
         assert len(results) == 2
-        assert results[0]['timestamp'] == sample_timestamp
+        assert results[0]["timestamp"] == sample_timestamp
         
         # Verify Redis calls
-        mock_redis.zcard.assert_called_with('raws_timestamps')
-        mock_redis.zrevrange.assert_called_with('raws_timestamps', 0, 1)
+        mock_redis.zcard.assert_called_with("raws_timestamps")
+        mock_redis.zrevrange.assert_called_with("raws_timestamps", 0, 1)
     
     def test_update_progress_with_task_manager_promotion(self, mock_redis, sample_timestamp):
         # Create mock task manager
@@ -459,13 +459,13 @@ class TestHimawariRawManager:
         
         # Create existing raw with pending status
         existing_raw = HimawariRawModel(sample_timestamp)
-        existing_raw.status = 'pending'
+        existing_raw.status = "pending"
         
         # Mock existing raw in Redis
         mock_redis.hget.return_value = existing_raw.to_json()
         
         # Update status to completed (should trigger task promotion)
-        manager.update_progress(sample_timestamp, status='completed')
+        manager.update_progress(sample_timestamp, status="completed")
         
         # Verify task manager promotion was called
         mock_task_manager.promote_tasks.assert_called_once_with(sample_timestamp)
@@ -486,7 +486,7 @@ class TestHimawariRawManager:
         mock_redis.hget.return_value = existing_raw.to_json()
         
         # Update status to completed (should not crash without task manager)
-        manager.update_progress(sample_timestamp, status='completed')
+        manager.update_progress(sample_timestamp, status="completed")
         
         # Verify Redis operations still work
         mock_redis.hset.assert_called()
@@ -504,16 +504,16 @@ class TestCompositeStateManager:
         
         # Mock composite states for initialization
         self.composite_states = {
-            'ir_clouds': self.test_timestamp,
-            'true_color': None,
-            'ash': self.test_timestamp
+            "ir_clouds": self.test_timestamp,
+            "true_color": None,
+            "ash": self.test_timestamp
         }
     
     def test_init_with_composite_states(self):
         """Test CompositeStateManager initialization with composite states"""
         # Mock get method to return None (no existing data)
-        with patch.object(CompositeStateManager, 'get', return_value=None):
-            with patch.object(CompositeStateManager, 'update') as mock_update:
+        with patch.object(CompositeStateManager, "get", return_value=None):
+            with patch.object(CompositeStateManager, "update") as mock_update:
                 manager = CompositeStateManager(self.mock_redis, self.composite_states)
                 
                 assert manager.redis_client == self.mock_redis
@@ -521,9 +521,9 @@ class TestCompositeStateManager:
                 
                 # Should call update for each composite with non-None timestamp
                 expected_calls = [
-                    (('ir_clouds', self.test_timestamp), {}),
-                    (('true_color', None), {}),
-                    (('ash', self.test_timestamp), {})
+                    (("ir_clouds", self.test_timestamp), {}),
+                    (("true_color", None), {}),
+                    (("ash", self.test_timestamp), {})
                 ]
                 assert mock_update.call_count == 3
     
@@ -532,12 +532,12 @@ class TestCompositeStateManager:
         existing_timestamp = datetime.datetime(2025, 1, 15, 10, 0, 0, tzinfo=datetime.timezone.utc)
         
         def mock_get_side_effect(composite):
-            if composite == 'ir_clouds':
+            if composite == "ir_clouds":
                 return existing_timestamp  # Different from composite_states
             return None
         
-        with patch.object(CompositeStateManager, 'get', side_effect=mock_get_side_effect):
-            with patch.object(CompositeStateManager, 'update') as mock_update:
+        with patch.object(CompositeStateManager, "get", side_effect=mock_get_side_effect):
+            with patch.object(CompositeStateManager, "update") as mock_update:
                 manager = CompositeStateManager(self.mock_redis, self.composite_states)
                 
                 # Should update ir_clouds because timestamps are different
@@ -547,13 +547,13 @@ class TestCompositeStateManager:
     def test_get_specific_composite_exists(self):
         """Test getting a specific composite that exists"""
         mock_states = {
-            'ir_clouds': self.test_timestamp_str,
-            'true_color': self.test_timestamp_str
+            "ir_clouds": self.test_timestamp_str,
+            "true_color": self.test_timestamp_str
         }
         self.mock_redis.hgetall.return_value = mock_states
         
         manager = CompositeStateManager(self.mock_redis, {})
-        result = manager.get('ir_clouds')
+        result = manager.get("ir_clouds")
         
         assert result == self.test_timestamp
         self.mock_redis.hgetall.assert_called_with("composite_state")
@@ -563,7 +563,7 @@ class TestCompositeStateManager:
         self.mock_redis.hgetall.return_value = {}
         
         manager = CompositeStateManager(self.mock_redis, {})
-        result = manager.get('ir_clouds')
+        result = manager.get("ir_clouds")
         
         assert result is None
         self.mock_redis.hgetall.assert_called_with("composite_state")
@@ -571,12 +571,12 @@ class TestCompositeStateManager:
     def test_get_specific_composite_invalid_timestamp(self):
         """Test getting a specific composite with invalid timestamp format"""
         mock_states = {
-            'ir_clouds': 'invalid_timestamp'
+            "ir_clouds": "invalid_timestamp"
         }
         self.mock_redis.hgetall.return_value = mock_states
         
         manager = CompositeStateManager(self.mock_redis, {})
-        result = manager.get('ir_clouds')
+        result = manager.get("ir_clouds")
         
         assert result is None
         self.mock_redis.hgetall.assert_called_with("composite_state")
@@ -584,10 +584,10 @@ class TestCompositeStateManager:
     def test_get_all_composites(self):
         """Test getting all composites"""
         mock_states = {
-            'ir_clouds': self.test_timestamp_str,
-            'true_color': self.test_timestamp_str,
-            'ash': None,
-            'night_microphysics': 'invalid_timestamp'
+            "ir_clouds": self.test_timestamp_str,
+            "true_color": self.test_timestamp_str,
+            "ash": None,
+            "night_microphysics": "invalid_timestamp"
         }
         self.mock_redis.hgetall.return_value = mock_states
         
@@ -595,10 +595,10 @@ class TestCompositeStateManager:
         result = manager.get()
         
         expected = {
-            'ir_clouds': self.test_timestamp,
-            'true_color': self.test_timestamp,
-            'ash': None,
-            'night_microphysics': None
+            "ir_clouds": self.test_timestamp,
+            "true_color": self.test_timestamp,
+            "ash": None,
+            "night_microphysics": None
         }
         assert result == expected
         self.mock_redis.hgetall.assert_called_with("composite_state")
@@ -623,7 +623,7 @@ class TestCompositeStateManager:
         mock_lock.__enter__ = Mock(return_value=mock_lock)
         mock_lock.__exit__ = Mock(return_value=None)
         
-        manager.update('ir_clouds', self.test_timestamp)
+        manager.update("ir_clouds", self.test_timestamp)
         
         self.mock_redis.hset.assert_called_once_with("composite_state", "ir_clouds", self.test_timestamp_str)
         mock_lock.__enter__.assert_called_once()
@@ -639,7 +639,7 @@ class TestCompositeStateManager:
         mock_lock.__enter__ = Mock(return_value=mock_lock)
         mock_lock.__exit__ = Mock(return_value=None)
         
-        manager.update('ir_clouds', None)
+        manager.update("ir_clouds", None)
         
         self.mock_redis.hset.assert_called_once_with("composite_state", "ir_clouds", "")
         mock_lock.__enter__.assert_called_once()

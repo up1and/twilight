@@ -83,7 +83,7 @@ class TestUploadToMinio:
             object_name=filename,
             data=buffer,
             length=buffer.getbuffer().nbytes,
-            content_type='image/png'
+            content_type="image/png"
         )
     
     def test_upload_video_to_minio(self):
@@ -99,7 +99,7 @@ class TestUploadToMinio:
             bucket_name='snapshot',
             object_name=filename,
             file_path=file_path,
-            content_type='video/mp4'
+            content_type="video/mp4"
         )
     
     def test_upload_create_bucket_if_not_exists(self):
@@ -111,7 +111,7 @@ class TestUploadToMinio:
         
         upload_to_minio(mock_client, buffer, filename)
         
-        mock_client.make_bucket.assert_called_once_with('snapshot')
+        mock_client.make_bucket.assert_called_once_with("snapshot")
     
     def test_upload_unknown_file_type(self):
         mock_client = Mock()
@@ -127,7 +127,7 @@ class TestUploadToMinio:
             object_name=filename,
             data=buffer,
             length=buffer.getbuffer().nbytes,
-            content_type='application/octet-stream'
+            content_type="application/octet-stream"
         )
     
     def test_upload_error_handling(self):

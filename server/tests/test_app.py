@@ -22,7 +22,7 @@ class TestCreateApp:
         mock_task_manager = Mock()
         mock_himawari_manager = Mock()
         mock_composite_state = Mock()
-        mock_composite_states = {'ir_clouds': None, 'true_color': None}
+        mock_composite_states = {"ir_clouds": None, "true_color": None}
         
         mock_task_manager_class.return_value = mock_task_manager
         mock_himawari_manager_class.return_value = mock_himawari_manager
@@ -32,23 +32,23 @@ class TestCreateApp:
         app = create_app()
         
         assert app is not None
-        assert app.config['AVAILABLE_COMPOSITES'] == [
-            'ir_clouds', 'true_color', 'ash', 'night_microphysics'
+        assert app.config["AVAILABLE_COMPOSITES"] == [
+            "ir_clouds", "true_color", "ash", "night_microphysics"
         ]
         
         # Verify extensions were initialized
         mock_init_extensions.assert_called_once_with(app)
         
         # Verify managers were created
-        assert hasattr(app, 'task_manager')
-        assert hasattr(app, 'himawari_raw_manager')
-        assert hasattr(app, 'composite_state')
+        assert hasattr(app, "task_manager")
+        assert hasattr(app, "himawari_raw_manager")
+        assert hasattr(app, "composite_state")
         
         # Verify managers were initialized correctly
         mock_task_manager_class.assert_called_once_with(mock_redis)
         mock_himawari_manager_class.assert_called_once_with(mock_redis, mock_task_manager)
         mock_initialize_state.assert_called_once_with(mock_client, [
-            'ir_clouds', 'true_color', 'ash', 'night_microphysics'
+            "ir_clouds", "true_color", "ash", "night_microphysics"
         ])
         mock_composite_state_class.assert_called_once_with(mock_redis, mock_composite_states)
     
@@ -102,15 +102,15 @@ class TestCreateApp:
         # Test error handler functionality by triggering it
         with app.test_client() as client:
             # Create a route that will raise an exception
-            @app.route('/test-error')
+            @app.route("/test-error")
             def test_error():
                 raise Exception("Test error")
             
-            response = client.get('/test-error')
+            response = client.get("/test-error")
             
             assert response.status_code == 500
             data = response.get_json()
-            assert data['error'] == 'Internal Server Error'
+            assert data["error"] == "Internal Server Error"
 
 
 class TestCorsHeaders:
@@ -141,7 +141,7 @@ class TestCacheHeaders:
         response = Response()
         
         # Test that the function can be called within request context
-        with app.test_request_context('/test'):
+        with app.test_request_context("/test"):
             result = add_cache_headers(response)
             assert result is response  # Should return the same response object
     
@@ -150,12 +150,12 @@ class TestCacheHeaders:
         from flask import Flask, Response
         
         app = Flask(__name__)
-        response = Response(mimetype='image/png')
+        response = Response(mimetype="image/png")
         
         # Mock tile endpoint
-        with app.test_request_context('/test'):
-            with patch('server.app.request') as mock_request:
-                mock_request.endpoint = 'main.tile'
+        with app.test_request_context("/test"):
+            with patch("server.app.request") as mock_request:
+                mock_request.endpoint = "main.tile"
                 result = add_cache_headers(response)
                 
                 assert 'Cache-Control' in result.headers
@@ -167,12 +167,12 @@ class TestCacheHeaders:
         from flask import Flask, Response
         
         app = Flask(__name__)
-        response = Response(mimetype='application/x-protobuf')
+        response = Response(mimetype="application/x-protobuf")
         
         # Mock natural earth tile endpoint
-        with app.test_request_context('/test'):
-            with patch('server.app.request') as mock_request:
-                mock_request.endpoint = 'main.vector_tile'
+        with app.test_request_context("/test"):
+            with patch("server.app.request") as mock_request:
+                mock_request.endpoint = "main.vector_tile"
                 result = add_cache_headers(response)
                 
                 assert 'Cache-Control' in result.headers
@@ -184,17 +184,17 @@ class TestCacheHeaders:
         from flask import Flask, Response
         
         app = Flask(__name__)
-        response = Response(mimetype='application/json')
+        response = Response(mimetype="application/json")
         
         # Mock tilejson endpoint
-        with app.test_request_context('/test'):
-            with patch('server.app.request') as mock_request:
-                mock_request.endpoint = 'main.tilejson'
+        with app.test_request_context("/test"):
+            with patch("server.app.request") as mock_request:
+                mock_request.endpoint = "main.tilejson"
                 result = add_cache_headers(response)
                 
-                assert 'Cache-Control' in result.headers
-                assert result.headers['Cache-Control'] == 'public, max-age=3600'
-                assert 'Expires' in result.headers
+                assert "Cache-Control" in result.headers
+                assert result.headers["Cache-Control"] == "public, max-age=3600"
+                assert "Expires" in result.headers
 
 
 class TestAppHelperFunctions:
@@ -228,14 +228,14 @@ class TestAppHelperFunctions:
             assert 'GET, POST, PUT, DELETE' in result.headers['Access-Control-Allow-Methods']
             assert 'Content-Type, Authorization' in result.headers['Access-Control-Allow-Headers']
     
-    @patch('server.app.register_blueprints')
-    @patch('server.app.initialize_composite_state')
-    @patch('server.app.CompositeStateManager')
-    @patch('server.app.HimawariRawManager')
-    @patch('server.app.TaskManager')
-    @patch('server.app.init_extensions')
-    @patch('server.app.redis_client')
-    @patch('server.app.client')
+    @patch("server.app.register_blueprints")
+    @patch("server.app.initialize_composite_state")
+    @patch("server.app.CompositeStateManager")
+    @patch("server.app.HimawariRawManager")
+    @patch("server.app.TaskManager")
+    @patch("server.app.init_extensions")
+    @patch("server.app.redis_client")
+    @patch("server.app.client")
     def test_register_blueprints_called(self, mock_client, mock_redis, mock_init_extensions,
                                        mock_task_manager_class, mock_himawari_manager_class,
                                        mock_composite_state_class, mock_initialize_state, mock_register_blueprints):
@@ -266,7 +266,7 @@ class TestBlueprintRegistration:
         
         with app.test_client() as client:
             # Test that API routes are accessible
-            response = client.get('/api/tasks')
+            response = client.get("/api/tasks")
             # Should not be 404 (route exists, even if it fails for other reasons)
             assert response.status_code != 404
     
@@ -275,5 +275,5 @@ class TestBlueprintRegistration:
         
         with app.test_client() as client:
             # Test that main routes are accessible
-            response = client.get('/')
+            response = client.get("/")
             assert response.status_code == 200

@@ -12,13 +12,13 @@ def generate_bbox_hash(bbox):
     bbox_str = f"{bbox[0]:.6f},{bbox[1]:.6f},{bbox[2]:.6f},{bbox[3]:.6f}"
     return hashlib.md5(bbox_str.encode()).hexdigest()[:8]
 
-def generate_filename(composite, timestamp, bbox, file_type='image', end_timestamp=None):
+def generate_filename(composite, timestamp, bbox, file_type="image", end_timestamp=None):
     """Generate filename for snapshot image or video with prefix"""
     bbox_hash = generate_bbox_hash(bbox)
-    time_str = timestamp.strftime('%Y%m%d_%H%M')
+    time_str = timestamp.strftime("%Y%m%d_%H%M")
 
-    if file_type == 'video' and end_timestamp:
-        end_str = end_timestamp.strftime('%Y%m%d_%H%M')
+    if file_type == "video" and end_timestamp:
+        end_str = end_timestamp.strftime("%Y%m%d_%H%M")
         return f"video/snapshot_{composite}_{time_str}_to_{end_str}_{bbox_hash}.mp4"
     else:
         return f"image/snapshot_{composite}_{time_str}_{bbox_hash}.png"
@@ -29,7 +29,7 @@ def create_snapshot_image(presigned_url, bbox):
     Returns BytesIO buffer with PNG image
     """
     import matplotlib
-    matplotlib.use('Agg')
+    matplotlib.use("Agg")
     import cartopy.crs as ccrs
     import matplotlib.pyplot as plt
 
@@ -54,33 +54,33 @@ def create_snapshot_image(presigned_url, bbox):
     ax.set_position([0, 0, 1, 1])
 
     # Disable axis and spines to prevent any border artifacts
-    ax.axis('off')
+    ax.axis("off")
     ax.set_frame_on(False)
 
     if data.shape[-1] == 1:
         ax.imshow(
             data[:, :, 0],
             extent=extent,
-            origin='upper',
-            cmap='RdGy',
+            origin="upper",
+            cmap="RdGy",
             transform=ccrs.PlateCarree()
         )
     else:
         ax.imshow(
             data,
             extent=extent,
-            origin='upper',
+            origin="upper",
             transform=ccrs.PlateCarree()
         )
 
     # Add coastlines using cartopy
-    ax.coastlines(resolution='10m', color='#828282', linewidth=1)
+    ax.coastlines(resolution="10m", color="#828282", linewidth=1)
     ax.set_extent([bounds[0], bounds[2], bounds[1], bounds[3]], crs=ccrs.PlateCarree())
 
     # Save to BytesIO buffer with exact dimensions
     buffer = BytesIO()
-    plt.savefig(buffer, format='png', dpi=dpi, pad_inches=0,
-               facecolor='none', edgecolor='none')
+    plt.savefig(buffer, format="png", dpi=dpi, pad_inches=0,
+               facecolor="none", edgecolor="none")
     plt.close()
     buffer.seek(0)
 
@@ -92,22 +92,22 @@ def upload_to_minio(client, data, filename):
     """
     try:
         # Ensure snapshot bucket exists
-        if not client.bucket_exists('snapshot'):
-            client.make_bucket('snapshot')
+        if not client.bucket_exists("snapshot"):
+            client.make_bucket("snapshot")
 
         # Determine content type based on file extension
-        if filename.endswith('.mp4'):
-            content_type = 'video/mp4'
-        elif filename.endswith('.png'):
-            content_type = 'image/png'
+        if filename.endswith(".mp4"):
+            content_type = "video/mp4"
+        elif filename.endswith(".png"):
+            content_type = "image/png"
         else:
-            content_type = 'application/octet-stream'
+            content_type = "application/octet-stream"
 
         # Upload based on data type
         if isinstance(data, str):
             # File path for video
             client.fput_object(
-                bucket_name='snapshot',
+                bucket_name="snapshot",
                 object_name=filename,
                 file_path=data,
                 content_type=content_type
@@ -115,7 +115,7 @@ def upload_to_minio(client, data, filename):
         else:
             # Buffer for image
             client.put_object(
-                bucket_name='snapshot',
+                bucket_name="snapshot",
                 object_name=filename,
                 data=data,
                 length=data.getbuffer().nbytes,
@@ -160,9 +160,9 @@ def find_composite_object(composite, timestamp):
     if timestamp is None:
         timestamp = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=30)
 
-    filename = 'himawari_{}_{}.tif'.format(composite, timestamp.strftime('%Y%m%d_%H%M'))
-    object_name = '{}/{}/{}'.format(
-        composite, timestamp.strftime('%Y/%m/%d'), filename
+    filename = "himawari_{}_{}.tif".format(composite, timestamp.strftime("%Y%m%d_%H%M"))
+    object_name = "{}/{}/{}".format(
+        composite, timestamp.strftime("%Y/%m/%d"), filename
     )
     return object_name
 
@@ -201,7 +201,7 @@ def create_video_from_images(image_buffers, fps=4):
         video_buffer = BytesIO()
 
         # Create video using imageio with in-memory buffer
-        with imageio.get_writer(video_buffer, format='mp4', fps=fps, codec='libx264', quality=8) as writer:
+        with imageio.get_writer(video_buffer, format="mp4", fps=fps, codec="libx264", quality=8) as writer:
             for image in images:
                 writer.append_data(image)
 
@@ -233,28 +233,28 @@ def create_single_snapshot(client, composite, timestamp, bbox, task_manager=None
         # Check if COG exists
         object_name = find_composite_object(composite, timestamp)
         try:
-            client.stat_object('himawari', object_name)
+            client.stat_object("himawari", object_name)
         except Exception:
             if task_manager:
                 # Create a low priority task for COG generation
-                task = task_manager.create_task(composite, timestamp, 'low')
+                task = task_manager.create_task(composite, timestamp, "low")
                 return {
-                    'status': 'pending',
-                    'message': 'COG file not found. Task created for processing.',
-                    'task_id': task.task_id
+                    "status": "pending",
+                    "message": "COG file not found. Task created for processing.",
+                    "task_id": task.task_id
                 }
             else:
                 return {
-                    'status': 'error',
-                    'message': f'COG file not found for {timestamp}'
+                    "status": "error",
+                    "message": f"COG file not found for {timestamp}"
                 }
 
         # Generate filename
-        filename = generate_filename(composite, timestamp, bbox, 'image')
+        filename = generate_filename(composite, timestamp, bbox, "image")
 
         # Get presigned URL for COG
         presigned_url = client.presigned_get_object(
-            bucket_name='himawari',
+            bucket_name="himawari",
             object_name=object_name,
             expires=datetime.timedelta(hours=24)
         )
@@ -266,16 +266,16 @@ def create_single_snapshot(client, composite, timestamp, bbox, task_manager=None
         upload_to_minio(client, image_buffer, filename)
 
         return {
-            'status': 'completed',
-            'object_name': filename,
-            'filename': os.path.basename(filename)
+            "status": "completed",
+            "object_name": filename,
+            "filename": os.path.basename(filename)
         }
 
     except Exception as e:
         print(f"Error creating snapshot: {str(e)}")
         return {
-            'status': 'error',
-            'message': f'Error creating snapshot: {str(e)}'
+            "status": "error",
+            "message": f"Error creating snapshot: {str(e)}"
         }
 
 
@@ -301,8 +301,8 @@ def create_series_snapshot(client, composite, start_time, end_time, bbox, task_m
 
         if not time_intervals:
             return {
-                'status': 'error',
-                'message': 'No valid time intervals found'
+                "status": "error",
+                "message": "No valid time intervals found"
             }
 
         print(f"Checking COGs for {len(time_intervals)} time intervals")
@@ -312,7 +312,7 @@ def create_series_snapshot(client, composite, start_time, end_time, bbox, task_m
         for timestamp in time_intervals:
             object_name = find_composite_object(composite, timestamp)
             try:
-                client.stat_object('himawari', object_name)
+                client.stat_object("himawari", object_name)
             except Exception:
                 missing_cogs.append(timestamp)
 
@@ -320,15 +320,15 @@ def create_series_snapshot(client, composite, start_time, end_time, bbox, task_m
             # Create tasks for missing COGs
             created_tasks = []
             for timestamp in missing_cogs:
-                task = task_manager.create_task(composite, timestamp, 'low')
+                task = task_manager.create_task(composite, timestamp, "low")
                 created_tasks.append(task.task_id)
 
             return {
-                'status': 'pending',
-                'message': f'Missing {len(missing_cogs)} files. Tasks created for processing.',
-                'missing_count': len(missing_cogs),
-                'total_count': len(time_intervals),
-                'task_ids': created_tasks
+                "status": "pending",
+                "message": f"Missing {len(missing_cogs)} files. Tasks created for processing.",
+                "missing_count": len(missing_cogs),
+                "total_count": len(time_intervals),
+                "task_ids": created_tasks
             }
 
         print(f"All COGs exist, generating video for {len(time_intervals)} time intervals")
@@ -338,61 +338,61 @@ def create_series_snapshot(client, composite, start_time, end_time, bbox, task_m
 
         for timestamp in time_intervals:
             result = create_single_snapshot(client, composite, timestamp, bbox)
-            if result['status'] == 'completed':
+            if result["status"] == "completed":
                 # Get the image from MinIO using object_name
                 try:
-                    response = client.get_object('snapshot', result['object_name'])
+                    response = client.get_object("snapshot", result["object_name"])
                     image_buffer = BytesIO(response.read())
                     image_buffers.append(image_buffer)
                 except Exception as e:
                     return {
-                        'status': 'error',
-                        'message': f'Failed to get image for {timestamp}: {str(e)}'
+                        "status": "error",
+                        "message": f"Failed to get image for {timestamp}: {str(e)}"
                     }
             else:
                 return {
-                    'status': 'error',
-                    'message': f'Failed to create snapshot for {timestamp}: {result.get("message", "Unknown error")}'
+                    "status": "error",
+                    "message": f"Failed to create snapshot for {timestamp}: {result.get('message', 'Unknown error')}"
                 }
 
         print(f"Successfully generated {len(image_buffers)} images")
 
         # Generate video filename
-        filename = generate_filename(composite, start_time, bbox, 'video', end_time)
+        filename = generate_filename(composite, start_time, bbox, "video", end_time)
 
         # Create video in memory (250ms per frame = 4 fps)
         video_buffer = create_video_from_images(image_buffers, fps=4)
 
         if not video_buffer:
             return {
-                'status': 'error',
-                'message': 'Failed to create video with imageio'
+                "status": "error",
+                "message": "Failed to create video with imageio"
             }
 
         # Upload video to MinIO
         upload_to_minio(client, video_buffer, filename)
 
         return {
-            'status': 'completed',
-            'object_name': filename,
-            'filename': os.path.basename(filename),
-            'frame_count': len(image_buffers),
-            'time_range': {
-                'start': start_time.isoformat(),
-                'end': end_time.isoformat()
+            "status": "completed",
+            "object_name": filename,
+            "filename": os.path.basename(filename),
+            "frame_count": len(image_buffers),
+            "time_range": {
+                "start": start_time.isoformat(),
+                "end": end_time.isoformat()
             }
         }
 
     except Exception as e:
         print(f"Error creating series snapshot: {str(e)}")
         return {
-            'status': 'error',
-            'message': f'Error creating video: {str(e)}'
+            "status": "error",
+            "message": f"Error creating video: {str(e)}"
         }
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # values = calculate_image_dimensions([100, 20, 140, 50], 7)
-    url = 'http://127.0.0.1:9000/himawari/true_color/2025/05/24/himawari_true_color_20250524_0340.tif?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20250528%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250528T071643Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host&X-Amz-Signature=e2a0394f9c5b3cf20d48598cbe4d46571b803db296ca1f9d5567cdc2e2f7d177'
+    url = "http://127.0.0.1:9000/himawari/true_color/2025/05/24/himawari_true_color_20250524_0340.tif?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=minioadmin%2F20250528%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250528T071643Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host&X-Amz-Signature=e2a0394f9c5b3cf20d48598cbe4d46571b803db296ca1f9d5567cdc2e2f7d177"
     bbox = [119.28955078125001, 13.678013256725489, 123.83789062500001, 20.2725032501349]
     create_snapshot_image(url, bbox)

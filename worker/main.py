@@ -17,7 +17,7 @@ def check_files(target_time):
     """Check files are available for the given time"""
     try:
         fs = s3fs.S3FileSystem(anon=True)
-        s3_path = 'noaa-himawari9/AHI-L1b-FLDK/{}'.format(target_time.strftime('%Y/%m/%d/%H%M'))
+        s3_path = "noaa-himawari9/AHI-L1b-FLDK/{}".format(target_time.strftime("%Y/%m/%d/%H%M"))
         files = fs.ls(s3_path)
         return files
 
@@ -34,7 +34,7 @@ def resolve_data_source(server_url, timestamp):
         timestamp: Target datetime
         
     Returns:
-        string: data_source ('local', 'remote' or 'pending')
+        string: data_source ("local", "remote" or "pending")
     """
     try:
         response = requests.get(
@@ -44,26 +44,26 @@ def resolve_data_source(server_url, timestamp):
         
         if response.status_code == 200:
             data = response.json()
-            status = data.get('status', 'pending')
+            status = data.get("status", "pending")
             
-            if status == 'completed':
+            if status == "completed":
                 # Raw data is complete, use local MinIO
-                return 'local'
-            elif status == 'running':
+                return "local"
+            elif status == "running":
                 # Raw data is still syncing, wait
-                return 'pending'
-            else:  # status == 'pending' or other
+                return "pending"
+            else:  # status == "pending" or other
                 # Raw data not available, use NOAA remote
-                return 'remote'
+                return "remote"
         else:
             logger.warning(f"Failed to check raw data status: {response.status_code} {response.text}")
             # Default to remote on error
-            return 'remote'
+            return "remote"
             
     except Exception as e:
         logger.error(f"Error checking raw data status: {e}")
         # Default to remote on error
-        return 'remote'
+        return "remote"
 
 def run_task_generator(server_url, shutdown_event=None):
     """
@@ -104,15 +104,15 @@ def run_task_generator(server_url, shutdown_event=None):
                         response = requests.post(
                             f"{server_url}/api/tasks",
                             json={
-                                'composite': composite_name,
-                                'timestamp': current_target_time.isoformat(),
-                                'priority': 'normal'
+                                "composite": composite_name,
+                                "timestamp": current_target_time.isoformat(),
+                                "priority": "normal"
                             },
                             timeout=10
                         )
                         if response.status_code == 201:
                             task_data = response.json()
-                            task_id = task_data['task_id']
+                            task_id = task_data["task_id"]
                             logger.info(f"Created task {task_id} for {composite_name} at {current_target_time.strftime('%Y-%m-%d %H:%M')} UTC")
                         else:
                             logger.error(f"Failed to create task for {composite_name}: {response.status_code} {response.text}")
@@ -171,7 +171,7 @@ def run_himawari_sync(shutdown_event=None):
         try:
             # Try to sync current target time
             sync_status = sync_processor.sync(current_target_time)
-            if sync_status == 'completed':
+            if sync_status == "completed":
                 # Successfully synced files, move to next 10-minute interval
                 current_target_time, target_start_time = move_to_next(current_target_time)
                 logger.info(f"Sync completed, moving to next time: {current_target_time.strftime('%Y-%m-%d %H:%M')} UTC")
@@ -181,7 +181,7 @@ def run_himawari_sync(shutdown_event=None):
                 elapsed_time = current_time - target_start_time
                 if elapsed_time > datetime.timedelta(minutes=timeout_minutes):
                     logger.warning(f"Target time {current_target_time.strftime('%Y-%m-%d %H:%M')} exceeded {timeout_minutes}-minute limit, moving to next")
-                    sync_client.update_sync(current_target_time, status='failed')
+                    sync_client.update_sync(current_target_time, status="failed")
                     current_target_time, target_start_time = move_to_next(current_target_time)
                 else:
                     # Still within time limit, wait and retry
@@ -225,18 +225,18 @@ def run_task_manager(server_url, worker_id=None, poll_interval=10, shutdown_even
             
             # Peek at next task with filtering
             task_data = task_client.peek_next_task(
-                priorities=processing_profile.get('priorities', []),
-                composites=processing_profile.get('composites', [])
+                priorities=processing_profile.get("priorities", []),
+                composites=processing_profile.get("composites", [])
             )
 
             if task_data:
-                task_id = task_data['task_id']
-                timestamp = task_data['timestamp']
+                task_id = task_data["task_id"]
+                timestamp = task_data["timestamp"]
                 
                 # Check raw data status to determine data source
                 source = resolve_data_source(server_url, timestamp)
                 
-                if source != 'pending':
+                if source != "pending":
                     # Claim the task before processing
                     claimed_task = task_client.claim_task(task_id)
                     if claimed_task:
@@ -265,14 +265,14 @@ def run_task_manager(server_url, worker_id=None, poll_interval=10, shutdown_even
 
 def main():
     """Main entry point"""
-    parser = argparse.ArgumentParser(description='Himawari satellite data processing')
-    parser.add_argument('--task', action='store_true',
-                        help='Enable task generator that monitors data availability and creates tasks')
-    parser.add_argument('--sync', action='store_true',
-                        help='Enable Himawari data synchronization from NOAA S3')
-    parser.add_argument('--worker', action='store_true',
-                        help='Enable composite worker that processes tasks from the queue')
-    parser.add_argument('--worker-id', help='Worker ID (auto-generated if not provided)')
+    parser = argparse.ArgumentParser(description="Himawari satellite data processing")
+    parser.add_argument("--task", action="store_true",
+                        help="Enable task generator that monitors data availability and creates tasks")
+    parser.add_argument("--sync", action="store_true",
+                        help="Enable Himawari data synchronization from NOAA S3")
+    parser.add_argument("--worker", action="store_true",
+                        help="Enable composite worker that processes tasks from the queue")
+    parser.add_argument("--worker-id", help="Worker ID (auto-generated if not provided)")
 
     args = parser.parse_args()
 
@@ -287,15 +287,15 @@ def main():
     should_run_worker = args.worker or (not args.task and not args.sync)
 
     if args.task:
-        t = threading.Thread(target=run_task_generator, args=(server_url,), kwargs={'shutdown_event': shared_event})
+        t = threading.Thread(target=run_task_generator, args=(server_url,), kwargs={"shutdown_event": shared_event})
         threads.append(t)
 
     if args.sync:
-        t = threading.Thread(target=run_himawari_sync, kwargs={'shutdown_event': shared_event})
+        t = threading.Thread(target=run_himawari_sync, kwargs={"shutdown_event": shared_event})
         threads.append(t)
 
     if should_run_worker:
-        t = threading.Thread(target=run_task_manager, args=(server_url, worker_id,), kwargs={'shutdown_event': shared_event})
+        t = threading.Thread(target=run_task_manager, args=(server_url, worker_id,), kwargs={"shutdown_event": shared_event})
         threads.append(t)
 
     for t in threads:
@@ -310,5 +310,5 @@ def main():
             t.join(timeout=3)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -16,7 +16,7 @@ from utils import parse_iso_timestamp, upper_case, extract_composite_from_object
 from snapshot import find_composite_object
 
 # Create blueprint
-main = Blueprint('main', __name__)
+main = Blueprint("main", __name__)
 
 
 def find_tile(composite, z, x, y, timestamp=None):
@@ -42,8 +42,8 @@ def find_tile(composite, z, x, y, timestamp=None):
 
         with Reader(presigned_url) as cog:
             img = cog.tile(x, y, z, tilesize=256)
-            if composite == 'ir_clouds':
-                cm = cmap.get('rdgy')
+            if composite == "ir_clouds":
+                cm = cmap.get("rdgy")
                 content = img.render(colormap=cm)
             else:
                 content = img.render()
@@ -87,7 +87,7 @@ def tile(composite, timestamp, z, x, y):
         return jsonify(error_msg), 400
 
 
-@main.route('/<composite>.tilejson')
+@main.route("/<composite>.tilejson")
 @cache.cached(timeout=3600)  # Cache for 1 hour
 def tilejson(composite):
     if composite not in current_app.config['AVAILABLE_COMPOSITES']:
@@ -131,7 +131,7 @@ def tilejson(composite):
         return jsonify(error_msg), 500
 
 
-@main.route('/<map_type>/<int:z>/<int:x>/<int:y>.pbf')
+@main.route("/<map_type>/<int:z>/<int:x>/<int:y>.pbf")
 @cache.cached(timeout=43200)  # Cache for 12 hours
 def vector_tile(map_type,z, x, y):
     """
@@ -139,38 +139,38 @@ def vector_tile(map_type,z, x, y):
     """
     # Map type to filename mapping
     file_mapping = {
-        'lands': 'natural_earth.mbtiles',
-        'firs': 'firs.mbtiles'
+        "lands": "natural_earth.mbtiles",
+        "firs": "firs.mbtiles"
     }
 
     # Validate map type
     if map_type not in file_mapping:
         return jsonify({
-            'error': 'Bad Request',
-            'message': 'Invalid map type. Must be either "lands" or "firs"'
+            "error": "Bad Request",
+            "message": "Invalid map type. Must be either \"lands\" or \"firs\""
         }), 400
 
     # Validate tile coordinates
     if not (0 <= z <= 18):
         return jsonify({
-            'error': 'Bad Request',
-            'message': 'Invalid zoom level. Must be between 0 and 18'
+            "error": "Bad Request",
+            "message": "Invalid zoom level. Must be between 0 and 18"
         }), 400
 
     max_coord = 2 ** z
     if not (0 <= x < max_coord) or not (0 <= y < max_coord):
         return jsonify({
-            'error': 'Bad Request',
-            'message': f'Invalid tile coordinates for zoom level {z}'
+            "error": "Bad Request",
+            "message": f"Invalid tile coordinates for zoom level {z}"
         }), 400
     
     filename = file_mapping[map_type]
-    mbtiles_path = os.path.join(os.path.dirname(__file__), '..', 'data', filename)
+    mbtiles_path = os.path.join(os.path.dirname(__file__), "..", "data", filename)
 
     if not os.path.exists(mbtiles_path):
         return jsonify({
-            'error': 'Not Found',
-            'message': 'mbtiles file not found'
+            "error": "Not Found",
+            "message": "mbtiles file not found"
         }), 404
 
     conn = sqlite3.connect(mbtiles_path)
@@ -189,15 +189,15 @@ def vector_tile(map_type,z, x, y):
     conn.close()
 
     if result:
-        response = Response(result[0], mimetype='application/x-protobuf')
-        response.headers['Access-Control-Allow-Origin'] = '*'
-        response.headers['Content-Encoding'] = 'gzip'
+        response = Response(result[0], mimetype="application/x-protobuf")
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Content-Encoding"] = "gzip"
         return response
     else:
-        return Response('', status=204)  # No content
+        return Response("", status=204)  # No content
 
 
-@main.route('/')
+@main.route("/")
 def index():
     """
     Provide basic server information and instructions for use
@@ -205,7 +205,7 @@ def index():
     info = {
         "status": "running",
         "description": "Himawari Tile Server",
-        "available_composites": current_app.config['AVAILABLE_COMPOSITES'],
+        "available_composites": current_app.config["AVAILABLE_COMPOSITES"],
         "usage": {
             "tiles": {
                 "standard": "/{composite}/tiles/{time}/{z}/{x}/{y}.png (ISO 8601 time format)"
@@ -222,7 +222,7 @@ def index():
     return jsonify(info)
 
 
-@main.route('/composites/latest', methods=['GET'])
+@main.route("/composites/latest", methods=["GET"])
 def latest_composite_state():
     """
     Get the latest update time for all composites
@@ -230,25 +230,25 @@ def latest_composite_state():
     return jsonify(current_app.composite_state.get())
 
 
-@main.route('/snapshots/<path:object_name>')
+@main.route("/snapshots/<path:object_name>")
 def serve_snapshot(object_name):
     """Get snapshot file from MinIO by object name"""
     # Get object from MinIO snapshot bucket
-    response = client.get_object('snapshot', object_name)
+    response = client.get_object("snapshot", object_name)
     
     # Determine content type based on file extension
-    if object_name.endswith('.mp4'):
-        content_type = 'video/mp4'
-    elif object_name.endswith('.png'):
-        content_type = 'image/png'
+    if object_name.endswith(".mp4"):
+        content_type = "video/mp4"
+    elif object_name.endswith(".png"):
+        content_type = "image/png"
     else:
-        content_type = 'application/octet-stream'
+        content_type = "application/octet-stream"
     
     # Return file data as response
     return Response(
         response.read(),
         mimetype=content_type,
         headers={
-            'Content-Disposition': f'inline; filename="{os.path.basename(object_name)}"'
+            "Content-Disposition": f"inline; filename=\"{os.path.basename(object_name)}\""
         }
     )

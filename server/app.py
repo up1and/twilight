@@ -12,29 +12,29 @@ from utils import default_json_handler, initialize_composite_state
 
 
 available_composites = [
-    'ir_clouds', 'true_color', 'ash', 'night_microphysics'
+    "ir_clouds", "true_color", "ash", "night_microphysics"
 ]
 
 def add_cors_headers(response):
     """Add CORS headers and cache control"""
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
 
 def add_cache_headers(response):
     # Add HTTP cache headers for tile and tilejson responses
-    if request.endpoint == 'main.tile' and response.mimetype == 'image/png' or \
-        request.endpoint == 'main.vector_tile' and response.mimetype == 'application/x-protobuf':
+    if request.endpoint == "main.tile" and response.mimetype == "image/png" or \
+        request.endpoint == "main.vector_tile" and response.mimetype == "application/x-protobuf":
         # Cache pbf tiles for 12 hours (43200 seconds)
-        response.headers['Cache-Control'] = 'public, max-age=43200'
-        response.headers['Expires'] = (datetime.datetime.now(datetime.timezone.utc) +
-                                        datetime.timedelta(hours=12)).strftime('%a, %d %b %Y %H:%M:%S GMT')
-    elif request.endpoint == 'main.tilejson' and response.mimetype == 'application/json':
+        response.headers["Cache-Control"] = "public, max-age=43200"
+        response.headers["Expires"] = (datetime.datetime.now(datetime.timezone.utc) +
+                                        datetime.timedelta(hours=12)).strftime("%a, %d %b %Y %H:%M:%S GMT")
+    elif request.endpoint == "main.tilejson" and response.mimetype == "application/json":
         # Cache tilejson for 1 hour (3600 seconds)
-        response.headers['Cache-Control'] = 'public, max-age=3600'
-        response.headers['Expires'] = (datetime.datetime.now(datetime.timezone.utc) +
-                                        datetime.timedelta(hours=1)).strftime('%a, %d %b %Y %H:%M:%S GMT')
+        response.headers["Cache-Control"] = "public, max-age=3600"
+        response.headers["Expires"] = (datetime.datetime.now(datetime.timezone.utc) +
+                                        datetime.timedelta(hours=1)).strftime("%a, %d %b %Y %H:%M:%S GMT")
 
     return response
 
@@ -48,7 +48,7 @@ def create_app():
     """Create and configure Flask application"""
     # Create Flask app
     app = Flask(__name__)
-    app.config['AVAILABLE_COMPOSITES'] = available_composites
+    app.config["AVAILABLE_COMPOSITES"] = available_composites
 
     # Initialize extensions
     init_extensions(app)
@@ -74,14 +74,14 @@ def create_app():
         """Handle 500 Internal Server Error"""
         app.logger.error(f"Internal Server Error: {error}", exc_info=True)
         return jsonify({
-            'error': 'Internal Server Error',
-            'message': 'An unexpected error occurred. Please try again later.'
+            "error": "Internal Server Error",
+            "message": "An unexpected error occurred. Please try again later."
         }), 500
     
     if not app.debug:
         handler = logging.StreamHandler()
         handler.setFormatter(logging.Formatter(
-            '[%(asctime)s] %(module)s - %(levelname)s: %(message)s'))
+            "[%(asctime)s] %(module)s - %(levelname)s: %(message)s"))
         app.logger.addHandler(handler)
         app.logger.setLevel(logging.INFO)
 
@@ -89,5 +89,5 @@ def create_app():
 
 app = create_app()
 
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+if __name__ == "__main__":
+    app.run(debug=True, host="0.0.0.0", port=5000)
