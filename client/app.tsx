@@ -18,6 +18,7 @@ import {
   fetchLatestComposites,
   fetchTileJSON,
 } from "./utils/api-client";
+import { roundToNearestTenMinutes } from "./utils/time-utils";
 
 import type { CompositeType, MapConfig } from "./utils/types";
 
@@ -211,8 +212,12 @@ export default function MapView() {
     }
   );
 
-  const [selectedTime, setSelectedTime] = useState<dayjs.Dayjs>(dayjs());
-  const [timelineTime, setTimelineTime] = useState<dayjs.Dayjs>(dayjs());
+  const [selectedTime, setSelectedTime] = useState<dayjs.Dayjs>(
+    roundToNearestTenMinutes(dayjs().utc())
+  );
+  const [timelineTime, setTimelineTime] = useState<dayjs.Dayjs>(
+    roundToNearestTenMinutes(dayjs().utc())
+  );
   const [viewportBounds, setViewportBounds] = useState<
     [number, number, number, number] | null
   >(null);

@@ -2,6 +2,7 @@ import type React from "react";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import dayjs from "dayjs";
 import { useIsMobile } from "../hooks/use-mobile";
+import { roundToNearestTenMinutes } from "../utils/time-utils";
 import "./time-range-selector.css";
 
 // Format time as HH:MM
@@ -24,11 +25,6 @@ const formatDateTimeInput = (date: dayjs.Dayjs): string => {
   return date.format("YYYY-MM-DDTHH:mm");
 };
 
-// Parse datetime-local input value
-const parseDateTimeInput = (value: string): dayjs.Dayjs => {
-  return dayjs(value);
-};
-
 interface TimeRangeSelectorProps {
   selectedTime: dayjs.Dayjs;
   onSelectedTimeChange?: (time: dayjs.Dayjs) => void;
@@ -40,18 +36,8 @@ export default function TimeRangeSelector({
   onSelectedTimeChange,
   onTimeRangeChange,
 }: TimeRangeSelectorProps) {
-  // Initialize time, ensuring minutes are rounded to the nearest 10
-  const roundToNearestTenMinutes = (
-    date: dayjs.Dayjs | Date | string
-  ): dayjs.Dayjs => {
-    const dayjsDate = dayjs(date);
-    const minutes = dayjsDate.minute();
-    const roundedMinutes = Math.round(minutes / 10) * 10;
-    return dayjsDate.minute(roundedMinutes).second(0).millisecond(0);
-  };
-
   const [timelineTime, setTimelineTime] = useState<dayjs.Dayjs>(
-    roundToNearestTenMinutes(dayjs().utc())
+    roundToNearestTenMinutes(selectedTime || dayjs().utc())
   );
   const [lookbackHours, setLookbackHours] = useState<number>(6); // Default to 6 hours lookback
   const [isDraggingMarker, setIsDraggingMarker] = useState<boolean>(false);
@@ -533,19 +519,16 @@ export default function TimeRangeSelector({
   };
 
   // Handle end time change
-  const handleEndTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newEndTime = parseDateTimeInput(e.target.value);
+  const handleTimelineChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const currentTime = dayjs().utc();
+    const newTime = dayjs(e.target.value);
+
     // Prevent selecting future dates
-    const currentRealTime = dayjs().utc();
-    let updatedEndTime;
+    const roundedTime = roundToNearestTenMinutes(
+      newTime.isAfter(currentTime) ? currentTime : newTime
+    );
 
-    if (newEndTime.isAfter(currentRealTime)) {
-      updatedEndTime = roundToNearestTenMinutes(currentRealTime);
-    } else {
-      updatedEndTime = roundToNearestTenMinutes(newEndTime);
-    }
-
-    setTimelineTime(updatedEndTime);
+    onSelectedTimeChange?.(roundedTime);
   };
 
   // Add an effect to handle changes to selectedTime prop
@@ -557,21 +540,7 @@ export default function TimeRangeSelector({
       const endTime = getEndTime();
 
       if (selectedTime.isBefore(startTime) || selectedTime.isAfter(endTime)) {
-        // Calculate the earliest time that would include selectedTime in the timeline
-        const currentRealTime = dayjs().utc();
-        const earliestTime = currentRealTime.subtract(lookbackHours, "hour");
-
-        if (earliestTime.isAfter(selectedTime)) {
-          // selectedTime is too old, we need to extend the timeline to include it
-          const newtimelineTime = roundToNearestTenMinutes(
-            selectedTime.add(lookbackHours, "hour")
-          );
-          setTimelineTime(newtimelineTime);
-        } else {
-          // selectedTime can be included in current timeline, use current real time as end
-          const newtimelineTime = roundToNearestTenMinutes(currentRealTime);
-          setTimelineTime(newtimelineTime);
-        }
+        setTimelineTime(selectedTime);
       }
     }
   }, [selectedTime, lookbackHours, timelineTime]);
@@ -650,7 +619,7 @@ export default function TimeRangeSelector({
             <input
               type="datetime-local"
               value={formatDateTimeInput(timelineTime)}
-              onChange={handleEndTimeChange}
+              onChange={handleTimelineChange}
               max={formatDateTimeInput(dayjs().utc())}
             />
           </div>
