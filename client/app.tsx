@@ -554,6 +554,7 @@ export default function MapView() {
         <div className={`time-selector-container ${isMobile ? "mobile" : ""}`}>
           <TimeRangeSelector
             selectedTime={selectedTime}
+            latestCompositeTime={latestCompositeTime}
             onSelectedTimeChange={handleTimeChange}
             onTimeRangeChange={handleTimeRangeChange}
           />

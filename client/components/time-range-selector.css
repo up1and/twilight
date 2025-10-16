@@ -131,6 +131,10 @@
   width: 0; /* Zero width as we're just positioning a point */
 }
 
+.time-interval.after-latest {
+  opacity: 0.5;
+}
+
 .tick-container {
   position: absolute;
   top: 0;

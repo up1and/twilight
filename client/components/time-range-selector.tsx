@@ -27,12 +27,14 @@ const formatDateTimeInput = (date: dayjs.Dayjs): string => {
 
 interface TimeRangeSelectorProps {
   selectedTime: dayjs.Dayjs;
+  latestCompositeTime?: dayjs.Dayjs;
   onSelectedTimeChange?: (time: dayjs.Dayjs) => void;
   onTimeRangeChange?: (startTime: dayjs.Dayjs, endTime: dayjs.Dayjs) => void;
 }
 
 export default function TimeRangeSelector({
   selectedTime,
+  latestCompositeTime,
   onSelectedTimeChange,
   onTimeRangeChange,
 }: TimeRangeSelectorProps) {
@@ -80,6 +82,11 @@ export default function TimeRangeSelector({
       // Don't go beyond the end time
       if (time.isAfter(endTime)) break;
 
+      // Check if it is after the latest composite time
+      const isAfterLatest = latestCompositeTime
+        ? time.isAfter(latestCompositeTime)
+        : false;
+
       // Check if this is midnight (start of a new day)
       const isMidnight = time.hour() === 0 && time.minute() === 0;
 
@@ -88,8 +95,8 @@ export default function TimeRangeSelector({
         label: formatTime(time), // Always show time at the bottom
         dateLabel: isMidnight ? formatDate(time) : null, // Show date at the top for midnight
         isHour: time.minute() === 0,
-        isHalfHour: time.minute() === 30,
         isMidnight: isMidnight,
+        isAfterLatest: isAfterLatest,
       });
     }
 
@@ -645,7 +652,9 @@ export default function TimeRangeSelector({
             return (
               <div
                 key={index}
-                className="time-interval"
+                className={`time-interval ${
+                  interval.isAfterLatest ? "after-latest" : ""
+                }`}
                 style={{
                   left: `${position}%`,
                 }}
