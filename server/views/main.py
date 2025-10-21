@@ -50,7 +50,8 @@ def find_tile(composite, z, x, y, timestamp=None):
 
         with Reader(presigned_url) as cog:
             img = cog.tile(x, y, z, tilesize=256)
-            if composite == "ir_clouds":
+            band_count = img.data.shape[0]
+            if band_count == 1:
                 cm = cmap.get("rdgy")
                 content = img.render(colormap=cm)
             else:
