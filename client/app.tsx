@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { MapContainer, TileLayer, useMapEvents, useMap } from "react-leaflet";
+import { MapContainer, useMapEvents, useMap } from "react-leaflet";
 import type L from "leaflet";
 import { CRS } from "leaflet";
 import "leaflet.vectorgrid";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 
+import TimeDimensionLayer from "./components/time-dimension-layer";
 import TimeRangeSelector from "./components/time-range-selector";
 import SettingsButton from "./components/settings-button";
 import MultiSelectComposite from "./components/multi-select-composite";
@@ -27,13 +28,6 @@ import "./app.css";
 
 // Extend dayjs with UTC plugin
 dayjs.extend(utc);
-
-// Generate tile URL with time parameter
-const generateTileUrl = (baseUrl: string, time: dayjs.Dayjs): string => {
-  // Replace {time} placeholder with actual ISO 8601 time in UTC
-  const timeStr = time.utc().format("YYYY-MM-DDTHH:mm:ss");
-  return baseUrl.replace("{time}", timeStr);
-};
 
 // VectorGrid Layer component with overzooming support
 function VectorGridLayer({
@@ -360,14 +354,9 @@ export default function MapView() {
     }
   };
 
-  // Get tile URL based on composite type
-  const tileUrl = (composite: CompositeType): string => {
-    // First check if we have a mapConfig for this composite
-    if (mapConfigs[composite]) {
-      return generateTileUrl(mapConfigs[composite].tileUrl, selectedTime);
-    }
-    return "";
-  };
+  // Get tile URL template based on composite type
+  const tileUrlTemplate = (composite: CompositeType): string =>
+    mapConfigs[composite]?.tileUrl ?? "";
 
   // Handle composite selection change
   const handleCompositeChange = (selected: CompositeType[]) => {
@@ -378,7 +367,6 @@ export default function MapView() {
     setSelectedComposites(selected);
     // Save selected composites to local storage
     localStorage.setItem("selected-composites", JSON.stringify(selected));
-    console.log(tileUrl(selectedComposites[0]));
   };
 
   // Fetch latest composites on component mount and every minute
@@ -462,21 +450,23 @@ export default function MapView() {
           <MapBoundsUpdater bounds={compositeBounds} />
 
           {/* First Layer */}
-          <TileLayer
-            url={tileUrl(selectedComposites[0])}
+          <TimeDimensionLayer
+            currentTime={selectedTime}
+            timelineTime={timelineTime}
+            urlTemplate={tileUrlTemplate(selectedComposites[0])}
             ref={leftLayerRef}
-            key={`${selectedComposites[0]}-${selectedTime.format()}`}
-            noWrap={true}
+            key={`layer-${selectedComposites[0]}`}
             bounds={compositeBounds || undefined}
           />
 
           {/* Second Layer (only if two composites are selected) */}
           {selectedComposites.length > 1 && (
-            <TileLayer
-              url={tileUrl(selectedComposites[1])}
+            <TimeDimensionLayer
+              currentTime={selectedTime}
+              timelineTime={timelineTime}
+              urlTemplate={tileUrlTemplate(selectedComposites[1])}
               ref={rightLayerRef}
-              key={`${selectedComposites[1]}-${selectedTime.format()}`}
-              noWrap={true}
+              key={`layer-${selectedComposites[1]}`}
               bounds={compositeBounds || undefined}
             />
           )}
