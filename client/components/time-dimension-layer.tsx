@@ -8,6 +8,74 @@ const generateTileUrl = (baseUrl: string, time: dayjs.Dayjs): string => {
   return baseUrl.replace("{time}", timeStr);
 };
 
+class TimeLayerCache {
+  private cache: Map<number, L.TileLayer> = new Map();
+  private map: L.Map;
+  private cacheRangeMinutes: number;
+
+  constructor(map: L.Map, cacheRangeMinutes: number = 60) {
+    this.map = map;
+    this.cacheRangeMinutes = cacheRangeMinutes;
+  }
+
+  has(timestamp: number): boolean {
+    return this.cache.has(timestamp);
+  }
+
+  get(timestamp: number): L.TileLayer | undefined {
+    return this.cache.get(timestamp);
+  }
+
+  set(timestamp: number, layer: L.TileLayer): void {
+    // Add new layer to cache
+    this.cache.set(timestamp, layer);
+    // Clean up if cache is too large
+    this.cleanup(timestamp);
+  }
+
+  delete(timestamp: number): boolean {
+    const layer = this.cache.get(timestamp);
+    if (layer && this.map.hasLayer(layer)) {
+      this.map.removeLayer(layer);
+    }
+    return this.cache.delete(timestamp);
+  }
+
+  // Clean up layers outside the time window
+  private cleanup(baseTimestamp: number): void {
+    // Calculate max cache size based on time range
+    const maxSize = Math.floor(this.cacheRangeMinutes / 10) * 2 + 1;
+
+    // Only clean up if cache exceeds max size
+    if (this.cache.size <= maxSize) return;
+
+    const milliseconds = this.cacheRangeMinutes * 60000;
+    const minTime = baseTimestamp - milliseconds;
+    const maxTime = baseTimestamp + milliseconds;
+
+    // Remove layers outside time window
+    this.cache.forEach((_, timestamp) => {
+      if (timestamp < minTime || timestamp > maxTime) {
+        this.delete(timestamp);
+      }
+    });
+  }
+
+  // Clear cache with option to keep specific layer
+  clear(keepLayer: L.TileLayer | null = null): void {
+    this.cache.forEach((layer, timestamp) => {
+      if (layer !== keepLayer) {
+        this.delete(timestamp);
+      }
+    });
+  }
+
+  // Get cache size
+  size(): number {
+    return this.cache.size;
+  }
+}
+
 interface TimeDimensionLayerProps {
   urlTemplate: string;
   currentTime: dayjs.Dayjs;
@@ -23,7 +91,7 @@ const TimeDimensionLayer = forwardRef<
   const map = useMap();
 
   // Cache system using Map<timestamp, TileLayer>
-  const layerCache = useRef<Map<number, L.TileLayer>>(new Map());
+  const layerCache = useRef(new TimeLayerCache(map, 60));
   const currentLayerRef = useRef<L.TileLayer | null>(null);
 
   // Update ref helper
@@ -77,30 +145,26 @@ const TimeDimensionLayer = forwardRef<
     targetLayer.setZIndex(zIndex);
     currentLayerRef.current = targetLayer;
     updateRef(targetLayer);
-
-    // Cleanup if cache is too large
-    if (layerCache.current.size > 36) {
-      const oldestLayer = layerCache.current.keys().next();
-      if (!oldestLayer.done) {
-        layerCache.current.delete(oldestLayer.value);
-      }
-    }
   };
 
-  // Preload only next time layer (current + 10 minutes)
-  const preloadNextLayer = (currentTime: dayjs.Dayjs) => {
-    const nextTime = currentTime.add(10, "minute");
-    if (timelineTime && nextTime.isAfter(timelineTime)) {
-      return;
-    }
+  // Preload adjacent time layer (current +/- 10 minutes)
+  const preloadAdjacentLayer = (currentTime: dayjs.Dayjs) => {
+    const timesToPreload = [
+      currentTime.add(10, "minute"),
+      currentTime.subtract(10, "minute"),
+    ];
 
-    const timestamp = nextTime.valueOf();
-    if (!layerCache.current.has(timestamp)) {
-      const layer = createTileLayer(nextTime);
-      layer.addTo(map);
-      layer.setOpacity(0);
-      layerCache.current.set(timestamp, layer);
-    }
+    timesToPreload.forEach((time) => {
+      if (timelineTime && time.isAfter(timelineTime)) return;
+
+      const timestamp = time.valueOf();
+      if (!layerCache.current.has(timestamp)) {
+        const layer = createTileLayer(time);
+        layer.addTo(map);
+        layer.setOpacity(0);
+        layerCache.current.set(timestamp, layer);
+      }
+    });
   };
 
   // Main effect - handles time changes
@@ -122,39 +186,32 @@ const TimeDimensionLayer = forwardRef<
       switchToTime(currentTime);
     }
 
-    // Preload next layer
-    preloadNextLayer(currentTime);
+    // Preload adjacent layer
+    preloadAdjacentLayer(currentTime);
   }, [currentTime, urlTemplate, map, zIndex, updateRef]);
 
-  // Handle zoom changes
+  // Handle view changes
   useEffect(() => {
     if (!map) return;
 
-    const handleZoomEnd = () => {
+    const handleViewChange = () => {
       // Clear cache except current layer
-      layerCache.current.forEach((layer, timestamp) => {
-        if (layer !== currentLayerRef.current) {
-          map.removeLayer(layer);
-          layerCache.current.delete(timestamp);
-        }
-      });
-
-      // Preload after zoom
-      setTimeout(() => preloadNextLayer(currentTime), 100);
+      layerCache.current.clear(currentLayerRef.current);
+      // Preload after view change
+      setTimeout(() => preloadAdjacentLayer(currentTime), 100);
     };
 
-    map.on("zoomend", handleZoomEnd);
+    map.on("zoomend", handleViewChange);
+    map.on("moveend", handleViewChange);
     return () => {
-      map.off("zoomend", handleZoomEnd);
+      map.off("zoomend", handleViewChange);
+      map.off("moveend", handleViewChange);
     };
   }, [map, currentTime]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      layerCache.current.forEach((layer) => {
-        if (map.hasLayer(layer)) map.removeLayer(layer);
-      });
       layerCache.current.clear();
       updateRef(null);
     };
@@ -162,5 +219,7 @@ const TimeDimensionLayer = forwardRef<
 
   return null;
 });
+
+TimeDimensionLayer.displayName = "TimeDimensionLayer";
 
 export default TimeDimensionLayer;
