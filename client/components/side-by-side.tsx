@@ -19,7 +19,6 @@ export default function SideBySide({
   const map = useMap();
   const [position, setPosition] = useState(initialPosition);
   const positionRef = useRef(initialPosition); // Use ref to track current position for real-time updates
-  const dividerRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -156,7 +155,6 @@ export default function SideBySide({
   return (
     <div ref={containerRef} className="side-by-side-container">
       <div
-        ref={dividerRef}
         className={`side-by-side-divider ${isDragging ? "dragging" : ""}`}
         style={{ left: `${position}%` }}
         onMouseDown={handleDragStart}
