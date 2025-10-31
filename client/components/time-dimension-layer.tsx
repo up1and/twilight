@@ -1,4 +1,4 @@
-import { useEffect, useRef, forwardRef, useCallback } from "react";
+import { useEffect, useCallback, useRef, forwardRef } from "react";
 import { useMap } from "react-leaflet";
 import L from "leaflet";
 import dayjs from "dayjs";
@@ -8,8 +8,13 @@ const generateTileUrl = (baseUrl: string, time: dayjs.Dayjs): string => {
   return baseUrl.replace("{time}", timeStr);
 };
 
+interface CachedLayer {
+  layer: L.TileLayer;
+  status: "loading" | "loaded" | "error";
+}
+
 class TimeLayerCache {
-  private cache: Map<number, L.TileLayer> = new Map();
+  private cache: Map<number, CachedLayer> = new Map();
   private map: L.Map;
   private cacheRangeMinutes: number;
 
@@ -22,21 +27,28 @@ class TimeLayerCache {
     return this.cache.has(timestamp);
   }
 
-  get(timestamp: number): L.TileLayer | undefined {
+  get(timestamp: number): CachedLayer | undefined {
     return this.cache.get(timestamp);
   }
 
   set(timestamp: number, layer: L.TileLayer): void {
     // Add new layer to cache
-    this.cache.set(timestamp, layer);
+    this.cache.set(timestamp, { layer, status: "loading" });
     // Clean up if cache is too large
     this.cleanup(timestamp);
   }
 
+  setStatus(timestamp: number, status: "loading" | "loaded" | "error"): void {
+    const state = this.cache.get(timestamp);
+    if (state) {
+      state.status = status;
+    }
+  }
+
   delete(timestamp: number): boolean {
-    const layer = this.cache.get(timestamp);
-    if (layer && this.map.hasLayer(layer)) {
-      this.map.removeLayer(layer);
+    const state = this.cache.get(timestamp);
+    if (state && this.map.hasLayer(state.layer)) {
+      this.map.removeLayer(state.layer);
     }
     return this.cache.delete(timestamp);
   }
@@ -63,8 +75,8 @@ class TimeLayerCache {
 
   // Clear cache with option to keep specific layer
   clear(keepLayer: L.TileLayer | null = null): void {
-    this.cache.forEach((layer, timestamp) => {
-      if (layer !== keepLayer) {
+    this.cache.forEach((state, timestamp) => {
+      if (state.layer !== keepLayer) {
         this.delete(timestamp);
       }
     });
@@ -81,144 +93,208 @@ interface TimeDimensionLayerProps {
   currentTime: dayjs.Dayjs;
   timelineTime?: dayjs.Dayjs;
   bounds?: L.LatLngBoundsExpression;
-  zIndex?: number;
+  onBufferingChange?: (isBuffering: boolean) => void;
 }
 
 const TimeDimensionLayer = forwardRef<
   L.TileLayer | null,
   TimeDimensionLayerProps
->(({ urlTemplate, currentTime, timelineTime, bounds, zIndex = 100 }, ref) => {
-  const map = useMap();
+>(
+  (
+    { urlTemplate, currentTime, timelineTime, bounds, onBufferingChange },
+    ref
+  ) => {
+    const zIndex = 100;
+    const map = useMap();
+    const isBufferingRef = useRef<boolean>(false);
 
-  // Cache system using Map<timestamp, TileLayer>
-  const layerCache = useRef(new TimeLayerCache(map, 60));
-  const currentLayerRef = useRef<L.TileLayer | null>(null);
+    // Cache system using Map<timestamp, TileLayer>
+    const layerCache = useRef(new TimeLayerCache(map, 60));
+    const currentLayerRef = useRef<L.TileLayer | null>(null);
 
-  // Update ref helper
-  const updateRef = useCallback(
-    (layer: L.TileLayer | null) => {
-      if (typeof ref === "function") {
-        ref(layer);
-      } else if (ref) {
-        ref.current = layer;
+    // Update ref helper
+    const updateRef = useCallback(
+      (layer: L.TileLayer | null) => {
+        if (typeof ref === "function") {
+          ref(layer);
+        } else if (ref) {
+          ref.current = layer;
+        }
+      },
+      [ref]
+    );
+
+    // Update buffering state helper
+    const updateBufferingState = useCallback(
+      (isBuffering: boolean) => {
+        if (isBufferingRef.current !== isBuffering) {
+          isBufferingRef.current = isBuffering;
+          onBufferingChange?.(isBuffering);
+        }
+      },
+      [onBufferingChange]
+    );
+
+    // Check if next layer is ready (loaded or error)
+    const checkNextLayer = useCallback(
+      (targetTime: dayjs.Dayjs) => {
+        const nextTime = targetTime.add(10, "minute");
+
+        // If next time is after timeline, consider it ready
+        if (timelineTime && nextTime.isAfter(timelineTime)) return true;
+
+        const timestamp = nextTime.valueOf();
+        const state = layerCache.current.get(timestamp);
+        // If layer doesn't exist yet, consider it ready (not preloaded)
+        if (!state) return true;
+        return state.status === "loaded" || state.status === "error";
+      },
+      [timelineTime]
+    );
+
+    // Create tile layer
+    const createTileLayer = (targetTime: dayjs.Dayjs): L.TileLayer => {
+      const url = generateTileUrl(urlTemplate, targetTime);
+      const timestamp = targetTime.valueOf();
+
+      const layer = L.tileLayer(url, {
+        zIndex: zIndex - 1,
+        opacity: 0,
+        className: "time-dimension-layer",
+        noWrap: true,
+        bounds,
+      });
+
+      // Track layer state
+      layer.on("loading", () => {
+        updateBufferingState(true);
+      });
+
+      layer.on("load", () => {
+        layerCache.current.setStatus(timestamp, "loaded");
+        if (checkNextLayer(targetTime)) {
+          updateBufferingState(false);
+        }
+      });
+
+      layer.on("tileerror", () => {
+        // Mark error to stop buffering for this timestamp
+        layerCache.current.setStatus(timestamp, "error");
+        if (checkNextLayer(targetTime)) {
+          updateBufferingState(false);
+        }
+      });
+
+      return layer;
+    };
+
+    // Layer switching logic
+    const switchToTime = (targetTime: dayjs.Dayjs) => {
+      const timestamp = targetTime.valueOf();
+      const currentLayer = currentLayerRef.current;
+
+      // Get or create target layer
+      let targetLayer: L.TileLayer;
+      const cachedLayer = layerCache.current.get(timestamp);
+      if (cachedLayer) {
+        targetLayer = cachedLayer.layer;
+      } else {
+        targetLayer = createTileLayer(targetTime);
+        layerCache.current.set(timestamp, targetLayer);
+        targetLayer.addTo(map);
       }
-    },
-    [ref]
-  );
 
-  // Create tile layer
-  const createTileLayer = (targetTime: dayjs.Dayjs): L.TileLayer => {
-    const url = generateTileUrl(urlTemplate, targetTime);
-
-    return L.tileLayer(url, {
-      zIndex: zIndex - 1,
-      opacity: 0,
-      className: "time-dimension-layer",
-      noWrap: true,
-      bounds,
-    });
-  };
-
-  // Layer switching logic
-  const switchToTime = (targetTime: dayjs.Dayjs) => {
-    const timestamp = targetTime.valueOf();
-    const currentLayer = currentLayerRef.current;
-
-    // Get or create target layer
-    let targetLayer: L.TileLayer;
-    if (layerCache.current.has(timestamp)) {
-      targetLayer = layerCache.current.get(timestamp)!;
-    } else {
-      targetLayer = createTileLayer(targetTime);
-      layerCache.current.set(timestamp, targetLayer);
-      targetLayer.addTo(map);
-    }
-
-    // Instant switch
-    if (currentLayer) {
-      currentLayer.setOpacity(0);
-      currentLayer.setZIndex(zIndex - 1);
-    }
-
-    // Update current layer reference
-    targetLayer.setOpacity(1);
-    targetLayer.setZIndex(zIndex);
-    currentLayerRef.current = targetLayer;
-    updateRef(targetLayer);
-  };
-
-  // Preload adjacent time layer (current +/- 10 minutes)
-  const preloadAdjacentLayer = (currentTime: dayjs.Dayjs) => {
-    const timesToPreload = [
-      currentTime.add(10, "minute"),
-      currentTime.subtract(10, "minute"),
-    ];
-
-    timesToPreload.forEach((time) => {
-      if (timelineTime && time.isAfter(timelineTime)) return;
-
-      const timestamp = time.valueOf();
-      if (!layerCache.current.has(timestamp)) {
-        const layer = createTileLayer(time);
-        layer.addTo(map);
-        layer.setOpacity(0);
-        layerCache.current.set(timestamp, layer);
+      // Instant switch
+      if (currentLayer) {
+        currentLayer.setOpacity(0);
+        currentLayer.setZIndex(zIndex - 1);
       }
-    });
-  };
 
-  // Main effect - handles time changes
-  useEffect(() => {
-    if (!map || !urlTemplate) return;
+      // Update current layer reference
+      targetLayer.setOpacity(1);
+      targetLayer.setZIndex(zIndex);
+      currentLayerRef.current = targetLayer;
+      updateRef(targetLayer);
 
-    const timestamp = currentTime.valueOf();
-
-    // Initial setup
-    if (!currentLayerRef.current) {
-      const initialLayer = createTileLayer(currentTime);
-      layerCache.current.set(timestamp, initialLayer);
-      initialLayer.addTo(map);
-      initialLayer.setOpacity(1);
-      initialLayer.setZIndex(zIndex);
-      currentLayerRef.current = initialLayer;
-      updateRef(initialLayer);
-    } else {
-      switchToTime(currentTime);
-    }
-
-    // Preload adjacent layer
-    preloadAdjacentLayer(currentTime);
-  }, [currentTime, urlTemplate, map, zIndex, updateRef]);
-
-  // Handle view changes
-  useEffect(() => {
-    if (!map) return;
-
-    const handleViewChange = () => {
-      // Clear cache except current layer
-      layerCache.current.clear(currentLayerRef.current);
-      // Preload after view change
-      setTimeout(() => preloadAdjacentLayer(currentTime), 100);
+      // Check if we can stop buffering after switching
+      if (checkNextLayer(targetTime)) {
+        updateBufferingState(false);
+      }
     };
 
-    map.on("zoomend", handleViewChange);
-    map.on("moveend", handleViewChange);
-    return () => {
-      map.off("zoomend", handleViewChange);
-      map.off("moveend", handleViewChange);
-    };
-  }, [map, currentTime]);
+    // Preload adjacent time layer (current +/- 10 minutes)
+    const preloadAdjacentLayer = (currentTime: dayjs.Dayjs) => {
+      const timesToPreload = [
+        currentTime.add(10, "minute"),
+        currentTime.subtract(10, "minute"),
+      ];
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      layerCache.current.clear();
-      updateRef(null);
-    };
-  }, [map, updateRef]);
+      timesToPreload.forEach((time) => {
+        if (timelineTime && time.isAfter(timelineTime)) return;
 
-  return null;
-});
+        const timestamp = time.valueOf();
+        if (!layerCache.current.has(timestamp)) {
+          const layer = createTileLayer(time);
+          layer.addTo(map);
+          layer.setOpacity(0);
+          layerCache.current.set(timestamp, layer);
+        }
+      });
+    };
+
+    // Main effect - handles time changes
+    useEffect(() => {
+      if (!map || !urlTemplate) return;
+
+      const timestamp = currentTime.valueOf();
+
+      // Initial setup
+      if (!currentLayerRef.current) {
+        const initialLayer = createTileLayer(currentTime);
+        layerCache.current.set(timestamp, initialLayer);
+        initialLayer.addTo(map);
+        initialLayer.setOpacity(1);
+        initialLayer.setZIndex(zIndex);
+        currentLayerRef.current = initialLayer;
+        updateRef(initialLayer);
+      } else {
+        switchToTime(currentTime);
+      }
+
+      // Preload adjacent layer
+      preloadAdjacentLayer(currentTime);
+    }, [currentTime, urlTemplate, map, zIndex, updateRef]);
+
+    // Handle view changes
+    useEffect(() => {
+      if (!map) return;
+
+      const handleViewChange = () => {
+        // Clear cache except current layer
+        layerCache.current.clear(currentLayerRef.current);
+        // Preload after view change
+        setTimeout(() => preloadAdjacentLayer(currentTime), 100);
+      };
+
+      map.on("zoomend", handleViewChange);
+      map.on("moveend", handleViewChange);
+      return () => {
+        map.off("zoomend", handleViewChange);
+        map.off("moveend", handleViewChange);
+      };
+    }, [map, currentTime]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+      return () => {
+        layerCache.current.clear();
+        updateRef(null);
+      };
+    }, [map, updateRef]);
+
+    return null;
+  }
+);
 
 TimeDimensionLayer.displayName = "TimeDimensionLayer";
 

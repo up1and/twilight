@@ -30,6 +30,7 @@ interface TimeRangeSelectorProps {
   latestCompositeTime?: dayjs.Dayjs;
   onSelectedTimeChange?: (time: dayjs.Dayjs) => void;
   onTimeRangeChange?: (startTime: dayjs.Dayjs, endTime: dayjs.Dayjs) => void;
+  isBuffering?: boolean;
 }
 
 export default function TimeRangeSelector({
@@ -37,6 +38,7 @@ export default function TimeRangeSelector({
   latestCompositeTime,
   onSelectedTimeChange,
   onTimeRangeChange,
+  isBuffering = false,
 }: TimeRangeSelectorProps) {
   const [timelineTime, setTimelineTime] = useState<dayjs.Dayjs>(
     roundToNearestTenMinutes(selectedTime || dayjs().utc())
@@ -52,8 +54,10 @@ export default function TimeRangeSelector({
   const [recentlyDragged, setRecentlyDragged] = useState<boolean>(false);
   const [hasMoved, setHasMoved] = useState<boolean>(false); // Track if mouse has moved during drag
   const [isCtrlPressed, setIsCtrlPressed] = useState<boolean>(false);
+  const [bufferTick, setBufferTick] = useState(0);
   const timelineRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<HTMLDivElement>(null);
+  const bufferingTimerRef = useRef<dayjs.Dayjs | null>(null);
   const isMobile = useIsMobile();
 
   // Calculate start time based on current time and lookback hours
@@ -500,7 +504,36 @@ export default function TimeRangeSelector({
     // If at the end or not found, stop playback
     if (currentIndex === -1 || currentIndex >= timeIntervals.length - 1) {
       setIsPlaying(false);
+      bufferingTimerRef.current = null;
       return;
+    }
+
+    // If buffering is enabled and currently buffering
+    if (isBuffering) {
+      // Record when buffering started
+      if (!bufferingTimerRef.current) {
+        bufferingTimerRef.current = dayjs();
+      }
+
+      // Check if buffering timeout exceeded
+      const bufferingDuration = dayjs().diff(bufferingTimerRef.current);
+      if (bufferingDuration < 3000) {
+        // Still waiting for buffer, check again later
+        const bufferCheckTimer = setTimeout(() => {
+          // Re-trigger this effect to check buffering state again
+          setBufferTick((prev) => (prev + 1) % 1000);
+        }, 100);
+        return () => clearTimeout(bufferCheckTimer);
+      } else {
+        // Force playback to continue despite buffering
+        console.log(
+          `buffering timeout exceeded (${bufferingDuration}ms), forcing playback to continue`
+        );
+        bufferingTimerRef.current = null;
+      }
+    } else {
+      // Not buffering, reset the timer
+      bufferingTimerRef.current = null;
     }
 
     // Set up timer to advance to next interval
@@ -515,10 +548,17 @@ export default function TimeRangeSelector({
       } else {
         setIsPlaying(false);
       }
-    }, 500); // Fixed speed of 500ms per step
+    }, 500);
 
     return () => clearTimeout(timer);
-  }, [isPlaying, selectedTime, timeIntervals, updateSelectedTime]);
+  }, [
+    isPlaying,
+    selectedTime,
+    timeIntervals,
+    updateSelectedTime,
+    isBuffering,
+    bufferTick,
+  ]);
 
   // Handle lookback hours change
   const handleLookbackChange = (hours: number) => {

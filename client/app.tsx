@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { MapContainer, useMapEvents, useMap } from "react-leaflet";
 import type L from "leaflet";
 import { CRS } from "leaflet";
@@ -237,6 +237,11 @@ export default function MapView() {
   const leftLayerRef = useRef<L.TileLayer | null>(null);
   const rightLayerRef = useRef<L.TileLayer | null>(null);
 
+  // Track buffering state for each layer
+  const [layerBufferingStates, setLayerBufferingStates] = useState<
+    Record<string, boolean>
+  >({});
+
   // Track if we need to reset layer clipping
   const [resetClipping, setResetClipping] = useState(false);
 
@@ -253,6 +258,22 @@ export default function MapView() {
   const videoTimedelta = useMemo(() => {
     return timelineTime.diff(selectedTime, "minute");
   }, [timelineTime, selectedTime]);
+
+  // Calculate overall buffering state
+  const isBuffering = useMemo(() => {
+    return Object.values(layerBufferingStates).some((state) => state);
+  }, [layerBufferingStates]);
+
+  // Handle buffering state change for a specific layer
+  const handleLayerBufferingChange = useCallback(
+    (layerId: string, isBuffering: boolean) => {
+      setLayerBufferingStates((prev) => ({
+        ...prev,
+        [layerId]: isBuffering,
+      }));
+    },
+    []
+  );
 
   // Get the latest update time for selected composites
   const latestCompositeTime = useMemo(() => {
@@ -316,7 +337,6 @@ export default function MapView() {
 
   // Handle time change from TimeRangeSelector
   const handleTimeChange = (time: any) => {
-    console.log("selected time:", time.format());
     setSelectedTime(time);
   };
 
@@ -457,6 +477,9 @@ export default function MapView() {
             ref={leftLayerRef}
             key={`layer-${selectedComposites[0]}`}
             bounds={compositeBounds || undefined}
+            onBufferingChange={(isBuffering) =>
+              handleLayerBufferingChange("left", isBuffering)
+            }
           />
 
           {/* Second Layer (only if two composites are selected) */}
@@ -468,6 +491,9 @@ export default function MapView() {
               ref={rightLayerRef}
               key={`layer-${selectedComposites[1]}`}
               bounds={compositeBounds || undefined}
+              onBufferingChange={(isBuffering) =>
+                handleLayerBufferingChange("right", isBuffering)
+              }
             />
           )}
 
@@ -547,6 +573,7 @@ export default function MapView() {
             latestCompositeTime={latestCompositeTime}
             onSelectedTimeChange={handleTimeChange}
             onTimeRangeChange={handleTimeRangeChange}
+            isBuffering={isBuffering}
           />
         </div>
       </div>
