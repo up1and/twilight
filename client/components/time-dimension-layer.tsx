@@ -1,4 +1,10 @@
-import { useEffect, useCallback, useRef, forwardRef } from "react";
+import {
+  useEffect,
+  useCallback,
+  useImperativeHandle,
+  useRef,
+  forwardRef,
+} from "react";
 import { useMap } from "react-leaflet";
 import L from "leaflet";
 import dayjs from "dayjs";
@@ -96,8 +102,13 @@ interface TimeDimensionLayerProps {
   onBufferingChange?: (isBuffering: boolean) => void;
 }
 
+export interface TimeDimensionLayerHandles {
+  getCurrentLayer: () => L.TileLayer | null;
+  getCachedLayers: () => L.TileLayer[];
+}
+
 const TimeDimensionLayer = forwardRef<
-  L.TileLayer | null,
+  TimeDimensionLayerHandles,
   TimeDimensionLayerProps
 >(
   (
@@ -112,16 +123,20 @@ const TimeDimensionLayer = forwardRef<
     const layerCache = useRef(new TimeLayerCache(map, 60));
     const currentLayerRef = useRef<L.TileLayer | null>(null);
 
-    // Update ref helper
-    const updateRef = useCallback(
-      (layer: L.TileLayer | null) => {
-        if (typeof ref === "function") {
-          ref(layer);
-        } else if (ref) {
-          ref.current = layer;
-        }
-      },
-      [ref]
+    // Expose handle
+    useImperativeHandle(
+      ref,
+      () => ({
+        getCurrentLayer: () => currentLayerRef.current,
+        getCachedLayers: () => {
+          const layers: L.TileLayer[] = [];
+          layerCache.current["cache"].forEach((state) => {
+            layers.push(state.layer);
+          });
+          return layers;
+        },
+      }),
+      []
     );
 
     // Update buffering state helper
@@ -214,7 +229,6 @@ const TimeDimensionLayer = forwardRef<
       targetLayer.setOpacity(1);
       targetLayer.setZIndex(zIndex);
       currentLayerRef.current = targetLayer;
-      updateRef(targetLayer);
 
       // Check if we can stop buffering after switching
       if (checkNextLayer(targetTime)) {
@@ -256,14 +270,13 @@ const TimeDimensionLayer = forwardRef<
         initialLayer.setOpacity(1);
         initialLayer.setZIndex(zIndex);
         currentLayerRef.current = initialLayer;
-        updateRef(initialLayer);
       } else {
         switchToTime(currentTime);
       }
 
       // Preload adjacent layer
       preloadAdjacentLayer(currentTime);
-    }, [currentTime, urlTemplate, map, zIndex, updateRef]);
+    }, [currentTime, urlTemplate, map]);
 
     // Handle view changes
     useEffect(() => {
@@ -288,9 +301,9 @@ const TimeDimensionLayer = forwardRef<
     useEffect(() => {
       return () => {
         layerCache.current.clear();
-        updateRef(null);
+        currentLayerRef.current = null;
       };
-    }, [map, updateRef]);
+    }, [map]);
 
     return null;
   }
@@ -298,4 +311,8 @@ const TimeDimensionLayer = forwardRef<
 
 TimeDimensionLayer.displayName = "TimeDimensionLayer";
 
-export default TimeDimensionLayer;
+export default TimeDimensionLayer as React.ForwardRefExoticComponent<
+  TimeDimensionLayerProps & React.RefAttributes<TimeDimensionLayerHandles>
+> & {
+  displayName?: string;
+};

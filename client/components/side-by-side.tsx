@@ -2,18 +2,23 @@ import type React from "react";
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useMap } from "react-leaflet";
-import type L from "leaflet";
+
+import dayjs from "dayjs";
+
+import type { TimeDimensionLayerHandles } from "./time-dimension-layer";
 import "./side-by-side.css";
 
 interface SideBySideProps {
-  leftLayer: L.TileLayer;
-  rightLayer: L.TileLayer;
+  leftLayer: TimeDimensionLayerHandles;
+  rightLayer: TimeDimensionLayerHandles;
+  selectedTime?: dayjs.Dayjs;
   initialPosition?: number;
 }
 
 export default function SideBySide({
   leftLayer,
   rightLayer,
+  selectedTime,
   initialPosition = 50,
 }: SideBySideProps) {
   const map = useMap();
@@ -32,8 +37,10 @@ export default function SideBySide({
     const clipX = nw.x + (mapSize.x * positionRef.current) / 100;
 
     // Set clip paths for both layers
-    const leftContainer = leftLayer.getContainer();
-    const rightContainer = rightLayer.getContainer();
+    const currentLeftLayer = leftLayer.getCurrentLayer();
+    const currentRightLayer = rightLayer.getCurrentLayer();
+    const leftContainer = currentLeftLayer?.getContainer();
+    const rightContainer = currentRightLayer?.getContainer();
 
     if (leftContainer && rightContainer) {
       // Left layer - show only left side of divider
@@ -44,23 +51,19 @@ export default function SideBySide({
     }
   }, [map, leftLayer, rightLayer]);
 
-  // Update ref when position state changes
+  // Update clip when selected time changes (e.g., when TimeDimensionLayer switches to a different cached layer)
   useEffect(() => {
-    positionRef.current = position;
-    updateClip();
-  }, [position, updateClip]);
+    // Use requestAnimationFrame to synchronize with browser repaint
+    const rafId = requestAnimationFrame(() => {
+      updateClip();
+    });
+
+    return () => cancelAnimationFrame(rafId);
+  }, [selectedTime, updateClip]);
 
   // Initialize the control
   useEffect(() => {
     if (!map || !leftLayer || !rightLayer) return;
-
-    // Make sure both layers are added to the map
-    if (!map.hasLayer(leftLayer)) {
-      map.addLayer(leftLayer);
-    }
-    if (!map.hasLayer(rightLayer)) {
-      map.addLayer(rightLayer);
-    }
 
     // Update clip on map events
     const onMoveEnd = () => updateClip();
@@ -73,8 +76,8 @@ export default function SideBySide({
     map.on("resize", onResize);
     map.on("move", onMove); // Listen for move events
 
-    // Initial update
-    updateClip();
+    // Initial update with delay
+    setTimeout(updateClip, 100);
 
     // Cleanup
     return () => {
@@ -83,12 +86,17 @@ export default function SideBySide({
       map.off("resize", onResize);
       map.off("move", onMove);
 
-      // Reset clip paths
-      const leftContainer = leftLayer.getContainer();
-      const rightContainer = rightLayer.getContainer();
+      // Get all cached layers from both layer handles
+      const leftLayers = leftLayer.getCachedLayers();
+      const rightLayers = rightLayer.getCachedLayers();
 
-      if (leftContainer) leftContainer.style.clipPath = "none";
-      if (rightContainer) rightContainer.style.clipPath = "none";
+      // Reset clip paths for all layer containers
+      [...leftLayers, ...rightLayers].forEach((layer) => {
+        const container = layer.getContainer();
+        if (container) {
+          container.style.clipPath = "none";
+        }
+      });
     };
   }, [map, leftLayer, rightLayer, updateClip]);
 

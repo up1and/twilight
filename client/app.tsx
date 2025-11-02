@@ -6,7 +6,9 @@ import "leaflet.vectorgrid";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 
-import TimeDimensionLayer from "./components/time-dimension-layer";
+import TimeDimensionLayer, {
+  type TimeDimensionLayerHandles,
+} from "./components/time-dimension-layer";
 import TimeRangeSelector from "./components/time-range-selector";
 import SettingsButton from "./components/settings-button";
 import MultiSelectComposite from "./components/multi-select-composite";
@@ -233,17 +235,14 @@ export default function MapView() {
 
   const isMobile = useIsMobile();
 
-  // References to the tile layers
-  const leftLayerRef = useRef<L.TileLayer | null>(null);
-  const rightLayerRef = useRef<L.TileLayer | null>(null);
+  // References to the TimeDimensionLayer handles
+  const leftLayerRef = useRef<TimeDimensionLayerHandles | null>(null);
+  const rightLayerRef = useRef<TimeDimensionLayerHandles | null>(null);
 
   // Track buffering state for each layer
   const [layerBufferingStates, setLayerBufferingStates] = useState<
     Record<string, boolean>
   >({});
-
-  // Track if we need to reset layer clipping
-  const [resetClipping, setResetClipping] = useState(false);
 
   const showFirBoundary = localStorage.getItem("fir-boundary") === "true";
 
@@ -425,19 +424,6 @@ export default function MapView() {
     }
   }, [latestCompositeTime]);
 
-  // Reset clipping when going from 2 layers to 1 layer
-  useEffect(() => {
-    if (resetClipping && leftLayerRef.current) {
-      // Reset the clipping on the remaining layer
-      const leftLayerElement = (leftLayerRef.current as any)._container;
-      if (leftLayerElement) {
-        leftLayerElement.style.clip = "auto";
-      }
-
-      setResetClipping(false);
-    }
-  }, [resetClipping, selectedComposites]);
-
   // Update map configurations when selected composites change
   useEffect(() => {
     const updateMapConfigs = async () => {
@@ -464,7 +450,6 @@ export default function MapView() {
           maxBoundsViscosity={1.0}
           crs={CRS.EPSG3857}
           keyboard={false}
-          fadeAnimation={false}
         >
           {/* Map bounds updater */}
           <MapBoundsUpdater bounds={compositeBounds} />
@@ -530,6 +515,7 @@ export default function MapView() {
               <SideBySide
                 leftLayer={leftLayerRef.current}
                 rightLayer={rightLayerRef.current}
+                selectedTime={selectedTime}
                 initialPosition={50}
               />
             )}
