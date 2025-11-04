@@ -105,7 +105,7 @@ export default function TimeRangeSelector({
     }
 
     return intervals;
-  }, [timelineTime, lookbackHours]);
+  }, [timelineTime, lookbackHours, latestCompositeTime]);
 
   // Find the closest time interval index for a given time
   const findClosestIntervalIndex = (targetTime: dayjs.Dayjs): number => {
