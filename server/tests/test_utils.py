@@ -6,7 +6,7 @@ import datetime
 from unittest.mock import Mock
 from server.utils import (
     upper_case, parse_iso_timestamp, extract_timestamp_from_object_name,
-    extract_composite_from_object_name, default_json_handler, initialize_composite_state
+    default_json_handler, initialize_composite_state
 )
 
 
@@ -75,34 +75,6 @@ class TestExtractTimestampFromObjectName:
     def test_wrong_extension(self):
         object_name = "ir_clouds/2025/01/15/himawari_ir_clouds_20250115_1200.jpg"
         result = extract_timestamp_from_object_name(object_name)
-        assert result is None
-
-
-class TestExtractCompositeFromObjectName:
-    """Test extract_composite_from_object_name function"""
-    
-    def test_valid_composite(self):
-        object_name = "ir_clouds/2025/01/15/himawari_ir_clouds_20250115_1200.tif"
-        available_composites = ["ir_clouds", "true_color", "ash"]
-        result = extract_composite_from_object_name(object_name, available_composites)
-        assert result == "ir_clouds"
-    
-    def test_different_composite(self):
-        object_name = "true_color/2025/01/15/himawari_true_color_20250115_1200.tif"
-        available_composites = ["ir_clouds", "true_color", "ash"]
-        result = extract_composite_from_object_name(object_name, available_composites)
-        assert result == "true_color"
-    
-    def test_unavailable_composite(self):
-        object_name = "unknown/2025/01/15/himawari_unknown_20250115_1200.tif"
-        available_composites = ['ir_clouds', 'true_color', 'ash']
-        result = extract_composite_from_object_name(object_name, available_composites)
-        assert result is None
-    
-    def test_invalid_object_name(self):
-        object_name = "invalid/path/file.tif"
-        available_composites = ['ir_clouds', 'true_color', 'ash']
-        result = extract_composite_from_object_name(object_name, available_composites)
         assert result is None
 
 

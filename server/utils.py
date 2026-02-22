@@ -51,18 +51,6 @@ def extract_timestamp_from_object_name(object_name):
     return None
 
 
-def extract_composite_from_object_name(object_name, available_composites):
-    """
-    Extract composite name from object name
-    """
-    # Try to extract from the filename
-    for composite in available_composites:
-        if f"himawari_{composite}_" in object_name:
-            return composite
-
-    return None
-
-
 def default_json_handler(obj):
     """JSON serializer for objects not serializable by default json code"""
     if isinstance(obj, datetime.datetime):
@@ -72,32 +60,40 @@ def default_json_handler(obj):
 
 def initialize_composite_state(client, available_composites):
     """
-    Initialize composite_state with the latest objects from MinIO
+    Initialize composite state by finding the latest available timestamp for each composite.
+    Searches for the most recent composite images in MinIO storage, starting with the last 7 days
+    and falling back to the entire dataset if no recent objects are found.
     """
     # Dictionary to store the latest update time for each composite
     composite_state = {composite: None for composite in available_composites}
+    current_date = datetime.datetime.now(datetime.timezone.utc)
 
-    # Get all objects from MinIO in one call
-    objects = list(client.list_objects("himawari", recursive=True))
-    # Group objects by composite
-    composite_objects = {}
-    for obj in objects:
-        composite_name = extract_composite_from_object_name(obj.object_name, available_composites)
-        if composite_name and composite_name in available_composites:
-            if composite_name not in composite_objects:
-                composite_objects[composite_name] = []
-            composite_objects[composite_name].append(obj)
-
-    # Find the latest timestamp for each composite
-    for composite, objects in composite_objects.items():
+    for composite in available_composites:
         latest_timestamp = None
 
-        for obj in objects:
-            timestamp = extract_timestamp_from_object_name(obj.object_name)
-            if timestamp and (latest_timestamp is None or timestamp > latest_timestamp):
-                latest_timestamp = timestamp
+        try:
+            # Get objects from MinIO
+            max_keys = 1000
+            search_date = current_date - datetime.timedelta(days=7)
+            date_prefix = search_date.strftime("%Y/%m/%d")
+            objects = client.list_objects("himawari", prefix=f"{composite}/{date_prefix}/", recursive=True)
 
-        if latest_timestamp:
-            composite_state[composite] = latest_timestamp
+            # If no objects found in the last 7 days, search the entire dataset
+            if not list(objects):
+                objects = client.list_objects("himawari", prefix=f"{composite}/", recursive=True)
+            
+            for i, obj in enumerate(objects):
+                if i >= max_keys:
+                    break
+
+                timestamp = extract_timestamp_from_object_name(obj.object_name)
+                if timestamp and (latest_timestamp is None or timestamp > latest_timestamp):
+                    latest_timestamp = timestamp
+
+                if latest_timestamp:
+                    composite_state[composite] = latest_timestamp
+
+        except Exception as e:
+            print(f"Warning: Failed to initialize composite state from MinIO: {e}")
 
     return composite_state

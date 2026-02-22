@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 from io import BytesIO
 from server.snapshot import (
     generate_bbox_hash, generate_filename, create_snapshot_image,
-    upload_to_minio, generate_time_range, find_composite_object,
+    upload_to_minio, generate_time_range, generate_composite_object_name,
     create_video_from_images, create_single_snapshot, create_series_snapshot
 )
 
@@ -168,30 +168,16 @@ class TestGenerateTimeRange:
         assert all(t.minute % 10 == 0 for t in times)
 
 
-class TestFindCompositeObject:
+class TestGenerateCompositeObjectName:
     """Test composite object finding"""
     
-    def test_find_composite_object_with_timestamp(self):
+    def test_generate_composite_object_name(self):
         timestamp = datetime.datetime(2025, 1, 15, 12, 30, 0, tzinfo=datetime.timezone.utc)
         
-        object_name = find_composite_object('ir_clouds', timestamp)
+        object_name = generate_composite_object_name('ir_clouds', timestamp)
         
         expected = 'ir_clouds/2025/01/15/himawari_ir_clouds_20250115_1230.tif'
         assert object_name == expected
-    
-    def test_find_composite_object_without_timestamp(self):
-        with patch('server.snapshot.datetime') as mock_datetime:
-            mock_now = datetime.datetime(2025, 1, 15, 12, 30, 0, tzinfo=datetime.timezone.utc)
-            mock_datetime.datetime.now.return_value = mock_now
-            mock_datetime.timedelta = datetime.timedelta
-            mock_datetime.timezone = datetime.timezone
-            
-            object_name = find_composite_object('true_color', None)
-            
-            # Should use current time minus 30 minutes
-            expected_time = mock_now - datetime.timedelta(minutes=30)
-            expected = f'true_color/2025/01/15/himawari_true_color_{expected_time.strftime("%Y%m%d_%H%M")}.tif'
-            assert 'true_color/2025/01/15/himawari_true_color_' in object_name
 
 
 class TestCreateVideoFromImages:
@@ -246,7 +232,7 @@ class TestCreateSingleSnapshot:
     
     @patch('server.snapshot.create_snapshot_image')
     @patch('server.snapshot.upload_to_minio')
-    @patch('server.snapshot.find_composite_object')
+    @patch('server.snapshot._composite_object')
     def test_create_single_snapshot_success(self, mock_find_object, mock_upload, mock_create_image):
         mock_client = Mock()
         mock_client.stat_object.return_value = True  # COG exists
@@ -265,7 +251,7 @@ class TestCreateSingleSnapshot:
         assert 'filename' in result
         mock_upload.assert_called_once()
     
-    @patch('server.snapshot.find_composite_object')
+    @patch('server.snapshot.generate_composite_object_name')
     def test_create_single_snapshot_cog_not_found_with_task_manager(self, mock_find_object):
         mock_client = Mock()
         mock_client.stat_object.side_effect = Exception("COG not found")
@@ -286,7 +272,7 @@ class TestCreateSingleSnapshot:
         assert result['task_id'] == 'test-task-id'
         mock_task_manager.create_task.assert_called_once_with('ir_clouds', timestamp, 'low')
     
-    @patch('server.snapshot.find_composite_object')
+    @patch('server.snapshot.generate_composite_object_name')
     def test_create_single_snapshot_cog_not_found_without_task_manager(self, mock_find_object):
         mock_client = Mock()
         mock_client.stat_object.side_effect = Exception("COG not found")
@@ -303,7 +289,7 @@ class TestCreateSingleSnapshot:
     
     @patch('server.snapshot.create_snapshot_image')
     @patch('server.snapshot.upload_to_minio')
-    @patch('server.snapshot.find_composite_object')
+    @patch('server.snapshot.generate_composite_object_name')
     def test_create_single_snapshot_error_handling(self, mock_find_object, mock_upload, mock_create_image):
         mock_client = Mock()
         mock_client.stat_object.return_value = True  # COG exists
@@ -328,7 +314,7 @@ class TestCreateSeriesSnapshot:
     @patch('server.snapshot.upload_to_minio')
     @patch('server.snapshot.create_single_snapshot')
     @patch('server.snapshot.generate_time_range')
-    @patch('server.snapshot.find_composite_object')
+    @patch('server.snapshot.generate_composite_object_name')
     def test_create_series_snapshot_success(self, mock_find_object, mock_time_range, 
                                           mock_create_single, mock_upload, mock_create_video):
         mock_client = Mock()
@@ -368,7 +354,7 @@ class TestCreateSeriesSnapshot:
         mock_upload.assert_called_once()
     
     @patch('server.snapshot.generate_time_range')
-    @patch('server.snapshot.find_composite_object')
+    @patch('server.snapshot.generate_composite_object_name')
     def test_create_series_snapshot_missing_cogs_with_task_manager(self, mock_find_object, mock_time_range):
         mock_client = Mock()
         # First COG exists, second doesn't
@@ -412,7 +398,7 @@ class TestCreateSeriesSnapshot:
     
     @patch('server.snapshot.create_single_snapshot')
     @patch('server.snapshot.generate_time_range')
-    @patch('server.snapshot.find_composite_object')
+    @patch('server.snapshot.generate_composite_object_name')
     def test_create_series_snapshot_failed_single_snapshot(self, mock_find_object, mock_time_range, mock_create_single):
         mock_client = Mock()
         mock_client.stat_object.return_value = True  # All COGs exist
@@ -440,7 +426,7 @@ class TestCreateSeriesSnapshot:
     
     @patch('server.snapshot.create_single_snapshot')
     @patch('server.snapshot.generate_time_range')
-    @patch('server.snapshot.find_composite_object')
+    @patch('server.snapshot.generate_composite_object_name')
     def test_create_series_snapshot_minio_get_error(self, mock_find_object, mock_time_range, mock_create_single):
         mock_client = Mock()
         mock_client.stat_object.return_value = True  # All COGs exist
@@ -472,7 +458,7 @@ class TestCreateSeriesSnapshot:
     @patch('server.snapshot.create_video_from_images')
     @patch('server.snapshot.create_single_snapshot')
     @patch('server.snapshot.generate_time_range')
-    @patch('server.snapshot.find_composite_object')
+    @patch('server.snapshot.generate_composite_object_name')
     def test_create_series_snapshot_video_creation_failed(self, mock_find_object, mock_time_range, 
                                                          mock_create_single, mock_create_video):
         mock_client = Mock()
@@ -583,26 +569,15 @@ class TestSnapshotUtilityFunctions:
         assert times[2].minute == 20
         assert times[3].minute == 30
     
-    def test_find_composite_object(self):
-        from server.snapshot import find_composite_object
+    def test_generate_composite_object_name(self):
+        from server.snapshot import generate_composite_object_name
         import datetime
         
         timestamp = datetime.datetime(2025, 1, 15, 12, 0, 0)
-        object_name = find_composite_object('ir_clouds', timestamp)
+        object_name = generate_composite_object_name('ir_clouds', timestamp)
         
         expected = 'ir_clouds/2025/01/15/himawari_ir_clouds_20250115_1200.tif'
         assert object_name == expected
-    
-    def test_find_composite_object_none_timestamp(self):
-        from server.snapshot import find_composite_object
-        
-        # Should use current time minus 30 minutes when timestamp is None
-        object_name = find_composite_object('ir_clouds', None)
-        
-        # Should contain the composite name and follow the pattern
-        assert 'ir_clouds' in object_name
-        assert object_name.endswith('.tif')
-        assert 'himawari_ir_clouds_' in object_name
 
 
 class TestUploadToMinioBasic:

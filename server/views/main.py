@@ -12,8 +12,8 @@ from rio_tiler.errors import TileOutsideBounds
 from rasterio.errors import RasterioIOError
 
 from extensions import cache, client
-from utils import parse_iso_timestamp, upper_case, extract_composite_from_object_name, extract_timestamp_from_object_name
-from snapshot import find_composite_object
+from utils import parse_iso_timestamp, upper_case, extract_timestamp_from_object_name
+from snapshot import generate_composite_object_name
 
 # Create blueprint
 main = Blueprint("main", __name__)
@@ -39,7 +39,7 @@ def find_tile(composite, z, x, y, timestamp=None):
         }
         return jsonify(error_msg), 404
 
-    object_name = find_composite_object(composite, timestamp)
+    object_name = generate_composite_object_name(composite, timestamp)
 
     try:
         presigned_url = client.presigned_get_object(
@@ -108,7 +108,7 @@ def tilejson(composite):
         return jsonify(error_msg), 404
 
     timestamp = current_app.composite_state.get(composite)
-    object_name = find_composite_object(composite, timestamp)
+    object_name = generate_composite_object_name(composite, timestamp)
 
     try:
         presigned_url = client.presigned_get_object(

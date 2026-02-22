@@ -153,17 +153,12 @@ def generate_time_range(start_time, end_time):
     return times
 
 
-def find_composite_object(composite, timestamp):
+def generate_composite_object_name(composite, timestamp):
     """
-    Find the object name for a composite, either for a specific time or the latest
+    Generate the object name for a composite
     """
-    if timestamp is None:
-        timestamp = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=30)
-
-    filename = "himawari_{}_{}.tif".format(composite, timestamp.strftime("%Y%m%d_%H%M"))
-    object_name = "{}/{}/{}".format(
-        composite, timestamp.strftime("%Y/%m/%d"), filename
-    )
+    filename = f"himawari_{composite}_{timestamp.strftime('%Y%m%d_%H%M')}.tif"
+    object_name = f"{composite}/{timestamp.strftime('%Y/%m/%d')}/{filename}"
     return object_name
 
 
@@ -231,7 +226,7 @@ def create_single_snapshot(client, composite, timestamp, bbox, task_manager=None
     """
     try:
         # Check if COG exists
-        object_name = find_composite_object(composite, timestamp)
+        object_name = generate_composite_object_name(composite, timestamp)
         try:
             client.stat_object("himawari", object_name)
         except Exception:
@@ -310,7 +305,7 @@ def create_series_snapshot(client, composite, start_time, end_time, bbox, task_m
         # First pass: check if ALL COGs exist
         missing_cogs = []
         for timestamp in time_intervals:
-            object_name = find_composite_object(composite, timestamp)
+            object_name = generate_composite_object_name(composite, timestamp)
             try:
                 client.stat_object("himawari", object_name)
             except Exception:
