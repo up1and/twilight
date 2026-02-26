@@ -5,7 +5,7 @@ description = "Default template for PDM package"
 authors = [
     {name = "up1and", email = "piratecb@gmail.com"},
 ]
-dependencies = ["satpy>=0.55.0", "pyspectral>=0.13.5", "dask[distributed]>=2025.5.1", "dask[diagnostics]>=2024.12.1", "rasterio>=1.4.3", "flask>=3.1.0", "rio-tiler>=7.6.1", "s3fs>=2025.3.2", "minio>=7.2.15", "imageio[ffmpeg]>=2.36.0", "redis>=6.2.0", "flask-caching>=2.3.1", "matplotlib>=3.10.3", "cartopy>=0.24.1", "boto3>=1.38.46"]
+dependencies = ["satpy>=0.55.0", "pyspectral>=0.13.5", "dask[distributed]>=2025.5.1", "dask[diagnostics]>=2024.12.1", "rasterio==1.4.3", "flask>=3.1.0", "rio-tiler>=7.6.1", "s3fs>=2025.3.2", "minio>=7.2.15", "imageio[ffmpeg]>=2.36.0", "redis>=6.2.0", "flask-caching>=2.3.1", "matplotlib>=3.10.3", "cartopy>=0.24.1", "boto3>=1.38.46"]
 requires-python = "==3.12.*"
 readme = "README.md"
 license = {text = "MIT"}
@@ -24,3 +24,6 @@ test = [
 test = "python run_tests.py"
 test-cov = "python run_tests.py --cov"
 test-verbose = "python run_tests.py --verbose"
+
+[tool.uv.pip]
+only-binary = [":all:"]

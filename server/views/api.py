@@ -315,6 +315,14 @@ def get_himawari_raws():
     })
 
 
+@api.route("/composites/latest", methods=["GET"])
+def latest_composite_state():
+    """
+    Get the latest update time for all composites
+    """
+    return jsonify(current_app.composite_state.get())
+
+
 @api.route("/snapshots", methods=["POST"])
 def create_snapshot():
     """Create a snapshot image or video with geographic bounds and coastlines"""

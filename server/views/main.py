@@ -12,7 +12,7 @@ from rio_tiler.errors import TileOutsideBounds
 from rasterio.errors import RasterioIOError
 
 from extensions import cache, client
-from utils import parse_iso_timestamp, upper_case, extract_timestamp_from_object_name
+from utils import parse_iso_timestamp, upper_case
 from snapshot import generate_composite_object_name
 
 # Create blueprint
@@ -77,26 +77,7 @@ def find_tile(composite, z, x, y, timestamp=None):
         return jsonify(error_msg), 404
 
 
-@main.route("/<composite>/tiles/<timestamp>/<int:z>/<int:x>/<int:y>.png")
-@cache.cached(timeout=43200, response_filter=cache_filter)  # Cache for 12 hours
-def tile(composite, timestamp, z, x, y):
-    """
-    Tile request with ISO 8601 time format
-    test url: http://localhost:5000/ash/tiles/2025-04-20T04:00:00/5/25/15.png
-    """
-    try:
-        request_time = parse_iso_timestamp(timestamp)
-        return find_tile(composite, z, x, y, request_time)
-    except ValueError:
-        error_msg = {
-            "error": "Invalid Time Format",
-            "message": "Invalid time format. Please use ISO 8601 format (e.g., 2023-04-20T04:00:00)",
-            "provided_time": timestamp
-        }
-        return jsonify(error_msg), 400
-
-
-@main.route("/<composite>.tilejson")
+@main.route("/tiles/<composite>/tile.json")
 @cache.cached(timeout=43200, response_filter=cache_filter)  # Cache for 1 hour
 def tilejson(composite):
     if composite not in current_app.config['AVAILABLE_COMPOSITES']:
@@ -108,6 +89,13 @@ def tilejson(composite):
         return jsonify(error_msg), 404
 
     timestamp = current_app.composite_state.get(composite)
+    if timestamp is None:
+        error_msg = {
+            "error": "Not Found",
+            "message": f"No available data for {composite}"
+        }
+        return jsonify(error_msg), 404
+
     object_name = generate_composite_object_name(composite, timestamp)
 
     try:
@@ -126,7 +114,7 @@ def tilejson(composite):
                 "name": f"Himawari {name}",
                 "attribution": f"© Himawari {name}",
                 "tiles": [
-                    f"{request.host_url.rstrip('/')}/{composite}/tiles/{'{time}'}/{'{z}'}/{'{x}'}/{'{y}'}.png"
+                    f"{request.host_url.rstrip('/')}/tiles/{composite}/{'{time}'}/{'{z}'}/{'{x}'}/{'{y}'}.png"
                 ]
             })
 
@@ -140,7 +128,26 @@ def tilejson(composite):
         return jsonify(error_msg), 500
 
 
-@main.route("/<map_type>/<int:z>/<int:x>/<int:y>.pbf")
+@main.route("/tiles/<composite>/<timestamp>/<int:z>/<int:x>/<int:y>.png")
+@cache.cached(timeout=43200, response_filter=cache_filter)  # Cache for 12 hours
+def tile(composite, timestamp, z, x, y):
+    """
+    Tile request with ISO 8601 time format
+    test url: http://localhost:5000/ash/tiles/2025-04-20T04:00:00/5/25/15.png
+    """
+    try:
+        request_time = parse_iso_timestamp(timestamp)
+        return find_tile(composite, z, x, y, request_time)
+    except ValueError:
+        error_msg = {
+            "error": "Invalid Time Format",
+            "message": "Invalid time format. Please use ISO 8601 format (e.g., 2023-04-20T04:00:00)",
+            "provided_time": timestamp
+        }
+        return jsonify(error_msg), 400
+
+
+@main.route("/tiles/<map_type>/<int:z>/<int:x>/<int:y>.pbf")
 @cache.cached(timeout=43200, response_filter=cache_filter)  # Cache for 12 hours
 def vector_tile(map_type,z, x, y):
     """
@@ -217,26 +224,18 @@ def index():
         "available_composites": current_app.config["AVAILABLE_COMPOSITES"],
         "usage": {
             "tiles": {
-                "standard": "/{composite}/tiles/{time}/{z}/{x}/{y}.png (ISO 8601 time format)"
+                "standard": "/tiles/{composite}/{time}/{z}/{x}/{y}.png (ISO 8601 time format)"
             },
-            "tilejson": "/{composite}.tilejson",
-            "latest_times": "/composites/latest"
+            "tilejson": "/tiles/{composite}/tile.json",
+            "latest_times": "/api/composites/latest"
         },
         "examples": {
-            "standard_tile": f"/ir_clouds/tiles/2025-04-20T04:00:00/5/25/15.png",
-            "tilejson": f"/ir_clouds.tilejson",
-            "latest_times": "/composites/latest"
+            "standard_tile": f"/tiles/ir_clouds/2025-04-20T04:00:00/5/25/15.png",
+            "tilejson": f"/tiles/ir_clouds/tile.json",
+            "latest_times": "/api/composites/latest"
         }
     }
     return jsonify(info)
-
-
-@main.route("/composites/latest", methods=["GET"])
-def latest_composite_state():
-    """
-    Get the latest update time for all composites
-    """
-    return jsonify(current_app.composite_state.get())
 
 
 @main.route("/snapshots/<path:object_name>")

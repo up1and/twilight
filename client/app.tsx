@@ -17,7 +17,6 @@ import SideBySide from "./components/side-by-side";
 import SnapshotButton from "./components/snapshot-button";
 import { useIsMobile } from "./hooks/use-mobile";
 import {
-  getApiConfig,
   fetchLatestComposites,
   fetchTileJSON,
 } from "./utils/api-client";
@@ -358,7 +357,6 @@ export default function MapView() {
   const handleSettingsChange = () => {
     // Add any logic that needs to run after settings are updated
     console.log("settings updated:", {
-      endpoint: localStorage.getItem("endpoint"),
       token: localStorage.getItem("token"),
       firBoundary: localStorage.getItem("fir-boundary"),
     });
@@ -484,7 +482,7 @@ export default function MapView() {
 
           {/* VectorGrid Layer */}
           <VectorGridLayer
-            url={`${getApiConfig().endpoint}/lands/{z}/{x}/{y}.pbf`}
+            url="/tiles/lands/{z}/{x}/{y}.pbf"
             styles={{
               land: {
                 color: "#828282",
@@ -496,7 +494,7 @@ export default function MapView() {
 
           {showFirBoundary && (
             <VectorGridLayer
-              url={`${getApiConfig().endpoint}/firs/{z}/{x}/{y}.pbf`}
+              url="/tiles/firs/{z}/{x}/{y}.pbf"
               styles={{
                 fir: {
                   color: "#a1a1a1",

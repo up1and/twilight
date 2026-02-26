@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { getApiConfig, setApiConfig } from "../utils/api-client";
 import "./settings-button.css";
 
 interface SettingsButtonProps {
@@ -11,10 +10,8 @@ export default function SettingsButton({
 }: SettingsButtonProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<
-    "connection" | "layer" | "about"
-  >("connection");
-  const [endpoint, setEndpoint] = useState(getApiConfig().endpoint);
-  const [token, setToken] = useState(getApiConfig().token);
+    "layer" | "about"
+  >("layer");
   const [firBoundary, setFirBoundary] = useState(() => {
     const saved = localStorage.getItem("fir-boundary");
     return saved ? JSON.parse(saved) : false;
@@ -43,12 +40,6 @@ export default function SettingsButton({
   }, [isModalOpen]);
 
   const handleSave = () => {
-    // Save settings using the API client utility
-    setApiConfig({
-      endpoint,
-      token,
-    });
-
     // Save fir-boundary to local storage
     localStorage.setItem("fir-boundary", JSON.stringify(firBoundary));
 
@@ -100,14 +91,6 @@ export default function SettingsButton({
               <div className="settings-sidebar">
                 <button
                   className={`settings-sidebar-item ${
-                    activeSection === "connection" ? "active" : ""
-                  }`}
-                  onClick={() => setActiveSection("connection")}
-                >
-                  Connection
-                </button>
-                <button
-                  className={`settings-sidebar-item ${
                     activeSection === "layer" ? "active" : ""
                   }`}
                   onClick={() => setActiveSection("layer")}
@@ -124,31 +107,6 @@ export default function SettingsButton({
                 </button>
               </div>
               <div className="settings-content">
-                {activeSection === "connection" && (
-                  <div className="settings-modal-body">
-                    <div className="settings-form-group">
-                      <label htmlFor="endpoint">Endpoint</label>
-                      <input
-                        id="endpoint"
-                        type="text"
-                        value={endpoint}
-                        onChange={(e) => setEndpoint(e.target.value)}
-                        placeholder="https://example.com/api"
-                      />
-                    </div>
-                    <div className="settings-form-group">
-                      <label htmlFor="token">Token</label>
-                      <input
-                        id="token"
-                        type="password"
-                        value={token}
-                        onChange={(e) => setToken(e.target.value)}
-                        placeholder="Enter your token"
-                        disabled={true}
-                      />
-                    </div>
-                  </div>
-                )}
                 {activeSection === "layer" && (
                   <div className="settings-modal-body">
                     <div className="settings-form-group settings-switch-group">

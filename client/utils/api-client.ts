@@ -5,26 +5,23 @@
 import ky from "ky";
 import type { TileJSON } from "./types";
 
-// Get API configuration from localStorage
-export function getApiConfig() {
+// Get API configuration from localStorage (token only now)
+export function getAuthConfig() {
   return {
-    endpoint: localStorage.getItem("endpoint") || "",
     token: localStorage.getItem("token") || "",
   };
 }
 
-// Set API configuration to localStorage
-export function setApiConfig(config: { endpoint: string; token: string }) {
-  localStorage.setItem("endpoint", config.endpoint);
+// Set API configuration to localStorage (token only now)
+export function setApiConfig(config: { token: string }) {
   localStorage.setItem("token", config.token);
 }
 
 // Create a ky instance with default options
 const createApiClient = () => {
-  const { endpoint, token } = getApiConfig();
+  const { token } = getAuthConfig();
 
   return ky.create({
-    prefixUrl: endpoint,
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -54,7 +51,7 @@ export async function fetchLatestComposites(): Promise<Record<string, string>> {
   try {
     const apiClient = createApiClient();
     const data = await apiClient
-      .get("composites/latest")
+      .get("/api/composites/latest")
       .json<Record<string, string>>();
     return data;
   } catch (error) {
@@ -71,7 +68,7 @@ export async function fetchLatestComposites(): Promise<Record<string, string>> {
  *
  * Example TileJSON response:
  * {
- *   "tiles": ["https://example.com/true_color/tiles/{time}/{z}/{x}/{y}.png"],
+ *   "tiles": ["https://example.com/tiles/true_color/{time}/{z}/{x}/{y}.png"],
  *   "bounds": [70.0, 0.0, 150.0, 55.0],  // [minLng, minLat, maxLng, maxLat]
  *   "minzoom": 1,
  *   "maxzoom": 10,
@@ -82,11 +79,13 @@ export async function fetchLatestComposites(): Promise<Record<string, string>> {
  * and tile URL templates that include time parameters for dynamic tile loading.
  */
 export async function fetchTileJSON(
-  composite: string
+  composite: string,
 ): Promise<TileJSON | null> {
   try {
     const apiClient = createApiClient();
-    const data = await apiClient.get(`${composite}.tilejson`).json<TileJSON>();
+    const data = await apiClient
+      .get(`/tiles/${composite}/tile.json`)
+      .json<TileJSON>();
     return data;
   } catch (error) {
     console.error(`Error fetching TileJSON for ${composite}:`, error);
@@ -134,7 +133,7 @@ export async function createSnapshot(params: {
 } | null> {
   try {
     const apiClient = createApiClient();
-    const data = await apiClient.post("api/snapshots", { json: params }).json<{
+    const data = await apiClient.post("/api/snapshots", { json: params }).json<{
       status: string;
       download_url?: string;
       filename?: string;
