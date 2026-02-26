@@ -3,14 +3,14 @@ import {
   useCallback,
   useImperativeHandle,
   useRef,
-  forwardRef,
+  forwardRef
 } from "react";
 import { useMap } from "react-leaflet";
 import L from "leaflet";
 import dayjs from "dayjs";
 
 const generateTileUrl = (baseUrl: string, time: dayjs.Dayjs): string => {
-  const timeStr = time.utc().format("YYYY-MM-DDTHH:mm:ss");
+  const timeStr = time.utc().format("YYYY-MM-DDTHH-mm-ss[Z]");
   return baseUrl.replace("{time}", timeStr);
 };
 
@@ -134,7 +134,7 @@ const TimeDimensionLayer = forwardRef<
             layers.push(state.layer);
           });
           return layers;
-        },
+        }
       }),
       []
     );
@@ -177,7 +177,7 @@ const TimeDimensionLayer = forwardRef<
         opacity: 0,
         className: "time-dimension-layer",
         noWrap: true,
-        bounds,
+        bounds
       });
 
       // Track layer state
@@ -240,7 +240,7 @@ const TimeDimensionLayer = forwardRef<
     const preloadAdjacentLayer = (currentTime: dayjs.Dayjs) => {
       const timesToPreload = [
         currentTime.add(10, "minute"),
-        currentTime.subtract(10, "minute"),
+        currentTime.subtract(10, "minute")
       ];
 
       timesToPreload.forEach((time) => {

@@ -21,6 +21,16 @@ def upper_case(name):
     return " ".join(formatted_segments)
 
 
+def format_to_standard_iso(url_timestamp):
+    """
+    Converts a URL-friendly timestamp (YYYY-MM-DDTHH-mm-ssZ) 
+    back to the standard ISO 8601 format (YYYY-MM-DDTHH:mm:ssZ)
+    """
+    date_part, time_part = url_timestamp.split("T")
+    time_part = time_part.replace("-", ":")
+    return f"{date_part}T{time_part}"
+
+
 def parse_iso_timestamp(timestamp_str):
     """
     Parse an ISO 8601 timestamp string into a timezone-aware datetime object.

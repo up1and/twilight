@@ -12,7 +12,7 @@ from rio_tiler.errors import TileOutsideBounds
 from rasterio.errors import RasterioIOError
 
 from extensions import cache, client
-from utils import parse_iso_timestamp, upper_case
+from utils import format_to_standard_iso, parse_iso_timestamp, upper_case
 from snapshot import generate_composite_object_name
 
 # Create blueprint
@@ -80,6 +80,7 @@ def find_tile(composite, z, x, y, timestamp=None):
 @main.route("/tiles/<composite>/tile.json")
 @cache.cached(timeout=43200, response_filter=cache_filter)  # Cache for 1 hour
 def tilejson(composite):
+    composite = composite.replace("-", '_')
     if composite not in current_app.config['AVAILABLE_COMPOSITES']:
         error_msg = {
             "error": "Not Found",
@@ -107,6 +108,7 @@ def tilejson(composite):
         with Reader(presigned_url) as cog:
             # Define attribution for different composites
             name = upper_case(composite)
+            composite_id = composite.replace("_", "-")
             return jsonify({
                 "bounds": cog.get_geographic_bounds(cog.tms.rasterio_geographic_crs),
                 "minzoom": cog.minzoom,
@@ -114,7 +116,7 @@ def tilejson(composite):
                 "name": f"Himawari {name}",
                 "attribution": f"© Himawari {name}",
                 "tiles": [
-                    f"{request.host_url.rstrip('/')}/tiles/{composite}/{'{time}'}/{'{z}'}/{'{x}'}/{'{y}'}.png"
+                    f"{request.host_url.rstrip('/')}/tiles/{composite_id}/{'{time}'}/{'{z}'}/{'{x}'}/{'{y}'}.png"
                 ]
             })
 
@@ -133,9 +135,11 @@ def tilejson(composite):
 def tile(composite, timestamp, z, x, y):
     """
     Tile request with ISO 8601 time format
-    test url: http://localhost:5000/ash/tiles/2025-04-20T04:00:00/5/25/15.png
+    test url: http://localhost:5000/tiles/ash/2025-04-20T04-00-00Z/5/25/15.png
     """
     try:
+        composite = composite.replace("-", '_')
+        timestamp = format_to_standard_iso(timestamp)
         request_time = parse_iso_timestamp(timestamp)
         return find_tile(composite, z, x, y, request_time)
     except ValueError:
@@ -230,8 +234,8 @@ def index():
             "latest_times": "/api/composites/latest"
         },
         "examples": {
-            "standard_tile": f"/tiles/ir_clouds/2025-04-20T04:00:00/5/25/15.png",
-            "tilejson": f"/tiles/ir_clouds/tile.json",
+            "standard_tile": f"/tiles/ir-clouds/2025-04-20T04-00-00Z/5/25/15.png",
+            "tilejson": f"/tiles/ir-clouds/tile.json",
             "latest_times": "/api/composites/latest"
         }
     }

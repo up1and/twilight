@@ -68,7 +68,7 @@ export async function fetchLatestComposites(): Promise<Record<string, string>> {
  *
  * Example TileJSON response:
  * {
- *   "tiles": ["https://example.com/tiles/true_color/{time}/{z}/{x}/{y}.png"],
+ *   "tiles": ["https://example.com/tiles/true-color/{time}/{z}/{x}/{y}.png"],
  *   "bounds": [70.0, 0.0, 150.0, 55.0],  // [minLng, minLat, maxLng, maxLat]
  *   "minzoom": 1,
  *   "maxzoom": 10,
@@ -82,9 +82,10 @@ export async function fetchTileJSON(
   composite: string,
 ): Promise<TileJSON | null> {
   try {
+    const compositeId = composite.replace(/_/g, '-');
     const apiClient = createApiClient();
     const data = await apiClient
-      .get(`/tiles/${composite}/tile.json`)
+      .get(`/tiles/${compositeId}/tile.json`)
       .json<TileJSON>();
     return data;
   } catch (error) {
