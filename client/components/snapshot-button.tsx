@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Camera, Video, Loader2 } from "lucide-react";
 import { createSnapshot } from "../utils/api-client";
 import type { CompositeType } from "../utils/types";
 import dayjs from "dayjs";
@@ -15,7 +16,7 @@ export default function SnapshotButton({
   composites,
   selectedTime,
   bbox,
-  timedelta,
+  timedelta
 }: SnapshotButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isCtrlPressed, setIsCtrlPressed] = useState(false);
@@ -62,7 +63,7 @@ export default function SnapshotButton({
         } = {
           bbox,
           timestamp: selectedTime.utc().format("YYYY-MM-DDTHH:mm:ssZZ"),
-          composite: composite,
+          composite: composite
         };
 
         // If Ctrl is pressed and timedelta is available, generate video
@@ -121,49 +122,11 @@ export default function SnapshotButton({
         title="Snapshot"
       >
         {isLoading ? (
-          <svg
-            className="loading-icon"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M21 12a9 9 0 11-6.219-8.56" />
-          </svg>
+          <Loader2 size={16} className="loading-icon" />
         ) : isCtrlPressed ? (
-          // Video icon
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polygon points="23 7 16 12 23 17 23 7" />
-            <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-          </svg>
+          <Video size={16} />
         ) : (
-          // Camera icon
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-            <circle cx="12" cy="13" r="4" />
-          </svg>
+          <Camera size={16} />
         )}
       </button>
     </div>

@@ -1,6 +1,7 @@
 import type React from "react";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import dayjs from "dayjs";
+import { ChevronDown } from "lucide-react";
 import { useIsMobile } from "../hooks/use-mobile";
 import { roundToNearestTenMinutes } from "../utils/time-utils";
 import "./time-range-selector.css";
@@ -38,7 +39,7 @@ export default function TimeRangeSelector({
   latestCompositeTime,
   onSelectedTimeChange,
   onTimeRangeChange,
-  isBuffering = false,
+  isBuffering = false
 }: TimeRangeSelectorProps) {
   const [timelineTime, setTimelineTime] = useState<dayjs.Dayjs>(
     roundToNearestTenMinutes(selectedTime || dayjs().utc())
@@ -100,7 +101,7 @@ export default function TimeRangeSelector({
         dateLabel: isMidnight ? formatDate(time) : null, // Show date at the top for midnight
         isHour: time.minute() === 0,
         isMidnight: isMidnight,
-        isAfterLatest: isAfterLatest,
+        isAfterLatest: isAfterLatest
       });
     }
 
@@ -414,7 +415,7 @@ export default function TimeRangeSelector({
     dragStartTime,
     dragStartSelectedTime,
     lookbackHours,
-    updateSelectedTime,
+    updateSelectedTime
   ]);
 
   // Toggle play/pause
@@ -448,7 +449,7 @@ export default function TimeRangeSelector({
     selectedTime,
     timelineTime,
     timeIntervals,
-    updateSelectedTime,
+    updateSelectedTime
   ]);
 
   // Handle keyboard navigation and playback control
@@ -557,7 +558,7 @@ export default function TimeRangeSelector({
     timeIntervals,
     updateSelectedTime,
     isBuffering,
-    bufferTick,
+    bufferTick
   ]);
 
   // Handle lookback hours change
@@ -645,20 +646,7 @@ export default function TimeRangeSelector({
               <option value={12}>Last 12 hours</option>
               <option value={24}>Last 24 hours</option>
             </select>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="select-icon"
-            >
-              <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
+            <ChevronDown size={14} className="select-icon" />
           </div>
 
           {/* Datetime picker */}
@@ -696,7 +684,7 @@ export default function TimeRangeSelector({
                   interval.isAfterLatest ? "after-latest" : ""
                 }`}
                 style={{
-                  left: `${position}%`,
+                  left: `${position}%`
                 }}
               >
                 {/* Date label for midnight (inside the timeline) */}
@@ -726,7 +714,7 @@ export default function TimeRangeSelector({
               className="timeline-overlay"
               style={{
                 left: "0%",
-                width: `${markerPosition}%`,
+                width: `${markerPosition}%`
               }}
             />
           )}
