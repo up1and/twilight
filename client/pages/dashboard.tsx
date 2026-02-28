@@ -9,7 +9,6 @@ import {
 } from "../utils/api-client";
 import "./dashboard.css";
 
-// Types
 interface Task {
   task_id: string;
   composite: string;
@@ -25,7 +24,7 @@ interface Task {
   ended?: string;
 }
 
-interface Raw {
+interface Sync {
   timestamp: string;
   status: "pending" | "running" | "completed" | "failed";
   files: number;
@@ -37,9 +36,6 @@ interface Raw {
   created: string;
 }
 
-const PER_PAGE = 5;
-
-// Helper functions
 function formatComposite(str: string | undefined): string {
   if (!str) return "N/A";
   // Special case for ir_clouds -> IR Clouds
@@ -73,582 +69,503 @@ function formatBytes(bytes: number | null | undefined): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
 
-function formatNumber(num: number | null | undefined): string | null {
-  if (num == null || isNaN(num)) return null;
-  return String(num);
-}
+const FilterGroup = ({
+  label,
+  value,
+  options,
+  onChange
+}: {
+  label: string;
+  value: string;
+  options: { label: string; value: string }[];
+  onChange: (v: string) => void;
+}) => (
+  <div className="filter-group">
+    <span className="filter-label">{label}:</span>
+    <select value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="">All</option>
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
+  </div>
+);
 
-function getStatusClass(status: string | undefined): string {
-  if (!status) return "";
-  switch (status) {
-    case "pending":
-      return "status-pending";
-    case "completed":
-      return "status-completed";
-    case "failed":
-      return "status-failed";
-    case "running":
-    case "processing":
-      return "status-running";
-    default:
-      return "";
-  }
-}
+const Pagination = ({
+  current,
+  total,
+  onChange
+}: {
+  current: number;
+  total: number;
+  onChange: (p: number) => void;
+}) => (
+  <div className="pagination">
+    <button
+      className="page-button"
+      disabled={current <= 1}
+      onClick={() => onChange(current - 1)}
+    >
+      Prev
+    </button>
+    {Array.from({ length: total }, (_, i) => i + 1).map((p) => (
+      <button
+        key={p}
+        className={`page-button ${p === current ? "active" : ""}`}
+        onClick={() => onChange(p)}
+      >
+        {p}
+      </button>
+    ))}
+    <button
+      className="page-button"
+      disabled={current >= total}
+      onClick={() => onChange(current + 1)}
+    >
+      Next
+    </button>
+  </div>
+);
+
+const DataList = ({
+  loading,
+  length,
+  emptyText,
+  children
+}: {
+  loading: boolean;
+  length: number;
+  emptyText: string;
+  children: React.ReactNode;
+}) => (
+  <div className="card-list">
+    {loading ? (
+      <div className="empty-cell">Loading...</div>
+    ) : length === 0 ? (
+      <div className="empty-cell">{emptyText}</div>
+    ) : (
+      children
+    )}
+  </div>
+);
+
+const TaskCard = ({ task }: { task: Task }) => (
+  <div className="data-card">
+    <div className="card-header">
+      <div className="header-left">
+        <span className="title-name">{formatComposite(task.composite)}</span>
+        <span className="timestamp">{formatDateTimeMin(task.timestamp)}</span>
+      </div>
+      <span className={`status-badge status-${task.status}`}>
+        {task.status?.toUpperCase()}
+      </span>
+    </div>
+    <div className="info-row">
+      <span>
+        <span className="label">Priority:</span> {task.priority}
+      </span>
+      <span>
+        <span className="label">Created:</span>{" "}
+        {formatDateTimeSec(task.created_at)}
+      </span>
+    </div>
+    <div className="info-row">
+      <span>
+        <span className="label">Worker:</span> {task.worker_id || "N/A"}
+      </span>
+      <span>
+        <span className="label">Started:</span>{" "}
+        {formatDateTimeSec(task.started)}
+      </span>
+      <span>
+        <span className="label">Duration:</span>{" "}
+        {task.duration ? `${task.duration}s` : "N/A"}
+      </span>
+    </div>
+    <span className="size-info">{task.task_id}</span>
+  </div>
+);
+
+const SyncCard = ({ sync }: { sync: Sync }) => (
+  <div className="data-card">
+    <div className="card-header">
+      <div className="header-left">
+        <span className="title-name">Himawari</span>
+        <span className="timestamp">{formatDateTimeMin(sync.timestamp)}</span>
+      </div>
+      <span className={`status-badge status-${sync.status}`}>
+        {sync.status?.toUpperCase()}
+      </span>
+    </div>
+    <div className="info-row">
+      <span>
+        <span className="label">Started:</span>{" "}
+        {formatDateTimeSec(sync.started)}
+      </span>
+      <span>
+        <span className="label">Created:</span>{" "}
+        {formatDateTimeSec(sync.created)}
+      </span>
+    </div>
+    <div className="info-row">
+      <span>
+        <span className="label">Files:</span> {sync.files}
+      </span>
+      <span>
+        <span className="label">Speed:</span>{" "}
+        {sync.speed ? `${sync.speed} KB/s` : "N/A"}
+      </span>
+      <span>
+        <span className="label">Duration:</span>{" "}
+        {sync.duration ? `${sync.duration}s` : "N/A"}
+      </span>
+    </div>
+    <span className="size-info">{formatBytes(sync.size)}</span>
+  </div>
+);
+
+const AddTaskModal = ({
+  show,
+  onClose,
+  composites,
+  onCreated
+}: {
+  show: boolean;
+  onClose: () => void;
+  composites: string[];
+  onCreated: () => void;
+}) => {
+  const [form, setForm] = useState({
+    composite: "ir_clouds",
+    timestamp: "",
+    priority: "normal"
+  });
+  const [submitting, setSubmitting] = useState(false);
+
+  if (!show) return null;
+
+  const handleTimeChange = (val: string) => {
+    if (!val) {
+      setForm({ ...form, timestamp: "" });
+      return;
+    }
+
+    const date = new Date(val);
+
+    // Prevent selecting future dates
+    if (date > new Date()) return;
+
+    // Round down to the nearest 10-minute increment
+    date.setMinutes(Math.floor(date.getMinutes() / 10) * 10);
+    date.setSeconds(0);
+    date.setMilliseconds(0);
+
+    // Format back to 'YYYY-MM-DDTHH:mm' for datetime-local input
+    const localTimestamp = new Date(
+      date.getTime() - date.getTimezoneOffset() * 60000
+    )
+      .toISOString()
+      .slice(0, 16);
+
+    setForm({ ...form, timestamp: localTimestamp });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.timestamp || submitting) return;
+    setSubmitting(true);
+    try {
+      const result = await createTask({
+        ...form,
+        timestamp: new Date(form.timestamp).toISOString()
+      });
+      if (result) {
+        onCreated();
+        onClose();
+        setForm({ composite: "ir_clouds", timestamp: "", priority: "normal" });
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="modal" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">Add New Task</div>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">Composite</label>
+            <select
+              className="form-input"
+              value={form.composite}
+              onChange={(e) => setForm({ ...form, composite: e.target.value })}
+            >
+              {composites.map((c) => (
+                <option key={c} value={c}>
+                  {formatComposite(c)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Timestamp</label>
+            <input
+              type="datetime-local"
+              className="form-input"
+              value={form.timestamp}
+              onChange={(e) => handleTimeChange(e.target.value)}
+              max={dayjs().utc().format("YYYY-MM-DDTHH:mm")}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Priority</label>
+            <select
+              className="form-input"
+              value={form.priority}
+              onChange={(e) => setForm({ ...form, priority: e.target.value })}
+            >
+              <option value="low">Low</option>
+              <option value="normal">Normal</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+          <div className="modal-actions">
+            <button type="button" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="add-button" disabled={submitting}>
+              {submitting ? "Submitting..." : "Submit"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<"tasks" | "syncs">("tasks");
-
-  // Tasks state
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [taskPage, setTaskPage] = useState(1);
-  const [taskTotalPages, setTaskTotalPages] = useState(1);
-  const [taskStatusFilter, setTaskStatusFilter] = useState("");
-  const [taskCompositeFilter, setTaskCompositeFilter] = useState("");
-  const [taskPriorityFilter, setTaskPriorityFilter] = useState("");
-  const [composites, setComposites] = useState<string[]>([]);
-
-  // Raws state
-  const [raws, setRaws] = useState<Raw[]>([]);
-  const [rawPage, setRawPage] = useState(1);
-  const [rawTotalPages, setRawTotalPages] = useState(1);
-  const [rawStatusFilter, setRawStatusFilter] = useState("");
-
-  // Loading state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showModal, setShowModal] = useState(false);
 
-  // Add Task Modal state
-  const [showAddTaskModal, setShowAddTaskModal] = useState(false);
-  const [newTaskComposite, setNewTaskComposite] = useState("ir_clouds");
-  const [newTaskTimestamp, setNewTaskTimestamp] = useState("");
-  const [newTaskPriority, setNewTaskPriority] = useState("normal");
-  const [submitting, setSubmitting] = useState(false);
+  // Task View State
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [taskParams, setTaskParams] = useState({
+    page: 1,
+    status: "",
+    composite: "",
+    priority: ""
+  });
+  const [taskTotalPages, setTaskTotalPages] = useState(1);
 
-  // Ref to track if data has been loaded for each tab
-  const tasksLoadedRef = useRef(false);
-  const rawsLoadedRef = useRef(false);
+  // Sync View State
+  const [syncs, setSyncs] = useState<Sync[]>([]);
+  const [syncParams, setSyncParams] = useState({ page: 1, status: "" });
+  const [syncTotalPages, setSyncTotalPages] = useState(1);
+
+  // Dictionary State
+  const [composites, setComposites] = useState<string[]>([]);
   const fetchingRef = useRef(false);
+  const compositesLoadedRef = useRef(false);
 
-  // Fetch composites from API
-  const fetchComposites = useCallback(async () => {
-    try {
-      const data = await fetchLatestComposites();
-      const compositeNames = Object.keys(data);
-      setComposites(compositeNames);
-    } catch {
-      // Silently fail - composites filter just won't be available
-    }
-  }, []);
-
-  // Fetch tasks from API
-  const fetchTasksData = useCallback(
-    async (
-      page: number,
-      status: string,
-      composite: string,
-      priority: string
-    ) => {
-      if (fetchingRef.current) return;
-      fetchingRef.current = true;
-
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await fetchTasks(
-          page,
-          PER_PAGE,
-          status || undefined,
-          composite || undefined,
-          priority || undefined
-        );
-        if (!data) {
-          throw new Error("Failed to fetch tasks");
-        }
-        setTasks(data.tasks);
-        setTaskPage(data.page);
-        setTaskTotalPages(data.pages);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to fetch tasks");
-      } finally {
-        setLoading(false);
-        fetchingRef.current = false;
-      }
-    },
-    []
-  );
-
-  // Load composites if not loaded yet
-  const loadComposites = useCallback(async () => {
-    if (composites.length === 0) {
-      await fetchComposites();
-    }
-  }, [composites.length, fetchComposites]);
-
-  // Fetch raws from API
-  const fetchRawsData = useCallback(async (page: number, status: string) => {
+  const loadTasks = useCallback(async () => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
-
     setLoading(true);
-    setError(null);
     try {
-      const data = await fetchRaws(page, PER_PAGE, status || undefined);
-      if (!data) {
-        throw new Error("Failed to fetch raws");
+      const data = await fetchTasks(
+        taskParams.page,
+        10,
+        taskParams.status || undefined,
+        taskParams.composite || undefined,
+        taskParams.priority || undefined
+      );
+      if (data) {
+        setTasks(data.tasks || []);
+        setTaskTotalPages(data.pages || 1);
       }
-
-      // Filter by status if specified (client-side filtering for raws)
-      let filteredRaws = data.raws;
-      if (status) {
-        filteredRaws = data.raws.filter((r) => r.status === status);
-      }
-
-      setRaws(filteredRaws);
-      setRawPage(data.page);
-      setRawTotalPages(data.pages);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch raws");
+    } catch (e: any) {
+      setError(e.message);
     } finally {
       setLoading(false);
       fetchingRef.current = false;
     }
+  }, [taskParams]);
+
+  const loadSyncs = useCallback(async () => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    setLoading(true);
+    try {
+      const data = await fetchRaws(
+        syncParams.page,
+        10,
+        syncParams.status || undefined
+      );
+      if (data) {
+        const items = data.raws || [];
+        // Filtering locally if status is provided, otherwise using data.raws
+        setSyncs(
+          syncParams.status
+            ? items.filter((item: any) => item.status === syncParams.status)
+            : items
+        );
+        setSyncTotalPages(data.pages || 1);
+      }
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+      fetchingRef.current = false;
+    }
+  }, [syncParams]);
+
+  // Initial lookup data load
+  useEffect(() => {
+    if (compositesLoadedRef.current) return;
+    fetchLatestComposites()
+      .then((data) => {
+        if (data) {
+          setComposites(Object.keys(data));
+          compositesLoadedRef.current = true;
+        }
+      })
+      .catch(() => {});
   }, []);
 
-  // Load tasks when tab is active or filters change
+  // Sync data based on active tab and filter parameters
   useEffect(() => {
-    if (activeTab !== "tasks") return;
-
-    const shouldLoad = !tasksLoadedRef.current;
-    tasksLoadedRef.current = true;
-
-    fetchTasksData(
-      taskPage,
-      taskStatusFilter,
-      taskCompositeFilter,
-      taskPriorityFilter
-    );
-
-    if (shouldLoad) {
-      loadComposites();
-    }
-  }, [
-    activeTab,
-    taskPage,
-    taskStatusFilter,
-    taskCompositeFilter,
-    taskPriorityFilter,
-    fetchTasksData
-  ]);
-
-  // Load raws when tab is active or filters change
-  useEffect(() => {
-    if (activeTab !== "syncs") return;
-
-    rawsLoadedRef.current = true;
-
-    fetchRawsData(rawPage, rawStatusFilter);
-  }, [activeTab, rawPage, rawStatusFilter, fetchRawsData]);
+    activeTab === "tasks" ? loadTasks() : loadSyncs();
+  }, [activeTab, loadTasks, loadSyncs]);
 
   return (
     <div className="dashboard">
       <div className="container">
-        {/* Header */}
-        <div className="header-section">
+        <header className="header-section">
           <h1>Twilight Dashboard</h1>
-          <div className="tabs">
-            <button
-              className={`tab-button ${activeTab === "tasks" ? "active" : ""}`}
-              onClick={() => setActiveTab("tasks")}
-            >
-              Tasks
-            </button>
-            <button
-              className={`tab-button ${activeTab === "syncs" ? "active" : ""}`}
-              onClick={() => setActiveTab("syncs")}
-            >
-              Syncs
-            </button>
+          <nav className="tabs">
+            {(["tasks", "syncs"] as const).map((tab) => (
+              <button
+                key={tab}
+                className={`tab-button ${activeTab === tab ? "active" : ""}`}
+                onClick={() => setActiveTab(tab)}
+              >
+                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </button>
+            ))}
             <Link className="tab-button" href="/">
               Back
             </Link>
-          </div>
-        </div>
+          </nav>
+        </header>
 
-        {/* Error */}
         {error && <div className="error-banner">{error}</div>}
 
-        {/* Tasks Tab */}
-        {activeTab === "tasks" && (
+        {activeTab === "tasks" ? (
           <div className="tab-content active">
-            {/* Filters */}
             <div className="action-bar">
               <div className="filters">
-                <div className="filter-group">
-                  <span className="filter-label">Composite:</span>
-                  <select
-                    value={taskCompositeFilter}
-                    onChange={(e) => setTaskCompositeFilter(e.target.value)}
-                  >
-                    <option value="">All</option>
-                    {composites.map((comp) => (
-                      <option key={comp} value={comp}>
-                        {formatComposite(comp)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="filter-group">
-                  <span className="filter-label">Priority:</span>
-                  <select
-                    value={taskPriorityFilter}
-                    onChange={(e) => setTaskPriorityFilter(e.target.value)}
-                  >
-                    <option value="">All</option>
-                    <option value="low">Low</option>
-                    <option value="normal">Normal</option>
-                    <option value="high">High</option>
-                  </select>
-                </div>
-                <div className="filter-group">
-                  <span className="filter-label">Status:</span>
-                  <select
-                    value={taskStatusFilter}
-                    onChange={(e) => setTaskStatusFilter(e.target.value)}
-                  >
-                    <option value="">All</option>
-                    <option value="pending">Pending</option>
-                    <option value="processing">Processing</option>
-                    <option value="completed">Completed</option>
-                    <option value="failed">Failed</option>
-                  </select>
-                </div>
+                <FilterGroup
+                  label="Composite"
+                  value={taskParams.composite}
+                  options={composites.map((c) => ({
+                    label: formatComposite(c),
+                    value: c
+                  }))}
+                  onChange={(v) =>
+                    setTaskParams((p) => ({ ...p, composite: v, page: 1 }))
+                  }
+                />
+                <FilterGroup
+                  label="Priority"
+                  value={taskParams.priority}
+                  options={["low", "normal", "high"].map((v) => ({
+                    label: v.toUpperCase(),
+                    value: v
+                  }))}
+                  onChange={(v) =>
+                    setTaskParams((p) => ({ ...p, priority: v, page: 1 }))
+                  }
+                />
+                <FilterGroup
+                  label="Status"
+                  value={taskParams.status}
+                  options={["pending", "processing", "completed", "failed"].map(
+                    (v) => ({ label: v.toUpperCase(), value: v })
+                  )}
+                  onChange={(v) =>
+                    setTaskParams((p) => ({ ...p, status: v, page: 1 }))
+                  }
+                />
               </div>
-              <button
-                className="add-button"
-                onClick={() => setShowAddTaskModal(true)}
-              >
+              <button className="add-button" onClick={() => setShowModal(true)}>
                 + Add Task
               </button>
             </div>
 
-            {/* Cards */}
-            <div className="card-list">
-              {loading ? (
-                <div className="empty-cell">Loading...</div>
-              ) : tasks.length === 0 ? (
-                <div className="empty-cell">No tasks found</div>
-              ) : (
-                tasks.map((task) => (
-                  <div key={task.task_id} className="data-card">
-                    <div className="card-header">
-                      <div className="header-left">
-                        <span className="title-name">
-                          {formatComposite(task.composite)}
-                        </span>
-                        <span className="timestamp">
-                          {formatDateTimeMin(task.timestamp)}
-                        </span>
-                      </div>
-                      <span
-                        className={`status-badge ${getStatusClass(task.status)}`}
-                      >
-                        {task.status?.toUpperCase() || "N/A"}
-                      </span>
-                    </div>
-                    <div className="info-row">
-                      <span>
-                        <span className="label">Priority:</span>{" "}
-                        {task.priority || "N/A"}
-                      </span>
-                      <span>
-                        <span className="label">Created:</span>{" "}
-                        {formatDateTimeSec(task.created_at)}
-                      </span>
-                    </div>
-                    <div className="info-row">
-                      <span>
-                        <span className="label">Worker:</span>{" "}
-                        {task.worker_id || "N/A"}
-                      </span>
-                      <span>
-                        <span className="label">Started:</span>{" "}
-                        {formatDateTimeSec(task.started)}
-                      </span>
-                      <span>
-                        <span className="label">Duration:</span>{" "}
-                        {task.duration != null ? task.duration + "s" : "N/A"}
-                      </span>
-                    </div>
-                    <span className="size-info">{task.task_id}</span>
-                  </div>
-                ))
-              )}
-            </div>
+            <DataList
+              loading={loading}
+              length={tasks.length}
+              emptyText="No tasks found"
+            >
+              {tasks.map((t) => (
+                <TaskCard key={t.task_id} task={t} />
+              ))}
+            </DataList>
 
-            {/* Pagination */}
-            <div className="pagination">
-              <button
-                className="page-button"
-                disabled={taskPage === 1}
-                onClick={() => setTaskPage(taskPage - 1)}
-              >
-                Prev
-              </button>
-              {Array.from({ length: taskTotalPages }, (_, i) => i + 1).map(
-                (page) => (
-                  <button
-                    key={page}
-                    className={`page-button ${page === taskPage ? "active" : ""}`}
-                    onClick={() => setTaskPage(page)}
-                  >
-                    {page}
-                  </button>
-                )
-              )}
-              <button
-                className="page-button"
-                disabled={taskPage === taskTotalPages}
-                onClick={() => setTaskPage(taskPage + 1)}
-              >
-                Next
-              </button>
-            </div>
+            <Pagination
+              current={taskParams.page}
+              total={taskTotalPages}
+              onChange={(p) => setTaskParams((prev) => ({ ...prev, page: p }))}
+            />
           </div>
-        )}
-
-        {/* Syncs Tab */}
-        {activeTab === "syncs" && (
+        ) : (
           <div className="tab-content active">
             <div className="action-bar">
-              {/* Filters */}
               <div className="filters">
-                <div className="filter-group">
-                  <span className="filter-label">Status:</span>
-                  <select
-                    value={rawStatusFilter}
-                    onChange={(e) => setRawStatusFilter(e.target.value)}
-                  >
-                    <option value="">All</option>
-                    <option value="pending">Pending</option>
-                    <option value="running">Running</option>
-                    <option value="completed">Completed</option>
-                    <option value="failed">Failed</option>
-                  </select>
-                </div>
+                <FilterGroup
+                  label="Status"
+                  value={syncParams.status}
+                  options={["pending", "running", "completed", "failed"].map(
+                    (v) => ({ label: v.toUpperCase(), value: v })
+                  )}
+                  onChange={(v) =>
+                    setSyncParams((p) => ({ ...p, status: v, page: 1 }))
+                  }
+                />
               </div>
             </div>
 
-            {/* Cards */}
-            <div className="card-list">
-              {loading ? (
-                <div className="empty-cell">Loading...</div>
-              ) : raws.length === 0 ? (
-                <div className="empty-cell">No sync data found</div>
-              ) : (
-                raws.map((raw) => (
-                  <div key={raw.timestamp} className="data-card">
-                    <div className="card-header">
-                      <div className="header-left">
-                        <span className="title-name">Himawari</span>
-                        <span className="timestamp">
-                          {formatDateTimeMin(raw.timestamp)}
-                        </span>
-                      </div>
-                      <span
-                        className={`status-badge ${getStatusClass(raw.status)}`}
-                      >
-                        {raw.status?.toUpperCase() || "N/A"}
-                      </span>
-                    </div>
-                    <div className="info-row">
-                      <span>
-                        <span className="label">Started:</span>{" "}
-                        {formatDateTimeSec(raw.started)}
-                      </span>
-                      <span>
-                        <span className="label">Created:</span>{" "}
-                        {formatDateTimeSec(raw.created)}
-                      </span>
-                    </div>
-                    <div className="info-row">
-                      <span>
-                        <span className="label">Files:</span>{" "}
-                        {formatNumber(raw.files) ?? "N/A"}
-                      </span>
-                      <span>
-                        <span className="label">Speed:</span>{" "}
-                        {formatNumber(raw.speed)
-                          ? `${formatNumber(raw.speed)} KB/s`
-                          : "N/A"}
-                      </span>
-                      <span>
-                        <span className="label">Duration:</span>{" "}
-                        {formatNumber(raw.duration)
-                          ? `${formatNumber(raw.duration)}s`
-                          : "N/A"}
-                      </span>
-                    </div>
-                    <span className="size-info">{formatBytes(raw.size)}</span>
-                  </div>
-                ))
-              )}
-            </div>
+            <DataList
+              loading={loading}
+              length={syncs.length}
+              emptyText="No sync data found"
+            >
+              {syncs.map((s) => (
+                <SyncCard key={s.timestamp} sync={s} />
+              ))}
+            </DataList>
 
-            {/* Pagination */}
-            <div className="pagination">
-              <button
-                className="page-button"
-                disabled={rawPage === 1}
-                onClick={() => setRawPage(rawPage - 1)}
-              >
-                Prev
-              </button>
-              {Array.from({ length: rawTotalPages }, (_, i) => i + 1).map(
-                (page) => (
-                  <button
-                    key={page}
-                    className={`page-button ${page === rawPage ? "active" : ""}`}
-                    onClick={() => setRawPage(page)}
-                  >
-                    {page}
-                  </button>
-                )
-              )}
-              <button
-                className="page-button"
-                disabled={rawPage === rawTotalPages}
-                onClick={() => setRawPage(rawPage + 1)}
-              >
-                Next
-              </button>
-            </div>
+            <Pagination
+              current={syncParams.page}
+              total={syncTotalPages}
+              onChange={(p) => setSyncParams((prev) => ({ ...prev, page: p }))}
+            />
           </div>
         )}
       </div>
 
-      {/* Add Task Modal */}
-      {showAddTaskModal && (
-        <div className="modal" onClick={() => setShowAddTaskModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">Add New Task</div>
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                if (!newTaskTimestamp || submitting) return;
-
-                setSubmitting(true);
-                const timestampISO = new Date(newTaskTimestamp).toISOString();
-                const result = await createTask({
-                  composite: newTaskComposite,
-                  timestamp: timestampISO,
-                  priority: newTaskPriority
-                });
-                setSubmitting(false);
-
-                if (result) {
-                  setShowAddTaskModal(false);
-                  setNewTaskComposite("ir_clouds");
-                  setNewTaskTimestamp("");
-                  setNewTaskPriority("normal");
-                  // Refresh tasks list
-                  fetchTasksData(
-                    taskPage,
-                    taskStatusFilter,
-                    taskCompositeFilter,
-                    taskPriorityFilter
-                  );
-                }
-              }}
-            >
-              <div className="form-group">
-                <label className="form-label">Composite</label>
-                <select
-                  id="modalComposite"
-                  className="form-input"
-                  value={newTaskComposite}
-                  onChange={(e) => setNewTaskComposite(e.target.value)}
-                  required
-                >
-                  {composites.length > 0 ? (
-                    composites.map((comp) => (
-                      <option key={comp} value={comp}>
-                        {formatComposite(comp)}
-                      </option>
-                    ))
-                  ) : (
-                    <>
-                      <option value="ir_clouds">Ir Clouds</option>
-                      <option value="radar_map">Radar Map</option>
-                      <option value="sat_img">Sat Img</option>
-                    </>
-                  )}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Timestamp</label>
-                <input
-                  type="datetime-local"
-                  id="modalTimestamp"
-                  className="form-input"
-                  value={newTaskTimestamp}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value) {
-                      const date = new Date(value);
-                      const now = new Date();
-                      if (date > now) return;
-
-                      const minutes = date.getMinutes();
-                      const roundedMinutes = Math.floor(minutes / 10) * 10;
-                      date.setMinutes(roundedMinutes);
-                      date.setSeconds(0);
-                      date.setMilliseconds(0);
-                      const adjusted = new Date(
-                        date.getTime() - date.getTimezoneOffset() * 60000
-                      )
-                        .toISOString()
-                        .slice(0, 16);
-                      setNewTaskTimestamp(adjusted);
-                    } else {
-                      setNewTaskTimestamp(value);
-                    }
-                  }}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Priority</label>
-                <select
-                  id="modalPriority"
-                  className="form-input"
-                  value={newTaskPriority}
-                  onChange={(e) => setNewTaskPriority(e.target.value)}
-                  required
-                >
-                  <option value="low">Low</option>
-                  <option value="normal">Normal</option>
-                  <option value="high">High</option>
-                </select>
-              </div>
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  onClick={() => setShowAddTaskModal(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="add-button"
-                  disabled={submitting}
-                >
-                  {submitting ? "Submitting..." : "Submit"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <AddTaskModal
+        show={showModal}
+        onClose={() => setShowModal(false)}
+        composites={composites}
+        onCreated={loadTasks}
+      />
     </div>
   );
 }
