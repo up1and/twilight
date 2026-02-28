@@ -5,6 +5,49 @@
 import ky from "ky";
 import type { TileJSON } from "./types";
 
+interface Task {
+  task_id: string;
+  composite: string;
+  timestamp: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  priority: string;
+  worker_id?: string;
+  created_at: string;
+  updated_at: string;
+  message?: string;
+  duration?: number;
+  started?: string;
+  ended?: string;
+}
+
+interface TasksResponse {
+  tasks: Task[];
+  total: number;
+  page: number;
+  per_page: number;
+  pages: number;
+}
+
+interface Raw {
+  timestamp: string;
+  status: "pending" | "running" | "completed" | "failed";
+  files: number;
+  size: number;
+  started: string | null;
+  ended: string | null;
+  duration: number | null;
+  speed: number | null;
+  created: string;
+}
+
+interface RawsResponse {
+  raws: Raw[];
+  total: number;
+  page: number;
+  per_page: number;
+  pages: number;
+}
+
 // Get API configuration from localStorage (token only now)
 export function getAuthConfig() {
   return {
@@ -90,6 +133,72 @@ export async function fetchTileJSON(
     return data;
   } catch (error) {
     console.error(`Error fetching TileJSON for ${composite}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Fetch tasks list with optional filtering and pagination
+ *
+ * @param page - Page number (default: 1)
+ * @param perPage - Items per page (default: 20)
+ * @param status - Optional status filter (pending, processing, completed, failed)
+ * @param composite - Optional composite filter
+ * @param priority - Optional priority filter (low, normal, high)
+ * @returns A Promise resolving to tasks list response or null if the request fails
+ */
+export async function fetchTasks(
+  page: number = 1,
+  perPage: number = 20,
+  status?: string,
+  composite?: string,
+  priority?: string
+): Promise<TasksResponse | null> {
+  try {
+    const params = new URLSearchParams();
+    params.append("page", String(page));
+    params.append("per_page", String(perPage));
+    if (status) params.append("status", status);
+    if (composite) params.append("composite", composite);
+    if (priority) params.append("priority", priority);
+
+    const apiClient = createApiClient();
+    const data = await apiClient
+      .get(`/api/tasks?${params.toString()}`)
+      .json<TasksResponse>();
+    return data;
+  } catch (error) {
+    console.error("Error fetching tasks:", error);
+    return null;
+  }
+}
+
+/**
+ * Fetch raws (Himawari sync data) list with optional filtering and pagination
+ *
+ * @param page - Page number (default: 1)
+ * @param perPage - Items per page (default: 20)
+ * @param status - Optional status filter (pending, running, completed, failed)
+ * @returns A Promise resolving to raws list response or null if the request fails
+ */
+export async function fetchRaws(
+  page: number = 1,
+  perPage: number = 20,
+  status?: string
+): Promise<RawsResponse | null> {
+  try {
+    const params = new URLSearchParams();
+    params.append("page", String(page));
+    params.append("per_page", String(perPage));
+    if (status) params.append("status", status);
+
+    const apiClient = createApiClient();
+    const data = await apiClient
+      .get(`/api/raws?${params.toString()}`)
+      .json<RawsResponse>();
+    return data;
+  } catch (error) {
+    console.error("Error fetching raws:", error);
     return null;
   }
 }

@@ -1,0 +1,300 @@
+/* Dashboard */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+.dashboard {
+  font-family: "Courier New", Courier, monospace;
+  background-color: #ffffff;
+  color: #000000;
+  margin: 0;
+  padding: 20px;
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* --- Header Section --- */
+.header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px dashed #000;
+  padding-bottom: 5px;
+  margin-bottom: 20px;
+}
+
+.header-section h1 {
+  font-size: 24px;
+  text-transform: uppercase;
+  margin: 0;
+  font-weight: bold;
+}
+
+/* --- Tabs --- */
+.tabs {
+  display: flex;
+  gap: 15px;
+}
+
+.tab-button {
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 16px;
+  cursor: pointer;
+  color: #777;
+  text-transform: uppercase;
+  padding: 0;
+  text-decoration: none;
+}
+
+.tab-button:hover {
+  text-decoration: underline;
+}
+
+.tab-button.active {
+  color: #000;
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* --- Filters --- */
+.filters {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+  padding: 10px;
+  background-color: #f9f9f9;
+  border: 1px solid #ccc;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-label {
+  font-weight: bold;
+  text-transform: uppercase;
+  font-size: 14px;
+}
+
+select {
+  font-family: inherit;
+  padding: 5px;
+  border: 1px solid #ccc;
+  background-color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+/* --- Card List --- */
+.card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 400px;
+}
+
+/* --- Data Card --- */
+.data-card {
+  border-bottom: 1px dashed #ccc;
+  padding-bottom: 15px;
+  position: relative;
+  min-height: 100px;
+}
+
+/* Card Header */
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.title-name {
+  text-transform: capitalize;
+}
+
+.timestamp {
+  color: #555;
+  font-weight: normal;
+  font-size: 16px;
+  margin-left: 10px;
+}
+
+.status-badge {
+  font-size: 14px;
+  text-transform: uppercase;
+}
+
+/* Status Colors */
+.status-pending {
+  color: #856404;
+}
+
+.status-completed {
+  color: #155724;
+}
+
+.status-failed {
+  color: #dc3545;
+}
+
+.status-running,
+.status-processing,
+.status-claimed {
+  color: #0056b3;
+}
+
+/* Info Row */
+.info-row {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 2px;
+  font-size: 14px;
+  flex-wrap: wrap;
+}
+
+.label {
+  font-weight: bold;
+  text-transform: uppercase;
+  margin-right: 5px;
+}
+
+/* Size Info (bottom right) */
+.size-info {
+  position: absolute;
+  bottom: 5px;
+  right: 0;
+  font-size: 12px;
+  color: #777;
+}
+
+/* Empty Cell */
+.empty-cell {
+  text-align: center;
+  color: #777;
+  padding: 40px;
+  font-size: 14px;
+}
+
+/* Error Banner */
+.error-banner {
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  border: 1px solid #dc3545;
+  color: #dc3545;
+  font-size: 14px;
+  background-color: #f8d7da;
+}
+
+/* --- Pagination --- */
+.pagination {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.page-button {
+  background: none;
+  border: 1px solid #ccc;
+  font-family: inherit;
+  padding: 5px 10px;
+  cursor: pointer;
+  color: #000;
+  font-size: 14px;
+}
+
+.page-button:hover:not(.active) {
+  background-color: #eee;
+}
+
+.page-button.active {
+  background-color: #000;
+  color: #fff;
+  border-color: #000;
+  font-weight: bold;
+}
+
+.page-button:disabled {
+  color: #ccc;
+  border-color: #eee;
+  cursor: not-allowed;
+}
+
+/* --- Responsive --- */
+@media (max-width: 768px) {
+  .dashboard {
+    padding: 10px;
+  }
+
+  .header-section {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .header-section h1 {
+    font-size: 20px;
+  }
+
+  .tabs {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .filters {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .header-left {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .timestamp {
+    margin-left: 0;
+  }
+
+  .info-row {
+    flex-direction: column;
+    gap: 5px;
+  }
+}
