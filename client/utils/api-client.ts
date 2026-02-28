@@ -261,3 +261,28 @@ export async function createSnapshot(params: {
     return null;
   }
 }
+
+export async function createTask(params: {
+  composite: string;
+  timestamp: string;
+  priority?: string;
+}): Promise<{
+  task_id: string;
+  status: string;
+  created: string;
+} | null> {
+  try {
+    const apiClient = createApiClient();
+    const data = await apiClient
+      .post("/api/tasks", { json: params })
+      .json<{
+        task_id: string;
+        status: string;
+        created: string;
+      }>();
+    return data;
+  } catch (error) {
+    console.error("Failed to create task:", error);
+    return null;
+  }
+}

@@ -4,7 +4,8 @@ import dayjs from "dayjs";
 import {
   fetchTasks,
   fetchRaws,
-  fetchLatestComposites
+  fetchLatestComposites,
+  createTask
 } from "../utils/api-client";
 import "./dashboard.css";
 
@@ -115,6 +116,13 @@ export default function Dashboard() {
   // Loading state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Add Task Modal state
+  const [showAddTaskModal, setShowAddTaskModal] = useState(false);
+  const [newTaskComposite, setNewTaskComposite] = useState("ir_clouds");
+  const [newTaskTimestamp, setNewTaskTimestamp] = useState("");
+  const [newTaskPriority, setNewTaskPriority] = useState("normal");
+  const [submitting, setSubmitting] = useState(false);
 
   // Ref to track if data has been loaded for each tab
   const tasksLoadedRef = useRef(false);
@@ -273,46 +281,54 @@ export default function Dashboard() {
         {activeTab === "tasks" && (
           <div className="tab-content active">
             {/* Filters */}
-            <div className="filters">
-              <div className="filter-group">
-                <span className="filter-label">Composite:</span>
-                <select
-                  value={taskCompositeFilter}
-                  onChange={(e) => setTaskCompositeFilter(e.target.value)}
-                >
-                  <option value="">All</option>
-                  {composites.map((comp) => (
-                    <option key={comp} value={comp}>
-                      {formatComposite(comp)}
-                    </option>
-                  ))}
-                </select>
+            <div className="action-bar">
+              <div className="filters">
+                <div className="filter-group">
+                  <span className="filter-label">Composite:</span>
+                  <select
+                    value={taskCompositeFilter}
+                    onChange={(e) => setTaskCompositeFilter(e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {composites.map((comp) => (
+                      <option key={comp} value={comp}>
+                        {formatComposite(comp)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="filter-group">
+                  <span className="filter-label">Priority:</span>
+                  <select
+                    value={taskPriorityFilter}
+                    onChange={(e) => setTaskPriorityFilter(e.target.value)}
+                  >
+                    <option value="">All</option>
+                    <option value="low">Low</option>
+                    <option value="normal">Normal</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+                <div className="filter-group">
+                  <span className="filter-label">Status:</span>
+                  <select
+                    value={taskStatusFilter}
+                    onChange={(e) => setTaskStatusFilter(e.target.value)}
+                  >
+                    <option value="">All</option>
+                    <option value="pending">Pending</option>
+                    <option value="processing">Processing</option>
+                    <option value="completed">Completed</option>
+                    <option value="failed">Failed</option>
+                  </select>
+                </div>
               </div>
-              <div className="filter-group">
-                <span className="filter-label">Priority:</span>
-                <select
-                  value={taskPriorityFilter}
-                  onChange={(e) => setTaskPriorityFilter(e.target.value)}
-                >
-                  <option value="">All</option>
-                  <option value="low">Low</option>
-                  <option value="normal">Normal</option>
-                  <option value="high">High</option>
-                </select>
-              </div>
-              <div className="filter-group">
-                <span className="filter-label">Status:</span>
-                <select
-                  value={taskStatusFilter}
-                  onChange={(e) => setTaskStatusFilter(e.target.value)}
-                >
-                  <option value="">All</option>
-                  <option value="pending">Pending</option>
-                  <option value="processing">Processing</option>
-                  <option value="completed">Completed</option>
-                  <option value="failed">Failed</option>
-                </select>
-              </div>
+              <button
+                className="add-button"
+                onClick={() => setShowAddTaskModal(true)}
+              >
+                + Add Task
+              </button>
             </div>
 
             {/* Cards */}
@@ -403,20 +419,22 @@ export default function Dashboard() {
         {/* Syncs Tab */}
         {activeTab === "syncs" && (
           <div className="tab-content active">
-            {/* Filters */}
-            <div className="filters">
-              <div className="filter-group">
-                <span className="filter-label">Status:</span>
-                <select
-                  value={rawStatusFilter}
-                  onChange={(e) => setRawStatusFilter(e.target.value)}
-                >
-                  <option value="">All</option>
-                  <option value="pending">Pending</option>
-                  <option value="running">Running</option>
-                  <option value="completed">Completed</option>
-                  <option value="failed">Failed</option>
-                </select>
+            <div className="action-bar">
+              {/* Filters */}
+              <div className="filters">
+                <div className="filter-group">
+                  <span className="filter-label">Status:</span>
+                  <select
+                    value={rawStatusFilter}
+                    onChange={(e) => setRawStatusFilter(e.target.value)}
+                  >
+                    <option value="">All</option>
+                    <option value="pending">Pending</option>
+                    <option value="running">Running</option>
+                    <option value="completed">Completed</option>
+                    <option value="failed">Failed</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -507,6 +525,130 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Add Task Modal */}
+      {showAddTaskModal && (
+        <div className="modal" onClick={() => setShowAddTaskModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">Add New Task</div>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!newTaskTimestamp || submitting) return;
+
+                setSubmitting(true);
+                const timestampISO = new Date(newTaskTimestamp).toISOString();
+                const result = await createTask({
+                  composite: newTaskComposite,
+                  timestamp: timestampISO,
+                  priority: newTaskPriority
+                });
+                setSubmitting(false);
+
+                if (result) {
+                  setShowAddTaskModal(false);
+                  setNewTaskComposite("ir_clouds");
+                  setNewTaskTimestamp("");
+                  setNewTaskPriority("normal");
+                  // Refresh tasks list
+                  fetchTasksData(
+                    taskPage,
+                    taskStatusFilter,
+                    taskCompositeFilter,
+                    taskPriorityFilter
+                  );
+                }
+              }}
+            >
+              <div className="form-group">
+                <label className="form-label">Composite</label>
+                <select
+                  id="modalComposite"
+                  className="form-input"
+                  value={newTaskComposite}
+                  onChange={(e) => setNewTaskComposite(e.target.value)}
+                  required
+                >
+                  {composites.length > 0 ? (
+                    composites.map((comp) => (
+                      <option key={comp} value={comp}>
+                        {formatComposite(comp)}
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="ir_clouds">Ir Clouds</option>
+                      <option value="radar_map">Radar Map</option>
+                      <option value="sat_img">Sat Img</option>
+                    </>
+                  )}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Timestamp</label>
+                <input
+                  type="datetime-local"
+                  id="modalTimestamp"
+                  className="form-input"
+                  value={newTaskTimestamp}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value) {
+                      const date = new Date(value);
+                      const now = new Date();
+                      if (date > now) return;
+
+                      const minutes = date.getMinutes();
+                      const roundedMinutes = Math.floor(minutes / 10) * 10;
+                      date.setMinutes(roundedMinutes);
+                      date.setSeconds(0);
+                      date.setMilliseconds(0);
+                      const adjusted = new Date(
+                        date.getTime() - date.getTimezoneOffset() * 60000
+                      )
+                        .toISOString()
+                        .slice(0, 16);
+                      setNewTaskTimestamp(adjusted);
+                    } else {
+                      setNewTaskTimestamp(value);
+                    }
+                  }}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Priority</label>
+                <select
+                  id="modalPriority"
+                  className="form-input"
+                  value={newTaskPriority}
+                  onChange={(e) => setNewTaskPriority(e.target.value)}
+                  required
+                >
+                  <option value="low">Low</option>
+                  <option value="normal">Normal</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  onClick={() => setShowAddTaskModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="add-button"
+                  disabled={submitting}
+                >
+                  {submitting ? "Submitting..." : "Submit"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
