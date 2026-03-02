@@ -2,7 +2,7 @@
 Tests for data models
 """
 import datetime
-from server.models import TaskModel, HimawariRawModel
+from server.models import TaskModel, SyncModel
 
 
 class TestTaskModel:
@@ -87,53 +87,55 @@ class TestTaskModel:
         assert restored_task.created == task.created
 
 
-class TestHimawariRawModel:
-    """Test HimawariRawModel class"""
+class TestSyncModel:
+    """Test SyncModel class"""
     
-    def test_raw_creation(self, sample_timestamp):
-        raw = HimawariRawModel(sample_timestamp)
+    def test_sync_creation(self, sample_timestamp):
+        sync = SyncModel("himawari", sample_timestamp)
         
-        assert raw.timestamp == sample_timestamp
-        assert raw.status == "pending"
-        assert raw.files == 0
-        assert raw.size == 0
-        assert raw.started is None
-        assert raw.ended is None
-        assert isinstance(raw.created, datetime.datetime)
+        assert sync.source == "himawari"
+        assert sync.timestamp == sample_timestamp
+        assert sync.status == "pending"
+        assert sync.files == 0
+        assert sync.size == 0
+        assert sync.started is None
+        assert sync.ended is None
+        assert isinstance(sync.created, datetime.datetime)
     
     def test_duration_calculation(self, sample_timestamp):
-        raw = HimawariRawModel(sample_timestamp)
+        sync = SyncModel("himawari", sample_timestamp)
         
         # No duration when not started/ended
-        assert raw.duration is None
+        assert sync.duration is None
         
         # Set started and ended times
-        raw.started = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
-        raw.ended = datetime.datetime(2025, 1, 15, 12, 3, 0, tzinfo=datetime.timezone.utc)
+        sync.started = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        sync.ended = datetime.datetime(2025, 1, 15, 12, 3, 0, tzinfo=datetime.timezone.utc)
         
-        assert raw.duration == 180  # 3 minutes
+        assert sync.duration == 180  # 3 minutes
     
     def test_speed_calculation(self, sample_timestamp):
-        raw = HimawariRawModel(sample_timestamp)
+        sync = SyncModel("himawari", sample_timestamp)
         
         # No speed when no duration or size
-        assert raw.speed is None
+        assert sync.speed is None
         
         # Set values for speed calculation
-        raw.started = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
-        raw.ended = datetime.datetime(2025, 1, 15, 12, 1, 0, tzinfo=datetime.timezone.utc)  # 60 seconds
-        raw.size = 1024 * 100  # 100 KB
+        sync.started = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        sync.ended = datetime.datetime(2025, 1, 15, 12, 1, 0, tzinfo=datetime.timezone.utc)  # 60 seconds
+        sync.size = 1024 * 100  # 100 KB
         
-        assert raw.speed == int(100 / 60)  # ~1 KB/s
+        assert sync.speed == int(100 / 60)  # ~1 KB/s
     
     def test_to_dict(self, sample_timestamp):
-        raw = HimawariRawModel(sample_timestamp)
-        raw.status = "completed"
-        raw.files = 10
-        raw.size = 1024000
+        sync = SyncModel("himawari", sample_timestamp)
+        sync.status = "completed"
+        sync.files = 10
+        sync.size = 1024000
         
-        result = raw.to_dict()
+        result = sync.to_dict()
         
+        assert result["source"] == "himawari"
         assert result["timestamp"] == sample_timestamp
         assert result["status"] == "completed"
         assert result["files"] == 10
@@ -142,20 +144,21 @@ class TestHimawariRawModel:
         assert result["speed"] is None
     
     def test_json_serialization(self, sample_timestamp):
-        raw = HimawariRawModel(sample_timestamp)
-        raw.status = "running"
-        raw.files = 5
-        raw.size = 512000
+        sync = SyncModel("himawari", sample_timestamp)
+        sync.status = "running"
+        sync.files = 5
+        sync.size = 512000
         
         # Serialize to JSON
-        json_str = raw.to_json()
+        json_str = sync.to_json()
         assert isinstance(json_str, str)
         
         # Deserialize from JSON
-        restored_raw = HimawariRawModel.from_json(json_str)
+        restored_sync = SyncModel.from_json(json_str)
         
-        assert restored_raw.timestamp == raw.timestamp
-        assert restored_raw.status == raw.status
-        assert restored_raw.files == raw.files
-        assert restored_raw.size == raw.size
-        assert restored_raw.created == raw.created
+        assert restored_sync.source == sync.source
+        assert restored_sync.timestamp == sync.timestamp
+        assert restored_sync.status == sync.status
+        assert restored_sync.files == sync.files
+        assert restored_sync.size == sync.size
+        assert restored_sync.created == sync.created

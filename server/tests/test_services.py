@@ -3,8 +3,8 @@ Tests for service classes
 """
 import datetime
 from unittest.mock import Mock, patch
-from server.services import TaskManager, HimawariRawManager, CompositeStateManager
-from server.models import TaskModel, HimawariRawModel
+from server.services import TaskManager, SyncManager, CompositeStateManager
+from server.models import TaskModel, SyncModel
 
 
 class TestTaskManager:
@@ -328,31 +328,31 @@ class TestTaskManager:
         mock_redis.zrem.assert_called_with("task_queue", "deleted-task-id")
 
 
-class TestHimawariRawManager:
-    """Test HimawariRawManager class"""
+class TestSyncManager:
+    """Test SyncManager class"""
     
     def test_init(self, mock_redis):
-        manager = HimawariRawManager(mock_redis)
+        manager = SyncManager(mock_redis)
         
         assert manager.redis == mock_redis
-        assert manager.raws_key == "himawari_raws"
-        assert manager.timestamps_key == "raws_timestamps"
+        assert manager.syncs_key == "syncs"
+        assert manager.timestamps_key == "syncs_timestamps"
         assert manager.expire_time == 3600 * 24 * 30
     
     def test_get_timestamp_key(self, mock_redis, sample_timestamp):
-        manager = HimawariRawManager(mock_redis)
+        manager = SyncManager(mock_redis)
         
-        result = manager._get_timestamp_key(sample_timestamp)
+        result = manager._get_timestamp_key("himawari", sample_timestamp)
         
-        assert result == "20250115_1200"
+        assert result == "himawari:20250115_1200"
     
     def test_create_sync_new(self, mock_redis, sample_timestamp):
-        manager = HimawariRawManager(mock_redis)
+        manager = SyncManager(mock_redis)
         
         # Mock sync doesn't exist
         mock_redis.hexists.return_value = False
         
-        manager.create_sync(sample_timestamp)
+        manager.create_sync("himawari", sample_timestamp)
         
         # Verify Redis calls
         mock_redis.hset.assert_called()
@@ -360,27 +360,27 @@ class TestHimawariRawManager:
         mock_redis.expire.assert_called()
     
     def test_create_sync_exists(self, mock_redis, sample_timestamp):
-        manager = HimawariRawManager(mock_redis)
+        manager = SyncManager(mock_redis)
         
         # Mock sync already exists
         mock_redis.hexists.return_value = True
         
-        manager.create_sync(sample_timestamp)
+        manager.create_sync("himawari", sample_timestamp)
         
         # Should not create new sync
         mock_redis.hset.assert_not_called()
     
     def test_update_progress_existing(self, mock_redis, sample_timestamp):
-        manager = HimawariRawManager(mock_redis)
+        manager = SyncManager(mock_redis)
         
-        # Create existing raw
-        existing_raw = HimawariRawModel(sample_timestamp)
-        existing_raw.status = 'pending'
+        # Create existing sync
+        existing_sync = SyncModel("himawari", sample_timestamp)
+        existing_sync.status = 'pending'
         
-        # Mock existing raw in Redis
-        mock_redis.hget.return_value = existing_raw.to_json()
+        # Mock existing sync in Redis
+        mock_redis.hget.return_value = existing_sync.to_json()
         
-        manager.update_progress(sample_timestamp, status="running", files=5, size=1024)
+        manager.update_progress("himawari", sample_timestamp, status="running", files=5, size=1024)
         
         # Verify Redis calls
         mock_redis.hset.assert_called()
@@ -388,84 +388,81 @@ class TestHimawariRawManager:
         mock_redis.expire.assert_called()
     
     def test_update_progress_new(self, mock_redis, sample_timestamp):
-        manager = HimawariRawManager(mock_redis)
+        manager = SyncManager(mock_redis)
         
-        # Mock no existing raw
+        # Mock no existing sync
         mock_redis.hget.return_value = None
         
-        manager.update_progress(sample_timestamp, status="running")
+        manager.update_progress("himawari", sample_timestamp, status="running")
         
-        # Should create new raw and update it
+        # Should create new sync and update it
         mock_redis.hset.assert_called()
         mock_redis.zadd.assert_called()
     
-    def test_get_raw_exists(self, mock_redis, sample_timestamp):
-        manager = HimawariRawManager(mock_redis)
+    def test_get_sync_exists(self, mock_redis, sample_timestamp):
+        manager = SyncManager(mock_redis)
         
-        # Create sample raw
-        raw = HimawariRawModel(sample_timestamp)
-        raw.status = "completed"
-        raw.files = 10
+        # Create sample sync
+        sync = SyncModel("himawari", sample_timestamp)
+        sync.status = "completed"
+        sync.files = 10
         
-        # Mock raw exists in Redis
-        mock_redis.hget.return_value = raw.to_json()
+        # Mock sync exists in Redis
+        mock_redis.hget.return_value = sync.to_json()
         
-        result = manager.get_raw(sample_timestamp)
+        result = manager.get_sync("himawari", sample_timestamp)
         
         assert result["status"] == "completed"
         assert result["files"] == 10
         assert result["timestamp"] == sample_timestamp
+        assert result["source"] == "himawari"
     
-    def test_get_raw_not_exists(self, mock_redis, sample_timestamp):
-        manager = HimawariRawManager(mock_redis)
+    def test_get_sync_not_exists(self, mock_redis, sample_timestamp):
+        manager = SyncManager(mock_redis)
         
-        # Mock raw doesn't exist
+        # Mock sync doesn't exist
         mock_redis.hget.return_value = None
         
-        result = manager.get_raw(sample_timestamp)
+        result = manager.get_sync("himawari", sample_timestamp)
         
         assert result is None
     
-    def test_get_raws_with_pagination(self, mock_redis, sample_timestamp):
-        manager = HimawariRawManager(mock_redis)
-        
-        # Mock total count
-        mock_redis.zcard.return_value = 5
+    def test_get_syncs_with_pagination(self, mock_redis, sample_timestamp):
+        manager = SyncManager(mock_redis)
         
         # Mock timestamp keys
-        mock_redis.zrevrange.return_value = ["20250115_1200", "20250115_1000"]
+        mock_redis.zrevrange.return_value = ["himawari:20250115_1200", "himawari:20250115_1000"]
         
-        # Create sample raws
-        raw1 = HimawariRawModel(sample_timestamp)
-        raw2 = HimawariRawModel(sample_timestamp.replace(hour=10))
+        # Create sample syncs
+        sync1 = SyncModel("himawari", sample_timestamp)
+        sync2 = SyncModel("himawari", sample_timestamp.replace(hour=10))
         
-        # Mock raw data
-        mock_redis.hget.side_effect = [raw1.to_json(), raw2.to_json()]
+        # Mock sync data
+        mock_redis.hget.side_effect = [sync1.to_json(), sync2.to_json()]
         
-        results, total = manager.get_raws(limit=2, offset=0)
+        results, total = manager.get_syncs(source="himawari", limit=2, offset=0)
         
-        assert total == 5
+        assert total == 2
         assert len(results) == 2
         assert results[0]["timestamp"] == sample_timestamp
         
         # Verify Redis calls
-        mock_redis.zcard.assert_called_with("raws_timestamps")
-        mock_redis.zrevrange.assert_called_with("raws_timestamps", 0, 1)
+        mock_redis.zrevrange.assert_called_with("syncs_timestamps", 0, -1)
     
     def test_update_progress_with_task_manager_promotion(self, mock_redis, sample_timestamp):
         # Create mock task manager
         mock_task_manager = Mock()
-        manager = HimawariRawManager(mock_redis, mock_task_manager)
+        manager = SyncManager(mock_redis, mock_task_manager)
         
-        # Create existing raw with pending status
-        existing_raw = HimawariRawModel(sample_timestamp)
-        existing_raw.status = "pending"
+        # Create existing sync with pending status
+        existing_sync = SyncModel("himawari", sample_timestamp)
+        existing_sync.status = "pending"
         
-        # Mock existing raw in Redis
-        mock_redis.hget.return_value = existing_raw.to_json()
+        # Mock existing sync in Redis
+        mock_redis.hget.return_value = existing_sync.to_json()
         
         # Update status to completed (should trigger task promotion)
-        manager.update_progress(sample_timestamp, status="completed")
+        manager.update_progress("himawari", sample_timestamp, status="completed")
         
         # Verify task manager promotion was called
         mock_task_manager.promote_tasks.assert_called_once_with(sample_timestamp)
@@ -476,17 +473,17 @@ class TestHimawariRawManager:
     
     def test_update_progress_no_task_manager(self, mock_redis, sample_timestamp):
         # Create manager without task manager
-        manager = HimawariRawManager(mock_redis, task_manager=None)
+        manager = SyncManager(mock_redis, task_manager=None)
         
-        # Create existing raw
-        existing_raw = HimawariRawModel(sample_timestamp)
-        existing_raw.status = 'pending'
+        # Create existing sync
+        existing_sync = SyncModel("himawari", sample_timestamp)
+        existing_sync.status = 'pending'
         
-        # Mock existing raw in Redis
-        mock_redis.hget.return_value = existing_raw.to_json()
+        # Mock existing sync in Redis
+        mock_redis.hget.return_value = existing_sync.to_json()
         
         # Update status to completed (should not crash without task manager)
-        manager.update_progress(sample_timestamp, status="completed")
+        manager.update_progress("himawari", sample_timestamp, status="completed")
         
         # Verify Redis operations still work
         mock_redis.hset.assert_called()

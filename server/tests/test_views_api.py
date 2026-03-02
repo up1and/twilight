@@ -279,13 +279,13 @@ class TestUpdateTaskStatus:
         assert "updated successfully" in result["message"]
 
 
-class TestManageHimawariRaw:
-    """Test POST/PUT /api/raws endpoint"""
+class TestManageSync:
+    """Test POST/PUT /api/syncs endpoint"""
     
-    def test_manage_raw_missing_timestamp(self, client):
+    def test_manage_sync_missing_timestamp(self, client):
         data = {"status": "completed"}
         
-        response = client.post("/api/raws",
+        response = client.post("/api/syncs",
                              data=json.dumps(data),
                              content_type="application/json")
         
@@ -293,10 +293,10 @@ class TestManageHimawariRaw:
         result = json.loads(response.data)
         assert "Missing required field: timestamp" in result["message"]
     
-    def test_manage_raw_invalid_timestamp(self, client):
+    def test_manage_sync_invalid_timestamp(self, client):
         data = {"timestamp": "invalid-timestamp"}
         
-        response = client.post("/api/raws",
+        response = client.post("/api/syncs",
                              data=json.dumps(data),
                              content_type="application/json")
         
@@ -304,10 +304,10 @@ class TestManageHimawariRaw:
         result = json.loads(response.data)
         assert "Invalid timestamp format" in result["message"]
     
-    def test_update_raw_no_fields(self, client):
+    def test_update_sync_no_fields(self, client):
         data = {"timestamp": "2025-01-15T12:00:00Z"}
         
-        response = client.put("/api/raws",
+        response = client.put("/api/syncs",
                             data=json.dumps(data),
                             content_type="application/json")
         
@@ -315,13 +315,13 @@ class TestManageHimawariRaw:
         result = json.loads(response.data)
         assert "At least one of status, files, or size must be provided" in result["message"]
     
-    def test_update_raw_invalid_status(self, client):
+    def test_update_sync_invalid_status(self, client):
         data = {
             "timestamp": "2025-01-15T12:00:00Z",
             "status": "invalid_status"
         }
         
-        response = client.put("/api/raws",
+        response = client.put("/api/syncs",
                             data=json.dumps(data),
                             content_type="application/json")
         
@@ -329,10 +329,10 @@ class TestManageHimawariRaw:
         result = json.loads(response.data)
         assert "Invalid status" in result["message"]
     
-    def test_create_raw_success(self, client):
+    def test_create_sync_success(self, client):
         data = {"timestamp": "2025-01-15T12:00:00Z"}
         
-        response = client.post("/api/raws",
+        response = client.post("/api/syncs",
                              data=json.dumps(data),
                              content_type="application/json")
         
@@ -341,7 +341,7 @@ class TestManageHimawariRaw:
         assert "created successfully" in result["message"]
         assert result["status"] == "pending"
     
-    def test_update_raw_success(self, client):
+    def test_update_sync_success(self, client):
         data = {
             "timestamp": "2025-01-15T12:00:00Z",
             "status": "running",  # Use "running" instead of "completed" to avoid promote_tasks call
@@ -349,7 +349,7 @@ class TestManageHimawariRaw:
             "size": 1024000
         }
         
-        response = client.put("/api/raws",
+        response = client.put("/api/syncs",
                             data=json.dumps(data),
                             content_type="application/json")
         
@@ -358,39 +358,39 @@ class TestManageHimawariRaw:
         assert "updated successfully" in result["message"]
 
 
-class TestGetHimawariRaw:
-    """Test GET /api/raws/<timestamp> endpoint"""
+class TestGetSync:
+    """Test GET /api/syncs/<timestamp> endpoint"""
     
-    def test_get_raw_invalid_timestamp(self, client):
-        response = client.get("/api/raws/invalid-timestamp")
+    def test_get_sync_invalid_timestamp(self, client):
+        response = client.get("/api/syncs/invalid-timestamp")
         
         assert response.status_code == 400
         result = json.loads(response.data)
         assert "Invalid timestamp format" in result["message"]
     
-    def test_get_raw_not_found(self, client):
-        response = client.get("/api/raws/2025-01-15T12:00:00Z")
+    def test_get_sync_not_found(self, client):
+        response = client.get("/api/syncs/2025-01-15T12:00:00Z")
         
-        # Should return 404 for non-existent raw or 200 if it exists
+        # Should return 404 for non-existent sync or 200 if it exists
         assert response.status_code in [200, 404]
 
 
-class TestGetHimawariRaws:
-    """Test GET /api/raws endpoint"""
+class TestGetSyncs:
+    """Test GET /api/syncs endpoint"""
     
-    def test_get_raws_invalid_pagination(self, client):
-        response = client.get("/api/raws?page=invalid")
+    def test_get_syncs_invalid_pagination(self, client):
+        response = client.get("/api/syncs?page=invalid")
         
         assert response.status_code == 400
         result = json.loads(response.data)
         assert "Invalid page" in result["message"]
     
-    def test_get_raws_success(self, client):
-        response = client.get("/api/raws")
+    def test_get_syncs_success(self, client):
+        response = client.get("/api/syncs")
         
         assert response.status_code == 200
         result = json.loads(response.data)
-        assert "raws" in result
+        assert "syncs" in result
         assert "total" in result
         assert result["page"] == 1
         assert result["per_page"] == 20
@@ -590,18 +590,19 @@ class TestAPIErrorHandling:
         assert result['per_page'] <= 100
 
 
-class TestHimawariRawExtended:
-    """Extended tests for Himawari raw endpoints"""
+class TestSyncExtended:
+    """Extended tests for sync endpoints"""
     
-    def test_create_raw_with_all_fields(self, client):
+    def test_create_sync_with_all_fields(self, client):
         data = {
             'timestamp': '2025-01-15T12:00:00Z',
             'status': 'pending',
             'files': 0,
-            'size': 0
+            'size': 0,
+            'source': 'himawari'
         }
         
-        response = client.post('/api/raws',
+        response = client.post('/api/syncs',
                              data=json.dumps(data),
                              content_type='application/json')
         
@@ -609,7 +610,7 @@ class TestHimawariRawExtended:
         result = json.loads(response.data)
         assert 'created successfully' in result['message']
     
-    def test_update_raw_partial_fields(self, client):
+    def test_update_sync_partial_fields(self, client):
         # Test updating with only some fields (avoid 'completed' status to prevent promote_tasks call)
         test_cases = [
             {'timestamp': '2025-01-15T12:00:00Z', 'status': 'running'},
@@ -619,7 +620,7 @@ class TestHimawariRawExtended:
         ]
         
         for data in test_cases:
-            response = client.put('/api/raws',
+            response = client.put('/api/syncs',
                                 data=json.dumps(data),
                                 content_type='application/json')
             
@@ -627,9 +628,9 @@ class TestHimawariRawExtended:
             result = json.loads(response.data)
             assert 'updated successfully' in result['message']
     
-    def test_get_raws_with_pagination(self, client):
+    def test_get_syncs_with_pagination(self, client):
         # Test pagination parameters
-        response = client.get('/api/raws?page=1&per_page=5')
+        response = client.get('/api/syncs?page=1&per_page=5')
         
         assert response.status_code == 200
         result = json.loads(response.data)
@@ -637,7 +638,7 @@ class TestHimawariRawExtended:
         assert result['per_page'] == 5
         assert 'pages' in result
     
-    def test_get_raw_with_various_timestamps(self, client):
+    def test_get_sync_with_various_timestamps(self, client):
         # Test with different timestamp formats
         test_timestamps = [
             '2025-01-15T12:00:00Z',
@@ -646,7 +647,7 @@ class TestHimawariRawExtended:
         ]
         
         for timestamp in test_timestamps:
-            response = client.get(f'/api/raws/{timestamp}')
+            response = client.get(f'/api/syncs/{timestamp}')
             # Should return 200 if exists, 404 if not, but not 400 for valid format
             assert response.status_code in [200, 404]
 
@@ -757,7 +758,7 @@ class TestAPIResponseFormats:
             ('/api/tasks', 'POST', {}),  # Missing fields
             ('/api/tasks/invalid', 'GET', None),  # Not found
             ('/api/tasks/invalid/claim', 'PUT', {}),  # Missing worker_id
-            ('/api/raws', 'POST', {}),  # Missing timestamp
+            ('/api/syncs', 'POST', {}),  # Missing timestamp
             ('/api/snapshots', 'POST', {}),  # Missing fields
         ]
         

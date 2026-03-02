@@ -115,7 +115,12 @@ class TestInitializeCompositeState:
         mock_obj3 = Mock()
         mock_obj3.object_name = "true_color/2025/01/15/himawari_true_color_20250115_0800.tif"
         
-        mock_client.list_objects.return_value = [mock_obj1, mock_obj2, mock_obj3]
+        objects = [mock_obj1, mock_obj2, mock_obj3]
+        
+        def mock_list_objects(bucket, prefix=None, recursive=True):
+            return [obj for obj in objects if obj.object_name.startswith(prefix)]
+            
+        mock_client.list_objects.side_effect = mock_list_objects
         
         available_composites = ["ir_clouds", "true_color"]
         result = initialize_composite_state(mock_client, available_composites)
@@ -134,7 +139,12 @@ class TestInitializeCompositeState:
         mock_obj = Mock()
         mock_obj.object_name = "unknown/2025/01/15/himawari_unknown_20250115_1200.tif"
         
-        mock_client.list_objects.return_value = [mock_obj]
+        objects = [mock_obj]
+        
+        def mock_list_objects(bucket, prefix=None, recursive=True):
+            return [obj for obj in objects if obj.object_name.startswith(prefix)]
+            
+        mock_client.list_objects.side_effect = mock_list_objects
         
         available_composites = ['ir_clouds', 'true_color']
         result = initialize_composite_state(mock_client, available_composites)

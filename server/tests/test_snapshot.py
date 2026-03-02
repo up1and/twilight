@@ -232,7 +232,7 @@ class TestCreateSingleSnapshot:
     
     @patch('server.snapshot.create_snapshot_image')
     @patch('server.snapshot.upload_to_minio')
-    @patch('server.snapshot._composite_object')
+    @patch('server.snapshot.generate_composite_object_name')
     def test_create_single_snapshot_success(self, mock_find_object, mock_upload, mock_create_image):
         mock_client = Mock()
         mock_client.stat_object.return_value = True  # COG exists

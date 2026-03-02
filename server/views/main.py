@@ -5,8 +5,9 @@ import os
 import sqlite3
 import datetime
 
+import rio_tiler.io
+
 from flask import Blueprint, Response, request, jsonify, current_app
-from rio_tiler.io import Reader
 from rio_tiler.colormap import cmap
 from rio_tiler.errors import TileOutsideBounds
 from rasterio.errors import RasterioIOError
@@ -48,7 +49,7 @@ def find_tile(composite, z, x, y, timestamp=None):
             expires=datetime.timedelta(hours=24)
         )
 
-        with Reader(presigned_url) as cog:
+        with rio_tiler.io.Reader(presigned_url) as cog:
             img = cog.tile(x, y, z, tilesize=256)
             band_count = img.data.shape[0]
             if band_count == 1:
@@ -100,12 +101,12 @@ def tilejson(composite):
     object_name = generate_composite_object_name(composite, timestamp)
 
     try:
-        presigned_url = client.presigned_get_object(
+        presigned_url = current_app.client.presigned_get_object(
             bucket_name='himawari',
             object_name=object_name,
             expires=datetime.timedelta(hours=24)
         )
-        with Reader(presigned_url) as cog:
+        with rio_tiler.io.Reader(presigned_url) as cog:
             # Define attribution for different composites
             name = upper_case(composite)
             composite_id = composite.replace("_", "-")

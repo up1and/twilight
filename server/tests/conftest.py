@@ -5,16 +5,20 @@ import pytest
 import datetime
 from unittest.mock import Mock, patch
 from server.app import create_app
-from server.models import TaskModel, HimawariRawModel
+from server.models import TaskModel, SyncModel
 
 
 @pytest.fixture
-def app():
+def app(mock_redis):
     """Create test app instance"""
-    app = create_app()
-    app.config["TESTING"] = True
-    app.config["AVAILABLE_COMPOSITES"] = ["ir_clouds", "true_color", "ash", "night_microphysics"]
-    return app
+    with patch("server.extensions.client", Mock()) as mock_minio:
+        app = create_app()
+        app.config["TESTING"] = True
+        app.config["AVAILABLE_COMPOSITES"] = ["ir_clouds", "true_color", "ash", "night_microphysics"]
+        # Explicitly set app.client if it's used directly
+        app.client = mock_minio
+        app.mock_minio = mock_minio
+        yield app
 
 
 @pytest.fixture
@@ -64,9 +68,9 @@ def sample_task(sample_timestamp):
 
 
 @pytest.fixture
-def sample_raw(sample_timestamp):
-    """Sample raw for testing"""
-    return HimawariRawModel(sample_timestamp)
+def sample_sync(sample_timestamp):
+    """Sample sync for testing"""
+    return SyncModel("himawari", sample_timestamp)
 
 
 @pytest.fixture
@@ -79,9 +83,9 @@ def mock_task_manager(mock_redis):
 
 
 @pytest.fixture
-def mock_himawari_manager(mock_redis):
-    """Mock HimawariRawManager with Redis"""
-    with patch("server.services.HimawariRawManager") as mock_class:
+def mock_sync_manager(mock_redis):
+    """Mock SyncManager with Redis"""
+    with patch("server.services.SyncManager") as mock_class:
         instance = mock_class.return_value
         instance.redis = mock_redis
         yield instance
