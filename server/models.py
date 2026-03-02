@@ -84,8 +84,9 @@ class TaskModel:
         return task
 
 
-class HimawariRawModel:
-    def __init__(self, timestamp):
+class SyncModel:
+    def __init__(self, source, timestamp):
+        self.source = source
         self.timestamp = timestamp
         self.status = "pending"  # pending, running, completed, failed
         self.files = 0
@@ -112,6 +113,7 @@ class HimawariRawModel:
     def to_dict(self):
         return {
             "timestamp": self.timestamp,
+            "source": self.source,
             "status": self.status,
             "files": self.files,
             "size": self.size,
@@ -126,6 +128,7 @@ class HimawariRawModel:
         """Serialize raw to JSON string for Redis storage"""
         data = {
             "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "source": self.source,
             "status": self.status,
             "files": self.files,
             "size": self.size,
@@ -141,15 +144,16 @@ class HimawariRawModel:
         data = json.loads(json_str)
 
         # Create raw instance
-        raw = cls.__new__(cls)
-        raw.status = data["status"]
-        raw.files = data["files"]
-        raw.size = data["size"]
+        sync = cls.__new__(cls)
+        sync.source = data["source"]
+        sync.status = data["status"]
+        sync.files = data["files"]
+        sync.size = data["size"]
 
         # Convert ISO format strings back to datetime objects
-        raw.timestamp = datetime.datetime.fromisoformat(data["timestamp"])
-        raw.created = datetime.datetime.fromisoformat(data["created"])
-        raw.started = datetime.datetime.fromisoformat(data["started"]) if data["started"] else None
-        raw.ended = datetime.datetime.fromisoformat(data["ended"]) if data["ended"] else None
+        sync.timestamp = datetime.datetime.fromisoformat(data["timestamp"])
+        sync.created = datetime.datetime.fromisoformat(data["created"])
+        sync.started = datetime.datetime.fromisoformat(data["started"]) if data["started"] else None
+        sync.ended = datetime.datetime.fromisoformat(data["ended"]) if data["ended"] else None
 
-        return raw
+        return sync

@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import dayjs from "dayjs";
 import {
   fetchTasks,
-  fetchRaws,
+  fetchSyncs,
   fetchLatestComposites,
   createTask
 } from "../utils/api-client";
@@ -26,6 +26,7 @@ interface Task {
 
 interface Sync {
   timestamp: string;
+  source: string;
   status: "pending" | "running" | "completed" | "failed";
   files: number;
   size: number;
@@ -192,7 +193,7 @@ const SyncCard = ({ sync }: { sync: Sync }) => (
   <div className="data-card">
     <div className="card-header">
       <div className="header-left">
-        <span className="title-name">Himawari</span>
+        <span className="title-name">{sync.source}</span>
         <span className="timestamp">{formatDateTimeMin(sync.timestamp)}</span>
       </div>
       <span className={`status-badge status-${sync.status}`}>
@@ -201,12 +202,12 @@ const SyncCard = ({ sync }: { sync: Sync }) => (
     </div>
     <div className="info-row">
       <span>
-        <span className="label">Started:</span>{" "}
-        {formatDateTimeSec(sync.started)}
-      </span>
-      <span>
         <span className="label">Created:</span>{" "}
         {formatDateTimeSec(sync.created)}
+      </span>
+      <span>
+        <span className="label">Started:</span>{" "}
+        {formatDateTimeSec(sync.started)}
       </span>
     </div>
     <div className="info-row">
@@ -317,7 +318,7 @@ const AddTaskModal = ({
               className="form-input"
               value={form.timestamp}
               onChange={(e) => handleTimeChange(e.target.value)}
-              max={dayjs().utc().format("YYYY-MM-DDTHH:mm")}
+              max={dayjs().format("YYYY-MM-DDTHH:mm")}
               required
             />
           </div>
@@ -402,14 +403,14 @@ export default function Dashboard() {
     fetchingRef.current = true;
     setLoading(true);
     try {
-      const data = await fetchRaws(
+      const data = await fetchSyncs(
         syncParams.page,
         10,
         syncParams.status || undefined
       );
       if (data) {
-        const items = data.raws || [];
-        // Filtering locally if status is provided, otherwise using data.raws
+        const items = data.syncs || [];
+        // Filtering locally if status is provided, otherwise using data.syncs
         setSyncs(
           syncParams.status
             ? items.filter((item: any) => item.status === syncParams.status)

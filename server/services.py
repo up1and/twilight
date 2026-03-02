@@ -3,7 +3,7 @@ Service classes for business logic
 """
 import datetime
 
-from models import TaskModel, HimawariRawModel
+from models import TaskModel, SyncModel
 
 class TaskManager:
     def __init__(self, redis_client):
@@ -198,120 +198,122 @@ class TaskManager:
         return filtered_tasks[offset:offset+limit], len(filtered_tasks)
 
 
-class HimawariRawManager:
+class SyncManager:
     def __init__(self, redis_client, task_manager=None):
         self.redis = redis_client
         self.task_manager = task_manager
         # Redis keys
-        self.raws_key = "himawari_raws"  # Hash: timestamp_key -> raw_json
-        self.timestamps_key = "raws_timestamps"  # Sorted Set: timestamp_key with unix timestamp score
+        self.syncs_key = "syncs"  # Hash: timestamp_key -> sync_json
+        self.timestamps_key = "syncs_timestamps"  # Sorted Set: timestamp_key with unix timestamp score
         self.expire_time = 3600 * 24 * 30  # 30 days
 
         # Redis lock for distributed locking
-        self.lock = self.redis.lock("raws_lock", timeout=10, blocking_timeout=10)
+        self.lock = self.redis.lock("syncs_lock", timeout=10, blocking_timeout=10)
 
-    def _get_timestamp_key(self, timestamp):
+    def _get_timestamp_key(self, source, timestamp):
         """Get timestamp key for Redis storage"""
-        return timestamp.strftime("%Y%m%d_%H%M")
+        return f"{source}:{timestamp.strftime('%Y%m%d_%H%M')}"
 
-    def create_sync(self, timestamp):
+    def create_sync(self, source, timestamp):
         """Create a pending sync record for a timestamp"""
-        timestamp_key = self._get_timestamp_key(timestamp)
+        timestamp_key = self._get_timestamp_key(source, timestamp)
         with self.lock:
             # Check if already exists
-            if self.redis.hexists(self.raws_key, timestamp_key):
+            if self.redis.hexists(self.syncs_key, timestamp_key):
                 return
-                
-            # Create new raw
-            raw = HimawariRawModel(timestamp)
-            
-            # Store raw in Redis hash
-            self.redis.hset(self.raws_key, timestamp_key, raw.to_json())
+
+            # Create new sync
+            sync = SyncModel(source, timestamp)
+
+            # Store sync in Redis hash
+            self.redis.hset(self.syncs_key, timestamp_key, sync.to_json())
             
             # Add to sorted set with unix timestamp as score
             score = int(timestamp.timestamp())
             self.redis.zadd(self.timestamps_key, {timestamp_key: score})
             
             # Set expiration
-            self.redis.expire(self.raws_key, self.expire_time)
+            self.redis.expire(self.syncs_key, self.expire_time)
             self.redis.expire(self.timestamps_key, self.expire_time)
         
-    def update_progress(self, timestamp, status=None, files=None, size=None):
+    def update_progress(self, source, timestamp, status=None, files=None, size=None):
         """Update sync progress for a timestamp with partial updates
         
         Args:
-            timestamp: Target datetime
+            source: Data source (required)
+            timestamp: Target datetime (required)
             status: Status to update (optional)
             files: Number of files to update (optional)
             size: Total size to update (optional)
         """
-        timestamp_key = self._get_timestamp_key(timestamp)
+        timestamp_key = self._get_timestamp_key(source, timestamp)
         now = datetime.datetime.now(datetime.timezone.utc)
         
         with self.lock:
             # Get existing sync
-            raw_json = self.redis.hget(self.raws_key, timestamp_key)
-            if raw_json:
-                raw = HimawariRawModel.from_json(raw_json)
+            sync_json = self.redis.hget(self.syncs_key, timestamp_key)
+            if sync_json:
+                sync = SyncModel.from_json(sync_json)
             else:
                 # Create new sync if doesn't exist
-                raw = HimawariRawModel(timestamp)
+                sync = SyncModel(source, timestamp)
             
             # Update only provided fields
             if status is not None:
                 # If status changed to "completed", promote related tasks to high priority
-                if self.task_manager and status == "completed" and raw.status != "completed":
+                if self.task_manager and status == "completed" and sync.status != "completed":
                     self.task_manager.promote_tasks(timestamp)
 
-                raw.status = status
+                sync.status = status
                 # Set started time when status becomes running
-                if status == "running" and raw.started is None:
-                    raw.started = now
+                if status == "running" and sync.started is None:
+                    sync.started = now
             
             if files is not None:
-                raw.files = files
+                sync.files = files
                 
             if size is not None:
-                raw.size = size
+                sync.size = size
                 
             # Always update ended time when any field is updated
-            raw.ended = now
+            sync.ended = now
                 
             # Store updated
-            self.redis.hset(self.raws_key, timestamp_key, raw.to_json())
+            self.redis.hset(self.syncs_key, timestamp_key, sync.to_json())
             
             # Ensure it's in sorted set
             score = int(timestamp.timestamp())
             self.redis.zadd(self.timestamps_key, {timestamp_key: score})
             
             # Set expiration
-            self.redis.expire(self.raws_key, self.expire_time)
+            self.redis.expire(self.syncs_key, self.expire_time)
             self.redis.expire(self.timestamps_key, self.expire_time)
         
-    def get_raw(self, timestamp):
-        """Get raw status for a timestamp"""
-        timestamp_key = self._get_timestamp_key(timestamp)
-        raw_json = self.redis.hget(self.raws_key, timestamp_key)
-        if not raw_json:
+    def get_sync(self, source, timestamp):
+        """Get sync status for a timestamp"""
+        timestamp_key = self._get_timestamp_key(source, timestamp)
+        sync_json = self.redis.hget(self.syncs_key, timestamp_key)
+        if not sync_json:
             return None
-        return HimawariRawModel.from_json(raw_json).to_dict()
+        return SyncModel.from_json(sync_json).to_dict()
         
-    def get_raws(self, limit=20, offset=0):
-        """Get all raw records with pagination"""
-        # Get total count
-        total = self.redis.zcard(self.timestamps_key)
-        
-        # Get timestamp keys from sorted set (latest first) with offset and limit
-        timestamp_keys = self.redis.zrevrange(self.timestamps_key, offset, offset + limit - 1)
+    def get_syncs(self, source=None, limit=20, offset=0):
+        """Get sync records with pagination and optional source filtering"""
+        timestamp_keys = self.redis.zrevrange(self.timestamps_key, 0, -1)
         results = []
         
         for timestamp_key in timestamp_keys:
-            raw_json = self.redis.hget(self.raws_key, timestamp_key)
-            if raw_json:
-                raw = HimawariRawModel.from_json(raw_json)
-                results.append(raw.to_dict())
+            sync_json = self.redis.hget(self.syncs_key, timestamp_key)
+            if sync_json:
+                sync = SyncModel.from_json(sync_json)
+                if source is None or sync.source == source:
+                    results.append(sync.to_dict())
+        
+        total = len(results)
+        # Apply pagination on filtered results
+        paginated_results = results[offset : offset + limit]
                 
-        return results, total
+        return paginated_results, total
 
 
 class CompositeStateManager:

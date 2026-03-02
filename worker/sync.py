@@ -27,10 +27,11 @@ class SyncClient:
         self.session = requests.Session()
 
     def get_sync(self, target_time):
-        """Get current himawari sync progress from server"""
+        """Get current sync progress from server"""
         try:
             response = self.session.get(
-                f"{self.server_url}/api/raws/{target_time.isoformat()}",
+                f"{self.server_url}/api/syncs/{target_time.isoformat()}",
+                params={"source": "himawari"},
                 timeout=10
             )
             
@@ -45,22 +46,25 @@ class SyncClient:
                 # No existing record, return defaults
                 return {"files": 0, "size": 0, "status": "pending"}
             else:
-                logger.warning(f"Failed to get himawari sync progress: {response.status_code} {response.text}")
+                logger.warning(f"Failed to get sync progress: {response.status_code} {response.text}")
                 return {"files": 0, "size": 0, "status": "pending"}
                 
         except Exception as e:
-            logger.error(f"Error getting himawari sync progress: {e}")
+            logger.error(f"Error getting sync progress: {e}")
             return {"files": 0, "size": 0, "status": "pending"}
 
     def update_sync(self, target_time, status=None, files=None, size=None):
-        """Update himawari sync progress to server"""
+        """Update sync progress to server"""
         try:
             # Validate that at least one field is provided
             if status is None and files is None and size is None:
                 raise ValueError("At least one of status, files, or size must be provided")
             
             # Build data payload with only non-None values
-            data = {"timestamp": target_time.isoformat()}
+            data = {
+                "timestamp": target_time.isoformat(),
+                "source": "himawari"
+            }
             
             if status is not None:
                 data["status"] = status
@@ -70,35 +74,36 @@ class SyncClient:
                 data["size"] = size
                 
             response = self.session.put(
-                f"{self.server_url}/api/raws",
+                f"{self.server_url}/api/syncs",
                 json=data,
                 timeout=10
             )
             
             if response.status_code != 200:
-                logger.warning(f"Failed to report himawari sync progress: {response.status_code} {response.text}")
+                logger.warning(f"Failed to report sync progress: {response.status_code} {response.text}")
                 
         except Exception as e:
-            logger.error(f"Error reporting himawari sync progress: {e}")
+            logger.error(f"Error reporting sync progress: {e}")
 
     def create_sync(self, target_time):
-        """Create a pending himawari sync record"""
+        """Create a pending sync record"""
         try:
             data = {
-                "timestamp": target_time.isoformat()
+                "timestamp": target_time.isoformat(),
+                "source": "himawari"
             }
             
             response = self.session.post(
-                f"{self.server_url}/api/raws",
+                f"{self.server_url}/api/syncs",
                 json=data,
                 timeout=10
             )
             
             if response.status_code != 201:
-                logger.warning(f"Failed to create pending himawari sync: {response.status_code} {response.text}")
+                logger.warning(f"Failed to create pending sync: {response.status_code} {response.text}")
                 
         except Exception as e:
-            logger.error(f"Error creating pending himawari sync: {e}")
+            logger.error(f"Error creating pending sync: {e}")
 
 
 class ProgressBar:

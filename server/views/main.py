@@ -42,7 +42,7 @@ def find_tile(composite, z, x, y, timestamp=None):
     object_name = generate_composite_object_name(composite, timestamp)
 
     try:
-        presigned_url = client.presigned_get_object(
+        presigned_url = current_app.client.presigned_get_object(
             bucket_name='himawari',
             object_name=object_name,
             expires=datetime.timedelta(hours=24)
@@ -246,8 +246,8 @@ def index():
 def serve_snapshot(object_name):
     """Get snapshot file from MinIO by object name"""
     # Get object from MinIO snapshot bucket
-    response = client.get_object("snapshot", object_name)
-    
+    response = current_app.client.get_object("snapshot", object_name)
+
     # Determine content type based on file extension
     if object_name.endswith(".mp4"):
         content_type = "video/mp4"
@@ -255,7 +255,7 @@ def serve_snapshot(object_name):
         content_type = "image/png"
     else:
         content_type = "application/octet-stream"
-    
+
     # Return file data as response
     return Response(
         response.read(),

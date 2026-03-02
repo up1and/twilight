@@ -27,7 +27,7 @@ def check_files(target_time):
     
 def resolve_data_source(server_url, timestamp):
     """
-    Check raw data status to determine data source and processing decision
+    Check sync status to determine data source and processing decision
     
     Args:
         server_url: Server endpoint URL
@@ -38,7 +38,8 @@ def resolve_data_source(server_url, timestamp):
     """
     try:
         response = requests.get(
-            f"{server_url}/api/raws/{timestamp.isoformat()}",
+            f"{server_url}/api/syncs/{timestamp.isoformat()}",
+            params={"source": "himawari"},
             timeout=10
         )
         
@@ -47,21 +48,21 @@ def resolve_data_source(server_url, timestamp):
             status = data.get("status", "pending")
             
             if status == "completed":
-                # Raw data is complete, use local MinIO
+                # Sync data is complete, use local MinIO
                 return "local"
             elif status == "running":
-                # Raw data is still syncing, wait
+                # Sync data is still running, wait
                 return "pending"
             else:  # status == "pending" or other
-                # Raw data not available, use NOAA remote
+                # Sync data not available, use NOAA remote
                 return "remote"
         else:
-            logger.warning(f"Failed to check raw data status: {response.status_code} {response.text}")
+            logger.warning(f"Failed to check sync data status: {response.status_code} {response.text}")
             # Default to remote on error
             return "remote"
             
     except Exception as e:
-        logger.error(f"Error checking raw data status: {e}")
+        logger.error(f"Error checking sync data status: {e}")
         # Default to remote on error
         return "remote"
 

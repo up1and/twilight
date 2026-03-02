@@ -28,8 +28,9 @@ interface TasksResponse {
   pages: number;
 }
 
-interface Raw {
+interface Sync {
   timestamp: string;
+  source: string;
   status: "pending" | "running" | "completed" | "failed";
   files: number;
   size: number;
@@ -40,8 +41,8 @@ interface Raw {
   created: string;
 }
 
-interface RawsResponse {
-  raws: Raw[];
+interface SyncsResponse {
+  syncs: Sync[];
   total: number;
   page: number;
   per_page: number;
@@ -51,7 +52,7 @@ interface RawsResponse {
 // Get API configuration from localStorage (token only now)
 export function getAuthConfig() {
   return {
-    token: localStorage.getItem("token") || "",
+    token: localStorage.getItem("token") || ""
   };
 }
 
@@ -67,10 +68,10 @@ const createApiClient = () => {
   return ky.create({
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
     },
     retry: 1,
-    timeout: 30000,
+    timeout: 30000
   });
 };
 
@@ -122,10 +123,10 @@ export async function fetchLatestComposites(): Promise<Record<string, string>> {
  * and tile URL templates that include time parameters for dynamic tile loading.
  */
 export async function fetchTileJSON(
-  composite: string,
+  composite: string
 ): Promise<TileJSON | null> {
   try {
-    const compositeId = composite.replace(/_/g, '-');
+    const compositeId = composite.replace(/_/g, "-");
     const apiClient = createApiClient();
     const data = await apiClient
       .get(`/tiles/${compositeId}/tile.json`)
@@ -174,31 +175,34 @@ export async function fetchTasks(
 }
 
 /**
- * Fetch raws (Himawari sync data) list with optional filtering and pagination
+ * Fetch sync records from the API
  *
  * @param page - Page number (default: 1)
  * @param perPage - Items per page (default: 20)
+ * @param source - Optional source filter (default: himawari)
  * @param status - Optional status filter (pending, running, completed, failed)
- * @returns A Promise resolving to raws list response or null if the request fails
+ * @returns A Promise resolving to syncs list response or null if the request fails
  */
-export async function fetchRaws(
+export async function fetchSyncs(
   page: number = 1,
   perPage: number = 20,
+  source?: string,
   status?: string
-): Promise<RawsResponse | null> {
+): Promise<SyncsResponse | null> {
   try {
     const params = new URLSearchParams();
     params.append("page", String(page));
     params.append("per_page", String(perPage));
+    if (source) params.append("source", source);
     if (status) params.append("status", status);
 
     const apiClient = createApiClient();
     const data = await apiClient
-      .get(`/api/raws?${params.toString()}`)
-      .json<RawsResponse>();
+      .get(`/api/syncs?${params.toString()}`)
+      .json<SyncsResponse>();
     return data;
   } catch (error) {
-    console.error("Error fetching raws:", error);
+    console.error("Error fetching syncs:", error);
     return null;
   }
 }
@@ -273,13 +277,11 @@ export async function createTask(params: {
 } | null> {
   try {
     const apiClient = createApiClient();
-    const data = await apiClient
-      .post("/api/tasks", { json: params })
-      .json<{
-        task_id: string;
-        status: string;
-        created: string;
-      }>();
+    const data = await apiClient.post("/api/tasks", { json: params }).json<{
+      task_id: string;
+      status: string;
+      created: string;
+    }>();
     return data;
   } catch (error) {
     console.error("Failed to create task:", error);

@@ -304,9 +304,9 @@ The worker supports multiple operational modes:
 
 ### Raw Data Management
 
-- `POST /api/raws` - Create raw data sync records
-- `GET /api/raws/{timestamp}` - Get raw data sync status
-- `PUT /api/raws` - Update raw data sync progress
+- `POST /api/syncs` - Create raw data sync records
+- `GET /api/syncs/{timestamp}` - Get raw data sync status
+- `PUT /api/syncs` - Update raw data sync progress
 
 ## Development
 

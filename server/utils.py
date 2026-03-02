@@ -71,39 +71,24 @@ def default_json_handler(obj):
 def initialize_composite_state(client, available_composites):
     """
     Initialize composite state by finding the latest available timestamp for each composite.
-    Searches for the most recent composite images in MinIO storage, starting with the last 7 days
-    and falling back to the entire dataset if no recent objects are found.
+    Searches for the most recent composite images in MinIO storage.
     """
-    # Dictionary to store the latest update time for each composite
     composite_state = {composite: None for composite in available_composites}
-    current_date = datetime.datetime.now(datetime.timezone.utc)
 
-    for composite in available_composites:
-        latest_timestamp = None
-
-        try:
-            # Get objects from MinIO
-            max_keys = 1000
-            search_date = current_date - datetime.timedelta(days=7)
-            date_prefix = search_date.strftime("%Y/%m/%d")
-            objects = client.list_objects("himawari", prefix=f"{composite}/{date_prefix}/", recursive=True)
-
-            # If no objects found in the last 7 days, search the entire dataset
-            if not list(objects):
-                objects = client.list_objects("himawari", prefix=f"{composite}/", recursive=True)
+    try:
+        # Search the entire dataset for each composite to find the latest
+        for composite in available_composites:
+            latest_timestamp = None
+            objects = client.list_objects("himawari", prefix=f"{composite}/", recursive=True)
             
-            for i, obj in enumerate(objects):
-                if i >= max_keys:
-                    break
-
+            for obj in objects:
                 timestamp = extract_timestamp_from_object_name(obj.object_name)
                 if timestamp and (latest_timestamp is None or timestamp > latest_timestamp):
                     latest_timestamp = timestamp
+            
+            composite_state[composite] = latest_timestamp
 
-                if latest_timestamp:
-                    composite_state[composite] = latest_timestamp
-
-        except Exception as e:
-            print(f"Warning: Failed to initialize composite state from MinIO: {e}")
+    except Exception as e:
+        print(f"Warning: Failed to initialize composite state from MinIO: {e}")
 
     return composite_state

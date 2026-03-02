@@ -196,9 +196,9 @@ def update_task_status(task_id):
     })
 
 
-@api.route("/raws", methods=["POST", "PUT"])
-def manage_himawari_raw():
-    """Create or update himawari sync record for a timestamp"""
+@api.route("/syncs", methods=["POST", "PUT"])
+def manage_sync():
+    """Create or update sync record for a timestamp"""
     data = request.get_json()
     
     # Validate required fields
@@ -217,14 +217,18 @@ def manage_himawari_raw():
             "message": "Invalid timestamp format. Use ISO 8601 format"
         }), 400
     
+    # Extract source (default to himawari)
+    source = data.get("source", "himawari")
+    
     # Handle POST request (create pending)
     if request.method == "POST":
         # Create pending sync record
-        current_app.himawari_raw_manager.create_sync(timestamp)
+        current_app.sync_manager.create_sync(source, timestamp)
         
         return jsonify({
-            "message": "Himawari sync created successfully",
+            "message": f"{source.capitalize()} sync created successfully",
             "timestamp": timestamp.isoformat(),
+            "source": source,
             "status": "pending"
         }), 201
     
@@ -252,7 +256,7 @@ def manage_himawari_raw():
                 }), 400
             
         # Update progress with partial data
-        current_app.himawari_raw_manager.update_progress(timestamp, status, files, size)
+        current_app.sync_manager.update_progress(source, timestamp, status, files, size)
         
         # Build response message
         updated_fields = []
@@ -264,14 +268,15 @@ def manage_himawari_raw():
             updated_fields.append(f'size={size}')
         
         return jsonify({
-            "message": f"Himawari sync updated successfully ({', '.join(updated_fields)})",
-            "timestamp": timestamp.isoformat()
+            "message": f"{source.capitalize()} sync updated successfully ({', '.join(updated_fields)})",
+            "timestamp": timestamp.isoformat(),
+            "source": source
         })
 
 
-@api.route("/raws/<timestamp>", methods=["GET"])
-def get_himawari_raw(timestamp):
-    """Get himawari sync progress for a specific timestamp"""
+@api.route("/syncs/<timestamp>", methods=["GET"])
+def get_sync(timestamp):
+    """Get sync progress for a specific timestamp"""
     # Parse timestamp
     try:
         parsed_time = parse_iso_timestamp(timestamp)
@@ -280,20 +285,21 @@ def get_himawari_raw(timestamp):
             "error": "Bad Request",
             "message": "Invalid timestamp format. Use ISO 8601 format"
         }), 400
-        
-    raw_data = current_app.himawari_raw_manager.get_raw(parsed_time)
-    if not raw_data:
+    
+    source = request.args.get("source", "himawari")
+    sync_data = current_app.sync_manager.get_sync(source, parsed_time)
+    if not sync_data:
         return jsonify({
             "error": "Not Found",
-            "message": f"No himawari sync found for {timestamp}"
+            "message": f"No {source} sync found for {timestamp}"
         }), 404
         
-    return jsonify(raw_data)
+    return jsonify(sync_data)
 
 
-@api.route("/raws", methods=["GET"])
-def get_himawari_raws():
-    """Get all himawari sync records with pagination"""
+@api.route("/syncs", methods=["GET"])
+def get_syncs():
+    """Get all sync records with pagination"""
     try:
         page = int(request.args.get("page", 1))
         per_page = min(int(request.args.get("per_page", 20)), 100)  # Max 100 per page
@@ -303,11 +309,12 @@ def get_himawari_raws():
             "message": "Invalid page or per_page parameter"
         }), 400
 
+    source = request.args.get("source")
     offset = (page - 1) * per_page
-    raws, total = current_app.himawari_raw_manager.get_raws(per_page, offset)
+    syncs, total = current_app.sync_manager.get_syncs(source, per_page, offset)
     
     return jsonify({
-        "raws": raws,
+        "syncs": syncs,
         "total": total,
         "page": page,
         "per_page": per_page,

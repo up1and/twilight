@@ -7,7 +7,7 @@ import datetime
 from flask import Flask, request, jsonify
 
 from extensions import init_extensions, redis_client, client
-from services import TaskManager, HimawariRawManager, CompositeStateManager
+from services import TaskManager, SyncManager, CompositeStateManager
 from utils import default_json_handler, initialize_composite_state
 
 
@@ -52,6 +52,7 @@ def create_app():
 
     # Initialize extensions
     init_extensions(app)
+    app.client = client
 
     # Register blueprints
     register_blueprints(app)
@@ -61,7 +62,7 @@ def create_app():
 
     # Initialize managers and composite state
     app.task_manager = TaskManager(redis_client)
-    app.himawari_raw_manager = HimawariRawManager(redis_client, app.task_manager)
+    app.sync_manager = SyncManager(redis_client, app.task_manager)
 
     composite_states = initialize_composite_state(client, available_composites)
     app.composite_state = CompositeStateManager(redis_client, composite_states)
