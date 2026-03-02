@@ -131,24 +131,16 @@ const Pagination = ({
 );
 
 const DataList = ({
-  loading,
   length,
   emptyText,
   children
 }: {
-  loading: boolean;
   length: number;
   emptyText: string;
   children: React.ReactNode;
 }) => (
   <div className="card-list">
-    {loading ? (
-      <div className="empty-cell">Loading...</div>
-    ) : length === 0 ? (
-      <div className="empty-cell">{emptyText}</div>
-    ) : (
-      children
-    )}
+    {length === 0 ? <div className="empty-cell">{emptyText}</div> : children}
   </div>
 );
 
@@ -350,7 +342,6 @@ const AddTaskModal = ({
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<"tasks" | "syncs">("tasks");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
 
@@ -377,7 +368,6 @@ export default function Dashboard() {
   const loadTasks = useCallback(async () => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
-    setLoading(true);
     try {
       const data = await fetchTasks(
         taskParams.page,
@@ -393,7 +383,6 @@ export default function Dashboard() {
     } catch (e: any) {
       setError(e.message);
     } finally {
-      setLoading(false);
       fetchingRef.current = false;
     }
   }, [taskParams]);
@@ -401,7 +390,6 @@ export default function Dashboard() {
   const loadSyncs = useCallback(async () => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
-    setLoading(true);
     try {
       const data = await fetchSyncs(
         syncParams.page,
@@ -421,7 +409,6 @@ export default function Dashboard() {
     } catch (e: any) {
       setError(e.message);
     } finally {
-      setLoading(false);
       fetchingRef.current = false;
     }
   }, [syncParams]);
@@ -442,6 +429,14 @@ export default function Dashboard() {
   // Sync data based on active tab and filter parameters
   useEffect(() => {
     activeTab === "tasks" ? loadTasks() : loadSyncs();
+  }, [activeTab, loadTasks, loadSyncs]);
+
+  // Auto-refresh every 60 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      activeTab === "tasks" ? loadTasks() : loadSyncs();
+    }, 60000);
+    return () => clearInterval(interval);
   }, [activeTab, loadTasks, loadSyncs]);
 
   return (
@@ -509,11 +504,7 @@ export default function Dashboard() {
               </button>
             </div>
 
-            <DataList
-              loading={loading}
-              length={tasks.length}
-              emptyText="No tasks found"
-            >
+            <DataList length={tasks.length} emptyText="No tasks found">
               {tasks.map((t) => (
                 <TaskCard key={t.task_id} task={t} />
               ))}
@@ -542,11 +533,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <DataList
-              loading={loading}
-              length={syncs.length}
-              emptyText="No sync data found"
-            >
+            <DataList length={syncs.length} emptyText="No sync data found">
               {syncs.map((s) => (
                 <SyncCard key={s.timestamp} sync={s} />
               ))}
