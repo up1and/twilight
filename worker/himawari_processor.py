@@ -1,10 +1,13 @@
 import os
+import gc
 import functools
+
+import dask
+import numpy as np
 
 from satpy import Scene
 from pyresample import create_area_def
 
-import dask
 from dask.diagnostics import ProgressBar, ResourceProfiler
 from dask.diagnostics.profile_visualize import visualize
 
@@ -69,7 +72,6 @@ def memory_profiler(chunk_size="256mb", save_profile=True):
                 return result
         return wrapper
     return decorator
-
 
 available_composites = [
     "true_color", "ir_clouds", "ash", "night_microphysics"
@@ -151,6 +153,47 @@ def ahi_s3_files(time, data_source="remote", cache=True):
     
     return [base_path]
 
+def get_custom_area(bbox, res_meters):
+    """
+    Generate an AreaDefinition based on lon/lat bounding box and target resolution.
+    
+    Args:
+        bbox: [min_lon, min_lat, max_lon, max_lat]
+        res_meters: Target resolution in meters (e.g., 500, 1000, 2000)
+        
+    Returns:
+        AreaDefinition: A pyresample object for EPSG:4326 projection.
+    """
+    min_lon, min_lat, max_lon, max_lat = bbox
+
+    # Calculate degree-based resolution adjusted for latitude convergence
+    deg_per_m = 1.0 / 111319.44
+    center_lat = (min_lat + max_lat) / 2.0
+    res_lat = res_meters * deg_per_m
+    res_lon = res_lat / np.cos(np.radians(center_lat))
+
+    # Calculate initial dimensions
+    width = int(np.ceil((max_lon - min_lon) / res_lon))
+    height = int(np.ceil((max_lat - min_lat) / res_lat))
+
+    # Align to 256-pixel tiles (Optimal for Cloud Optimized GeoTIFF)
+    tile_size = 256
+    width = ((width + tile_size - 1) // tile_size) * tile_size
+    height = ((height + tile_size - 1) // tile_size) * tile_size
+
+    # Adjust extent to match the aligned grid exactly
+    max_lon = min_lon + width * res_lon
+    max_lat = min_lat + height * res_lat
+
+    area_def = create_area_def(
+        area_id="china_area",
+        projection="EPSG:4326",
+        area_extent=(min_lon, min_lat, max_lon, max_lat),
+        width=width,
+        height=height,
+        units="degrees"
+    )
+    return area_def
 
 @timing
 @memory_profiler()
@@ -174,31 +217,30 @@ def process_composite(composite_name, target_time, data_source="remote"):
         files = ahi_s3_files(time=target_time, data_source=data_source, cache=True)
         reader_kwargs = get_reader_kwargs(data_source, cache=True)
 
-        china_bbox = [75, 0, 160, 55]  # lon: 75°-160°，lat 0°-55°
-
-        lon_span = china_bbox[2] - china_bbox[0]
-        lat_span = china_bbox[3] - china_bbox[1]
-
-        pixel_resolution = 0.02
-        width = int(lon_span / pixel_resolution)  # 80° / 0.02° = 4000
-        height = int(lat_span / pixel_resolution) # 55° / 0.02° = 2750
-
-        china_area = create_area_def(
-            area_id="china",
-            projection="EPSG:4326",
-            width=width,
-            height=height,
-            area_extent=china_bbox,  # [min_lon, min_lat, max_lon, max_lat]
-        )
-
         scn = Scene(filenames=files, reader="ahi_hsd", reader_kwargs=reader_kwargs)
         scn.load([satpy_composite_name])
 
-        dims = len(scn[satpy_composite_name].data.shape)
-        chunks = (512, 512) if dims == 2 else ("auto", 512, 512)
+        # Determine target resolution
+        loaded_res = [
+            scn[ds_id].attrs.get('resolution') 
+            for ds_id in scn.keys() 
+            if scn[ds_id].attrs.get('resolution')
+        ]
+        max_res = min(loaded_res)
+        target_res = max(1000, max_res)
+
+        # Native Resampling
+        scn = scn.resample(resampler='native')
+
+        gc.collect()
+
+        china_bbox = [75, 0, 160, 55]  # lon: 75°-160°，lat 0°-55°
+        china_area = get_custom_area(china_bbox, target_res)
+        logger.info(f"Target Area: {china_area.width}x{china_area.height} at {target_res}m")
 
         # Resample with chunking for memory efficiency
-        scn_china = scn.resample(china_area, resampler="bilinear", chunks=chunks)
+        chunks = {"y": 2048, "x": 2048}
+        scn_china = scn.resample(china_area, resampler="nearest", chunks=chunks)
         filename = os.path.join(cache_dir, name)
 
         scn_china.save_dataset(
@@ -206,13 +248,18 @@ def process_composite(composite_name, target_time, data_source="remote"):
             filename=filename,
             driver="COG",
             tiled=True,
-            blockxsize=256,
-            blockysize=256,
-            compress="deflate"
+            blockxsize=512,
+            blockysize=512,
+            compress="deflate",
+            predictor=2
         )
 
         upload("himawari", object_name, filename, composite_name)
         logger.info(f"Successfully processed and uploaded composite '{composite_name}' for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC")
+
+        del scn
+        del scn_china
+        gc.collect()
 
     except Exception as e:
         logger.error(f"Error processing composite '{composite_name}' for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC: {e}", exc_info=True)
