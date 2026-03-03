@@ -7,35 +7,8 @@ import {
   fetchLatestComposites,
   createTask
 } from "../utils/api-client";
+import type { Task, Sync } from "../utils/types";
 import "./dashboard.css";
-
-interface Task {
-  task_id: string;
-  composite: string;
-  timestamp: string;
-  status: "pending" | "processing" | "completed" | "failed";
-  priority: string;
-  worker_id?: string;
-  created_at: string;
-  updated_at: string;
-  message?: string;
-  duration?: number;
-  started?: string;
-  ended?: string;
-}
-
-interface Sync {
-  timestamp: string;
-  source: string;
-  status: "pending" | "running" | "completed" | "failed";
-  files: number;
-  size: number;
-  started: string | null;
-  ended: string | null;
-  duration: number | null;
-  speed: number | null;
-  created: string;
-}
 
 function formatComposite(str: string | undefined): string {
   if (!str) return "N/A";
@@ -161,7 +134,7 @@ const TaskCard = ({ task }: { task: Task }) => (
       </span>
       <span>
         <span className="label">Created:</span>{" "}
-        {formatDateTimeSec(task.created_at)}
+        {formatDateTimeSec(task.created)}
       </span>
     </div>
     <div className="info-row">

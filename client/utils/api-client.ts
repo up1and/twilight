@@ -3,22 +3,7 @@
  * Handles API requests using ky HTTP client
  */
 import ky from "ky";
-import type { TileJSON } from "./types";
-
-interface Task {
-  task_id: string;
-  composite: string;
-  timestamp: string;
-  status: "pending" | "processing" | "completed" | "failed";
-  priority: string;
-  worker_id?: string;
-  created_at: string;
-  updated_at: string;
-  message?: string;
-  duration?: number;
-  started?: string;
-  ended?: string;
-}
+import type { TileJSON, Task, Sync } from "./types";
 
 interface TasksResponse {
   tasks: Task[];
@@ -26,19 +11,6 @@ interface TasksResponse {
   page: number;
   per_page: number;
   pages: number;
-}
-
-interface Sync {
-  timestamp: string;
-  source: string;
-  status: "pending" | "running" | "completed" | "failed";
-  files: number;
-  size: number;
-  started: string | null;
-  ended: string | null;
-  duration: number | null;
-  speed: number | null;
-  created: string;
 }
 
 interface SyncsResponse {

@@ -20,3 +20,30 @@ export interface MapConfig {
   tileUrl: string;
   attribution: string;
 }
+
+export interface Task {
+  task_id: string;
+  composite: string;
+  timestamp: string;
+  status: "pending" | "processing" | "completed" | "failed";
+  priority: string;
+  worker_id?: string;
+  created: string;
+  message?: string;
+  duration?: number;
+  started?: string;
+  ended?: string;
+}
+
+export interface Sync {
+  timestamp: string;
+  source: string;
+  status: "pending" | "running" | "completed" | "failed";
+  files: number;
+  size: number;
+  started: string | null;
+  ended: string | null;
+  duration: number | null;
+  speed: number | null;
+  created: string;
+}
