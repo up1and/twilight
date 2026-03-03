@@ -73,6 +73,7 @@ def get_tasks():
     try:
         status = request.args.get("status")
         composite = request.args.get("composite")
+        priority = request.args.get("priority")
         page = int(request.args.get("page", 1))
         per_page = min(int(request.args.get("per_page", 20)), 100)  # Max 100 per page
     except ValueError:
@@ -82,7 +83,7 @@ def get_tasks():
         }), 400
 
     offset = (page - 1) * per_page
-    tasks, total = current_app.task_manager.get_tasks(status, composite, per_page, offset)
+    tasks, total = current_app.task_manager.get_tasks(status, composite, priority, per_page, offset)
 
     return jsonify({
         "tasks": [task.to_dict() for task in tasks],

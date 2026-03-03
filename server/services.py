@@ -180,7 +180,7 @@ class TaskManager:
             self.redis.expire(self.tasks_key, self.expire_time)
             return True
 
-    def get_tasks(self, status=None, composite=None, limit=20, offset=0):
+    def get_tasks(self, status=None, composite=None, priority=None, limit=20, offset=0):
         """Get tasks with optional filtering"""
         all_tasks = self._get_all_tasks()
         filtered_tasks = []
@@ -189,6 +189,8 @@ class TaskManager:
             if status and task.status != status:
                 continue
             if composite and task.composite != composite:
+                continue
+            if priority and task.priority != priority:
                 continue
             filtered_tasks.append(task)
 
