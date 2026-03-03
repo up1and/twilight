@@ -296,7 +296,7 @@ def main():
         threads.append(t)
 
     if should_run_worker:
-        t = threading.Thread(target=run_task_manager, args=(server_url, worker_id,), kwargs={"shutdown_event": shared_event})
+        t = threading.Thread(target=run_task_manager, args=(server_url, worker_id,), kwargs={"shutdown_event": shared_event}, daemon=True)
         threads.append(t)
 
     for t in threads:

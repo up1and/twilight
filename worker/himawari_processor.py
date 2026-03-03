@@ -3,13 +3,16 @@ import gc
 import functools
 
 import dask
+import psutil
 import numpy as np
 
 from satpy import Scene
 from pyresample import create_area_def
+from contextlib import contextmanager
 
 from dask.diagnostics import ProgressBar, ResourceProfiler
 from dask.diagnostics.profile_visualize import visualize
+from dask.distributed import Client, LocalCluster
 
 from client import upload, check_object_exists
 from utils import logger, timing
@@ -22,6 +25,91 @@ cache_dir = (
     else "/tmp/satpy_cache"
 )
 
+def compute_worker_allocation(mem_per_worker=7.0, system_margin=4.0):
+    """
+    Dynamically calculates the optimal number of worker processes based on 
+    real-time hardware availability (RAM and CPU).
+
+    Args:
+        mem_per_worker (float): Estimated RAM consumption per worker in GB.
+        system_margin (float): RAM to keep free for OS and other tasks. Default is 4GB.
+
+    Returns:
+        int: The calculated number of workers, constrained between 1 and the CPU core count.
+    """
+    # Get available physical memory in GB
+    available_mem = psutil.virtual_memory().available / (1024**3)
+
+    # Get the number of logical CPU cores
+    logical_cores = psutil.cpu_count(logical=True) or 8
+
+    # Calculate how many workers the available RAM can support
+    effective_mem = max(0, available_mem - system_margin)
+    dynamic_count = int(effective_mem // mem_per_worker)
+
+    n_workers = max(1, min(dynamic_count, logical_cores))
+    return n_workers, effective_mem
+
+@contextmanager
+def dask_scope():
+    """
+    Dynamic resource management context: 
+    Calculates the safe number of Dask threads based on real-time RAM availability.
+    
+    Args:
+        mem_per_worker: Estimated peak RAM per parallel AHI TrueColor task.
+    """
+    n_workers, available_mem = compute_worker_allocation()
+
+    logger.info(f"Dask Scope Started: {n_workers} workers, RAM {available_mem:.1f} GB")
+
+    settings = {
+        "scheduler": "threads",
+        "num_workers": n_workers
+    }
+    
+    with dask.config.set(settings):
+        try:
+            yield None
+        finally:
+            gc.collect()
+
+@contextmanager
+def dask_scope_with_cluster():
+    """
+    Context manager to handle Dask lifecycle.
+    Ensures memory is fully released after each processing task.
+    """
+    # Constrain within [1, logical_cores] range
+    n_workers, available_mem = compute_worker_allocation()
+    threads_per_worker = 1
+    memory_limit = available_mem / n_workers
+
+    # Initialize Cluster
+    cluster = LocalCluster(
+        n_workers=n_workers,
+        threads_per_worker=threads_per_worker,
+        memory_limit=f"{memory_limit:.2f}GB",
+        processes=True,
+        dashboard_address=':8787'
+    )
+    client = Client(cluster)
+    
+    # Global memory protection settings
+    dask.config.set({
+        "distributed.worker.memory.target": 0.7,
+        "distributed.worker.memory.spill": 0.85,
+        "distributed.worker.memory.pause": 0.90,
+    })
+    
+    logger.info(f"Dask Cluster Started: {n_workers} workers, {threads_per_worker} threads, {memory_limit:.1f} GB/worker")
+    
+    try:
+        yield client
+    finally:
+        client.close()
+        cluster.close()
+        gc.collect()
 
 def memory_profiler(chunk_size="256mb", save_profile=True):
     """
@@ -84,7 +172,6 @@ composite_mapping = {
     "ir_clouds": "B13",
     "ash": "ash"
 }
-
 
 def get_reader_kwargs(data_source, cache=True):
     """
@@ -196,7 +283,6 @@ def get_custom_area(bbox, res_meters):
     return area_def
 
 @timing
-@memory_profiler()
 def process_composite(composite_name, target_time, data_source="remote"):
     """Process a single composite for the given time"""
     try:
@@ -232,14 +318,12 @@ def process_composite(composite_name, target_time, data_source="remote"):
         # Native Resampling
         scn = scn.resample(resampler='native')
 
-        gc.collect()
-
         china_bbox = [75, 0, 160, 55]  # lon: 75°-160°，lat 0°-55°
         china_area = get_custom_area(china_bbox, target_res)
         logger.info(f"Target Area: {china_area.width}x{china_area.height} at {target_res}m")
 
         # Resample with chunking for memory efficiency
-        chunks = {"y": 2048, "x": 2048}
+        chunks = {"y": 1024, "x": 1024}
         scn_china = scn.resample(china_area, resampler="nearest", chunks=chunks)
         filename = os.path.join(cache_dir, name)
 
@@ -259,7 +343,6 @@ def process_composite(composite_name, target_time, data_source="remote"):
 
         del scn
         del scn_china
-        gc.collect()
 
     except Exception as e:
         logger.error(f"Error processing composite '{composite_name}' for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC: {e}", exc_info=True)

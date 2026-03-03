@@ -130,12 +130,14 @@ class TaskProcessor:
             logger.info(f"Starting task {task_id}: {composite} at {timestamp.strftime('%Y-%m-%d %H:%M')} UTC")
 
             # Import here to avoid circular imports
-            from himawari_processor import process_composite
+            from himawari_processor import process_composite, dask_scope
             # Clean up cache before processing
             self.cache_manager.cleanup_cache()
 
-            # Process the composite
-            process_composite(composite, timestamp, data_source)
+            with dask_scope() as client:
+                # Process the composite
+                process_composite(composite, timestamp, data_source)
+
             # Report completion
             self.task_client.update_task_status(task_id, "completed")
             logger.info(f"Task {task_id} completed successfully")
