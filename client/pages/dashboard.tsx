@@ -150,6 +150,7 @@ const TaskCard = ({ task }: { task: Task }) => (
         {task.duration ? `${task.duration}s` : "N/A"}
       </span>
     </div>
+    {task.message && <div className="error-message">Error: {task.message}</div>}
     <span className="size-info">{task.task_id}</span>
   </div>
 );

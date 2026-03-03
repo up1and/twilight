@@ -181,6 +181,11 @@ select {
   color: #0056b3;
 }
 
+.error-message {
+  color: #dc3545;
+  font-weight: bold;
+}
+
 /* Info Row */
 .info-row {
   display: flex;
