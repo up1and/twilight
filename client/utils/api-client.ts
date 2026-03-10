@@ -3,7 +3,7 @@
  * Handles API requests using ky HTTP client
  */
 import ky from "ky";
-import type { TileJSON, Task, Sync } from "./types";
+import type { TileJSON, Task, Sync, Profile } from "./types";
 
 interface TasksResponse {
   tasks: Task[];
@@ -257,6 +257,25 @@ export async function createTask(params: {
     return data;
   } catch (error) {
     console.error("Failed to create task:", error);
+    return null;
+  }
+}
+
+/**
+ * Fetch profile data for a specific task
+ *
+ * @param taskId - The task ID to fetch profile for
+ * @returns A Promise resolving to Profile data or null if not found
+ */
+export async function fetchProfile(taskId: string): Promise<Profile | null> {
+  try {
+    const apiClient = createApiClient();
+    const data = await apiClient
+      .get(`/api/tasks/${taskId}/profile`)
+      .json<Profile>();
+    return data;
+  } catch (error) {
+    console.error("Error fetching profile:", error);
     return null;
   }
 }

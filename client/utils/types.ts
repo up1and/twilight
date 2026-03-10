@@ -47,3 +47,20 @@ export interface Sync {
   speed: number | null;
   created: string;
 }
+
+export interface ProfileTask {
+  key: string;
+  duration: number;
+}
+
+export interface ProfileResource {
+  time: number;
+  memory: number;
+  cpu_percent: number;
+}
+
+export interface Profile {
+  task_id: string;
+  tasks: ProfileTask[];
+  resources: ProfileResource[];
+}

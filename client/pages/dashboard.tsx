@@ -2,13 +2,38 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "wouter";
 import dayjs from "dayjs";
 import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+} from "chart.js";
+import { Line } from "react-chartjs-2";
+
+import {
   fetchTasks,
   fetchSyncs,
   fetchLatestComposites,
-  createTask
+  createTask,
+  fetchProfile
 } from "../utils/api-client";
-import type { Task, Sync } from "../utils/types";
+import type { Task, Sync, Profile } from "../utils/types";
 import "./dashboard.css";
+
+interface TaskData {
+  key: string;
+  duration: number;
+}
+
+interface ResourceData {
+  time: number;
+  memory: number;
+  cpu_percent: number;
+}
 
 function formatComposite(str: string | undefined): string {
   if (!str) return "N/A";
@@ -117,16 +142,31 @@ const DataList = ({
   </div>
 );
 
-const TaskCard = ({ task }: { task: Task }) => (
+const TaskCard = ({
+  task,
+  onViewProfile
+}: {
+  task: Task;
+  onViewProfile?: (taskId: string) => void;
+}) => (
   <div className="data-card">
     <div className="card-header">
       <div className="header-left">
         <span className="title-name">{formatComposite(task.composite)}</span>
         <span className="timestamp">{formatDateTimeMin(task.timestamp)}</span>
       </div>
-      <span className={`status-badge status-${task.status}`}>
-        {task.status?.toUpperCase()}
-      </span>
+      {task.status === "completed" ? (
+        <span
+          className={`status-badge status-${task.status} clickable`}
+          onClick={() => onViewProfile?.(task.task_id)}
+        >
+          {task.status?.toUpperCase()}
+        </span>
+      ) : (
+        <span className={`status-badge status-${task.status}`}>
+          {task.status?.toUpperCase()}
+        </span>
+      )}
     </div>
     <div className="info-row">
       <span>
@@ -314,10 +354,196 @@ const AddTaskModal = ({
   );
 };
 
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
+
+const ResourceChart = ({ data }: { data: ResourceData[] }) => {
+  if (!data || data.length === 0)
+    return <div className="empty-cell">No resource data</div>;
+
+  const labels = data.map((_, i) => `${i}`);
+  const memData = data.map((r) => r.memory);
+  const cpuData = data.map((r) => r.cpu_percent);
+
+  const chartData = {
+    labels,
+    datasets: [
+      {
+        label: "CPU",
+        data: cpuData,
+        borderColor: "#000",
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.3,
+        yAxisID: "y"
+      },
+      {
+        label: "MEM",
+        data: memData,
+        borderColor: "#777",
+        backgroundColor: "rgba(119, 119, 119, 0.2)",
+        borderWidth: 1,
+        pointRadius: 0,
+        tension: 0.3,
+        fill: true,
+        yAxisID: "y1"
+      }
+    ]
+  };
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+      mode: "index" as const,
+      intersect: false
+    },
+    plugins: {
+      legend: {
+        position: "top" as const
+      },
+      tooltip: {
+        callbacks: {
+          title: () => "",
+          label: (context: any) => {
+            const label = context.dataset.label || "";
+            const value = context.raw;
+            if (label === "CPU") {
+              return `${label}: ${value.toFixed(1)}%`;
+            }
+            return `${label}: ${value.toFixed(1)} MB`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: {
+          offset: false
+        },
+        ticks: {
+          callback: function (index: any) {
+            return index % 5 === 0 ? index : null;
+          }
+        }
+      },
+      y: {
+        type: "linear" as const,
+        position: "right" as const,
+        title: {
+          display: true,
+          text: "CPU"
+        }
+      },
+      y1: {
+        type: "linear" as const,
+        position: "left" as const,
+        grid: {
+          drawOnChartArea: false
+        },
+        title: {
+          display: true,
+          text: "MEM"
+        }
+      }
+    }
+  };
+
+  return (
+    <div style={{ height: "200px" }}>
+      <Line data={chartData} options={options} />
+    </div>
+  );
+};
+
+const TaskList = ({ data }: { data: TaskData[] }) => {
+  if (!data || data.length === 0)
+    return <div className="empty-cell">No task data</div>;
+
+  const sortedTasks = [...data]
+    .sort((a, b) => b.duration - a.duration)
+    .slice(0, 10);
+
+  return (
+    <div className="trace-list">
+      {sortedTasks.map((task, idx) => (
+        <div className="trace-item" key={idx}>
+          <span className="trace-key" title={task.key}>
+            {task.key}
+          </span>
+          <b>{task.duration.toFixed(3)}s</b>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const ProfileModal = ({
+  show,
+  onClose,
+  taskId
+}: {
+  show: boolean;
+  onClose: () => void;
+  taskId: string | null;
+}) => {
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  useEffect(() => {
+    if (show && taskId) {
+      fetchProfile(taskId).then((data) => {
+        setProfile(data);
+      });
+    }
+  }, [show, taskId]);
+
+  if (!show) return null;
+
+  return (
+    <div className="modal" onClick={onClose}>
+      <div
+        className="modal-content modal-wide"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-header">Profile: {taskId}</div>
+        {profile ? (
+          <div className="profile">
+            <div className="profile-section">
+              <ResourceChart data={profile.resources || []} />
+            </div>
+
+            <div className="profile-section">
+              <div className="profile-section-title">Execution Trace</div>
+              <TaskList data={profile.tasks || []} />
+            </div>
+          </div>
+        ) : (
+          <div className="empty-cell">No profile data available</div>
+        )}
+        <div className="modal-actions">
+          <button type="button" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<"tasks" | "syncs">("tasks");
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   // Task View State
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -338,6 +564,11 @@ export default function Dashboard() {
   const [composites, setComposites] = useState<string[]>([]);
   const fetchingRef = useRef(false);
   const compositesLoadedRef = useRef(false);
+
+  const handleViewProfile = useCallback((taskId: string) => {
+    setSelectedTaskId(taskId);
+    setShowProfile(true);
+  }, []);
 
   const loadTasks = useCallback(async () => {
     if (fetchingRef.current) return;
@@ -480,7 +711,11 @@ export default function Dashboard() {
 
             <DataList length={tasks.length} emptyText="No tasks found">
               {tasks.map((t) => (
-                <TaskCard key={t.task_id} task={t} />
+                <TaskCard
+                  key={t.task_id}
+                  task={t}
+                  onViewProfile={handleViewProfile}
+                />
               ))}
             </DataList>
 
@@ -527,6 +762,12 @@ export default function Dashboard() {
         onClose={() => setShowModal(false)}
         composites={composites}
         onCreated={loadTasks}
+      />
+
+      <ProfileModal
+        show={showProfile}
+        onClose={() => setShowProfile(false)}
+        taskId={selectedTaskId}
       />
     </div>
   );

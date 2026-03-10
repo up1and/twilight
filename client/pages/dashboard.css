@@ -413,3 +413,51 @@ select {
   background-color: #333;
   color: #fff;
 }
+
+/* --- Profile --- */
+.modal-wide {
+  width: 800px;
+  max-width: 95%;
+}
+
+.profile {
+  max-height: 800px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.profile-section {
+  padding: 10px;
+}
+
+.profile-section-title {
+  font-size: 14px;
+  font-weight: bold;
+  text-transform: uppercase;
+  color: #333;
+  padding-bottom: 5px;
+}
+
+.status-badge.clickable {
+  cursor: pointer;
+}
+
+.status-badge.clickable:hover {
+  text-decoration: underline;
+}
+
+.trace-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  border-bottom: 1px dotted #ccc;
+  padding: 5px 0;
+}
+
+.trace-key {
+  color: #444;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 90%;
+}
