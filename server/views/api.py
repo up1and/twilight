@@ -197,6 +197,50 @@ def update_task_status(task_id):
     })
 
 
+@api.route("/tasks/<task_id>/profile", methods=["POST"])
+def create_task_profile(task_id):
+    """Receive profiler data from worker"""
+    data = request.get_json()
+
+    if not data:
+        return jsonify({"error": "Bad Request", "message": "Missing request body"}), 400
+
+    task = current_app.task_manager.get_task(task_id)
+    if not task:
+        return jsonify(
+            {"error": "Not Found", "message": f"Task {task_id} not found"}
+        ), 404
+
+    tasks = data.get("tasks", [])
+    resources = data.get("resources", [])
+
+    current_app.task_manager.save_profile(task_id, tasks, resources)
+
+    return jsonify({"message": "Profile saved"}), 201
+
+
+@api.route("/tasks/<task_id>/profile", methods=["GET"])
+def get_task_profile(task_id):
+    """Get profiler data for a task"""
+    profile = current_app.task_manager.get_profile(task_id)
+
+    if not profile:
+        return jsonify(
+            {
+                "error": "Not Found",
+                "message": f"Profile data for task {task_id} not found",
+            }
+        ), 404
+
+    return jsonify(
+        {
+            "task_id": task_id,
+            "tasks": profile["tasks"],
+            "resources": profile["resources"],
+        }
+    )
+
+
 @api.route("/syncs", methods=["POST", "PUT"])
 def manage_sync():
     """Create or update sync record for a timestamp"""

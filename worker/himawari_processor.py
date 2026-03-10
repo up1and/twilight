@@ -1,6 +1,5 @@
 import os
 import gc
-import functools
 
 import dask
 import psutil
@@ -10,8 +9,7 @@ from satpy import Scene
 from pyresample import create_area_def
 from contextlib import contextmanager
 
-from dask.diagnostics import ProgressBar, ResourceProfiler
-from dask.diagnostics.profile_visualize import visualize
+from dask.diagnostics import Profiler, ResourceProfiler
 from dask.distributed import Client, LocalCluster
 
 from client import upload, check_object_exists
@@ -67,12 +65,12 @@ def dask_scope():
         "scheduler": "threads",
         "num_workers": n_workers
     }
-    
-    with dask.config.set(settings):
-        try:
-            yield None
-        finally:
-            gc.collect()
+    with Profiler() as prof, ResourceProfiler(dt=1) as rprof:
+        with dask.config.set(settings):
+            try:
+                yield prof, rprof
+            finally:
+                gc.collect()
 
 @contextmanager
 def dask_scope_with_cluster():
@@ -93,7 +91,6 @@ def dask_scope_with_cluster():
         processes=True,
         dashboard_address=':8787'
     )
-    client = Client(cluster)
     
     # Global memory protection settings
     dask.config.set({
@@ -104,62 +101,14 @@ def dask_scope_with_cluster():
     
     logger.info(f"Dask Cluster Started: {n_workers} workers, {threads_per_worker} threads, {memory_limit:.1f} GB/worker")
     
-    try:
-        yield client
-    finally:
-        client.close()
-        cluster.close()
-        gc.collect()
-
-def memory_profiler(chunk_size="256mb", save_profile=True):
-    """
-    Decorator for memory profiling with Dask diagnostics
-
-    Args:
-        chunk_size: Dask chunk size for the operation
-        save_profile: Whether to save HTML profile report
-    """
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            # Extract function name and args for profile naming
-            func_name = func.__name__
-
-            # Try to extract composite_name and target_time from args for naming
-            composite_name, target_time, *_ = args
-            time_str = target_time.strftime("%Y%m%d_%H%M")
-
-            # Set memory limit for this operation
-            with dask.config.set({"array.chunk-size": chunk_size}):
-                # Initialize diagnostics
-                resource_prof = ResourceProfiler(dt=0.25)  # Sample every 250ms
-                progress = ProgressBar()
-
-                with resource_prof, progress:
-                    # Execute the original function
-                    result = func(*args, **kwargs)
-
-                # Log detailed resource usage
-                try:
-                    # Extract memory usage from resource profiler
-                    memory_usage = [entry["memory"] for entry in resource_prof.results if "memory" in entry]
-                    peak_memory = max(memory_usage) / 1e9 if memory_usage else 0
-                    logger.info(f"[{func_name}] Peak memory usage: {peak_memory:.2f} GB")
-                except Exception as e:
-                    logger.info(f"[{func_name}] Memory profiling completed (details unavailable: {e})")
-
-                # Generate resource profile visualization (optional)
-                if save_profile:
-                    try:
-                        profile_file = os.path.join(cache_dir, f"dask_profile_{func_name}_{composite_name}_{time_str}.html")
-                        visualize([resource_prof], filename=profile_file, show=False)
-                        logger.info(f"[{func_name}] Resource profile saved to: {profile_file}")
-                    except Exception as e:
-                        logger.warning(f"[{func_name}] Could not save resource profile: {e}")
-
-                return result
-        return wrapper
-    return decorator
+    with Profiler() as prof, ResourceProfiler(dt=1) as rprof:
+        client = Client(cluster)
+        try:
+            yield prof, rprof
+        finally:
+            client.close()
+            cluster.close()
+            gc.collect()
 
 available_composites = [
     "true_color", "ir_clouds", "ash", "night_microphysics"

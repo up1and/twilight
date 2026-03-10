@@ -1,11 +1,10 @@
 import os
 import sys
 import time
-import datetime
 import socket
 import logging
-
-from functools import wraps
+import datetime
+import functools
 
 
 def _replace_minute(time):
@@ -34,7 +33,7 @@ def generate_worker_id():
     return f"{hostname}_{ip}"
 
 def timing(f):
-    @wraps(f)
+    @functools.wraps(f)
     def wrap(*args, **kw):
         ts = time.time()
         result = f(*args, **kw)

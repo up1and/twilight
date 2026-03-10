@@ -111,6 +111,17 @@ class TaskClient:
         except Exception as e:
             logger.error(f"Error updating task status: {e}")
             return False
+        
+    def update_profile(self, task_id, tasks, resources):
+        """Update profiler data to server"""
+        try:
+            self.session.post(
+                f"{self.server_url}/api/tasks/{task_id}/profile",
+                json={"tasks": tasks, "resources": resources},
+                timeout=10
+            )
+        except Exception as e:
+            logger.warning(f"Failed to update profile: {e}")
 
 
 class TaskProcessor:
@@ -134,9 +145,11 @@ class TaskProcessor:
             # Clean up cache before processing
             self.cache_manager.cleanup_cache()
 
-            with dask_scope() as client:
+            with dask_scope() as (prof, rprof):
                 # Process the composite
                 process_composite(composite, timestamp, data_source)
+
+            self.update_profile(task_id, prof, rprof)
 
             # Report completion
             self.task_client.update_task_status(task_id, "completed")
@@ -144,3 +157,21 @@ class TaskProcessor:
         except Exception as e:
             logger.error(f"Error processing task {task_id}: {e}", exc_info=True)
             self.task_client.update_task_status(task_id, "failed", message=str(e))
+
+    def update_profile(self, task_id, prof, rprof):
+        """Serialize and update profiler data to server"""
+        tasks = []
+        for r in prof.results:
+            tasks.append({"key": str(r.key), "duration": r.end_time - r.start_time})
+        tasks.sort(key=lambda x: x["duration"], reverse=True)
+        tasks = tasks[:50]
+
+        resources = [
+            {"time": r.time, "memory": r.mem, "cpu_percent": r.cpu}
+            for r in rprof.results
+        ]
+
+        try:
+            self.task_client.update_profile(task_id, tasks, resources)
+        except Exception as e:
+            logger.warning(f"Failed to update profile: {e}")

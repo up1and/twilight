@@ -1,9 +1,11 @@
 """
 Service classes for business logic
 """
+import json
 import datetime
 
 from models import TaskModel, SyncModel
+
 
 class TaskManager:
     def __init__(self, redis_client):
@@ -198,7 +200,25 @@ class TaskManager:
         filtered_tasks.sort(key=lambda t: t.created, reverse=True)
 
         return filtered_tasks[offset:offset+limit], len(filtered_tasks)
+    
+    def save_profile(self, task_id, tasks, resources):
+        """Save profiler data for a task"""
+        profile_key = f"profiles:{task_id}"
+        if tasks:
+            self.redis.set(f"{profile_key}:tasks", json.dumps(tasks))
+        if resources:
+            self.redis.set(f"{profile_key}:resources", json.dumps(resources))
+        self.redis.expire(f"{profile_key}:tasks", self.expire_time)
+        self.redis.expire(f"{profile_key}:resources", self.expire_time)
 
+    def get_profile(self, task_id):
+        """Get profiler data for a task"""
+        profile_key = f"profiles:{task_id}"
+        tasks_data = self.redis.get(f"{profile_key}:tasks")
+        resources_data = self.redis.get(f"{profile_key}:resources")
+        if not tasks_data and not resources_data:
+            return None
+        return {"tasks": json.loads(tasks_data), "resources": json.loads(resources_data)}
 
 class SyncManager:
     def __init__(self, redis_client, task_manager=None):
