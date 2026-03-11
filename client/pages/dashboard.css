@@ -11,8 +11,8 @@ body {
 
 .dashboard {
   font-family: "Courier New", Courier, monospace;
-  background-color: #ffffff;
-  color: #000000;
+  background-color: var(--background);
+  color: var(--text);
   margin: 0;
   padding: 20px;
   font-size: 15px;
@@ -30,7 +30,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px dashed #000;
+  border-bottom: 1px dashed var(--text);
   padding-bottom: 5px;
   margin-bottom: 20px;
 }
@@ -54,7 +54,7 @@ body {
   font-family: inherit;
   font-size: 16px;
   cursor: pointer;
-  color: #777;
+  color: var(--text-muted);
   text-transform: uppercase;
   padding: 0;
   text-decoration: none;
@@ -65,7 +65,7 @@ body {
 }
 
 .tab-button.active {
-  color: #000;
+  color: var(--text);
   font-weight: bold;
   text-decoration: underline;
 }
@@ -85,8 +85,8 @@ body {
   align-items: center;
   margin-bottom: 20px;
   padding: 10px;
-  background-color: #f9f9f9;
-  border: 1px solid #ccc;
+  background-color: var(--background-hover);
+  border: 1px solid var(--border);
 }
 
 .filters {
@@ -109,8 +109,8 @@ body {
 select {
   font-family: inherit;
   padding: 5px;
-  border: 1px solid #ccc;
-  background-color: #fff;
+  border: 1px solid var(--border);
+  background-color: var(--white);
   cursor: pointer;
   font-size: 14px;
 }
@@ -125,7 +125,7 @@ select {
 
 /* --- Data Card --- */
 .data-card {
-  border-bottom: 1px dashed #ccc;
+  border-bottom: 1px dashed var(--border);
   padding-bottom: 15px;
   position: relative;
   min-height: 100px;
@@ -151,7 +151,7 @@ select {
 }
 
 .timestamp {
-  color: #555;
+  color: var(--text-secondary);
   font-weight: normal;
   font-size: 16px;
   margin-left: 10px;
@@ -164,25 +164,25 @@ select {
 
 /* Status Colors */
 .status-pending {
-  color: #856404;
+  color: var(--status-pending);
 }
 
 .status-completed {
-  color: #155724;
+  color: var(--status-completed);
 }
 
 .status-failed {
-  color: #dc3545;
+  color: var(--status-failed);
 }
 
 .status-running,
 .status-processing,
 .status-claimed {
-  color: #0056b3;
+  color: var(--status-running);
 }
 
 .error-message {
-  color: #dc3545;
+  color: var(--status-failed);
   font-weight: bold;
 }
 
@@ -207,13 +207,13 @@ select {
   bottom: 5px;
   right: 0;
   font-size: 12px;
-  color: #777;
+  color: var(--text-muted);
 }
 
 /* Empty Cell */
 .empty-cell {
   text-align: center;
-  color: #777;
+  color: var(--text-muted);
   padding: 40px;
   font-size: 14px;
 }
@@ -222,10 +222,10 @@ select {
 .error-banner {
   padding: 10px 16px;
   margin-bottom: 16px;
-  border: 1px solid #dc3545;
-  color: #dc3545;
+  border: 1px solid var(--status-failed);
+  color: var(--status-failed);
   font-size: 14px;
-  background-color: #f8d7da;
+  background-color: var(--red-light);
 }
 
 /* --- Pagination --- */
@@ -238,28 +238,28 @@ select {
 
 .page-button {
   background: none;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   font-family: inherit;
   padding: 5px 10px;
   cursor: pointer;
-  color: #000;
+  color: var(--text);
   font-size: 14px;
 }
 
 .page-button:hover:not(.active) {
-  background-color: #eee;
+  background-color: var(--background-hover);
 }
 
 .page-button.active {
-  background-color: #000;
-  color: #fff;
-  border-color: #000;
+  background-color: var(--primary);
+  color: var(--white);
+  border-color: var(--primary);
   font-weight: bold;
 }
 
 .page-button:disabled {
-  color: #ccc;
-  border-color: #eee;
+  color: var(--border);
+  border-color: var(--divider);
   cursor: not-allowed;
 }
 
@@ -312,22 +312,22 @@ select {
 
 /* --- Add Button --- */
 .add-button {
-  background-color: #000;
-  color: #fff;
+  background-color: var(--primary);
+  color: var(--white);
   font-family: inherit;
   padding: 7px 15px 6px;
-  border: 1px solid #000;
+  border: 1px solid var(--primary);
   cursor: pointer;
   text-transform: uppercase;
   font-weight: bold;
 }
 
 .add-button:hover {
-  background-color: #333;
+  background-color: var(--primary-hover);
 }
 
 .add-button:disabled {
-  background-color: #666;
+  background-color: var(--secondary);
   cursor: not-allowed;
 }
 
@@ -346,12 +346,12 @@ select {
 }
 
 .modal-content {
-  background-color: #fff;
-  border: 2px solid #000;
+  background-color: var(--white);
+  border: 2px solid var(--primary);
   padding: 20px;
   width: 400px;
   max-width: 90%;
-  box-shadow: 5px 5px 0px rgba(0, 0, 0, 0.2);
+  box-shadow: 5px 5px 0px var(--shadow-heavy);
 }
 
 .modal-header {
@@ -359,7 +359,7 @@ select {
   font-weight: bold;
   text-transform: uppercase;
   margin-bottom: 15px;
-  border-bottom: 1px dashed #000;
+  border-bottom: 1px dashed var(--text);
   padding-bottom: 5px;
 }
 
@@ -379,7 +379,7 @@ select {
   width: 100%;
   box-sizing: border-box;
   padding: 8px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   font-family: inherit;
 }
 
@@ -393,25 +393,25 @@ select {
 .modal-actions button {
   font-family: inherit;
   padding: 8px 15px;
-  border: 1px solid #000;
-  background-color: #fff;
+  border: 1px solid var(--primary);
+  background-color: var(--white);
   cursor: pointer;
   text-transform: uppercase;
   font-weight: bold;
 }
 
 .modal-actions button:hover {
-  background-color: #eee;
+  background-color: var(--background-hover);
 }
 
 .modal-actions button.add-button {
-  background-color: #000;
-  color: #fff;
+  background-color: var(--primary);
+  color: var(--white);
 }
 
 .modal-actions button.add-button:hover {
-  background-color: #333;
-  color: #fff;
+  background-color: var(--primary-hover);
+  color: var(--white);
 }
 
 /* --- Profile --- */
@@ -434,7 +434,7 @@ select {
   font-size: 14px;
   font-weight: bold;
   text-transform: uppercase;
-  color: #333;
+  color: var(--text);
   padding-bottom: 5px;
 }
 
@@ -450,12 +450,12 @@ select {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
-  border-bottom: 1px dotted #ccc;
+  border-bottom: 1px dotted var(--border);
   padding: 5px 0;
 }
 
 .trace-key {
-  color: #444;
+  color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

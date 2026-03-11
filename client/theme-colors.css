@@ -21,6 +21,13 @@
   --green-light: #dff0d8;
   --red-primary: #d9534f;
   --red-hover: #c9302c;
+  --red-light: #f8d7da;
+
+  /* Status Colors */
+  --status-pending: #856404;
+  --status-completed: #155724;
+  --status-failed: #dc3545;
+  --status-running: #0056b3;
 
   /* Common Colors */
   --white: #ffffff;
