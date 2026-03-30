@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react-swc";
+import react from "@vitejs/plugin-react";
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -9,20 +9,20 @@ export default defineConfig({
     proxy: {
       "/api": {
         target: "http://127.0.0.1:5000",
-        changeOrigin: true,
+        changeOrigin: true
       },
       "/tiles": {
         target: "http://127.0.0.1:5000",
-        changeOrigin: true,
+        changeOrigin: true
       },
       "/snapshots": {
         target: "http://127.0.0.1:5000",
         changeOrigin: true,
         ws: false,
         headers: {
-          "Access-Control-Allow-Origin": "*",
-        },
-      },
-    },
-  },
+          "Access-Control-Allow-Origin": "*"
+        }
+      }
+    }
+  }
 });
