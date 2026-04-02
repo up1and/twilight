@@ -10,16 +10,16 @@ import TimeDimensionLayer, {
   type TimeDimensionLayerHandles
 } from "../components/time-dimension-layer";
 import TimeRangeSelector from "../components/time-range-selector";
-import SettingsButton from "../components/settings-button";
 import MultiSelectComposite from "../components/multi-select-composite";
 import CoordinatesDisplay from "../components/coordinates-display";
 import SideBySide from "../components/side-by-side";
 import SnapshotButton from "../components/snapshot-button";
+import LayerButton from "../components/layer-button";
 import { useIsMobile } from "../hooks/use-mobile";
 import { fetchLatestComposites, fetchTileJSON } from "../utils/api-client";
 import { roundToNearestTenMinutes } from "../utils/time-utils";
 
-import type { CompositeType, MapConfig } from "../utils/types";
+import type { CompositeType, MapConfig, MapLayers } from "../utils/types";
 
 import "leaflet/dist/leaflet.css";
 import "./map.css";
@@ -204,6 +204,13 @@ export default function MapView() {
     }
   );
 
+  const [layers, setLayers] = useState<MapLayers>(() => {
+    const boundary = localStorage.getItem("fir-boundary");
+    return {
+      "fir-boundary": boundary ? JSON.parse(boundary) : false
+    };
+  });
+
   const [selectedTime, setSelectedTime] = useState<dayjs.Dayjs>(
     roundToNearestTenMinutes(dayjs().utc())
   );
@@ -240,7 +247,16 @@ export default function MapView() {
     Record<string, boolean>
   >({});
 
-  const showFirBoundary = localStorage.getItem("fir-boundary") === "true";
+  // Toggles layer state, auto-syncs to localStorage using layerId as key
+  const toggleLayer = (layerId: keyof MapLayers) => {
+    const newValue = !layers[layerId];
+    console.log(`Layer changed: ${layerId} -> ${newValue}`);
+    setLayers({
+      ...layers,
+      [layerId]: newValue,
+    });
+    localStorage.setItem(layerId, JSON.stringify(newValue));
+  };
 
   // Get the composite's bounds
   const compositeBounds = useMemo(() => {
@@ -348,15 +364,6 @@ export default function MapView() {
     bbox: [number, number, number, number]
   ) => {
     setViewportBounds(bbox);
-  };
-
-  // Callback function when settings change
-  const handleSettingsChange = () => {
-    // Add any logic that needs to run after settings are updated
-    console.log("settings updated:", {
-      token: localStorage.getItem("token"),
-      firBoundary: localStorage.getItem("fir-boundary")
-    });
   };
 
   // Handle mouse position change
@@ -489,7 +496,7 @@ export default function MapView() {
             }}
           />
 
-          {showFirBoundary && (
+          {layers["fir-boundary"] && (
             <VectorGridLayer
               url="/tiles/firs/{z}/{x}/{y}.pbf"
               styles={{
@@ -544,7 +551,7 @@ export default function MapView() {
             bbox={viewportBounds}
             timedelta={videoTimedelta}
           />
-          <SettingsButton onSettingsChange={handleSettingsChange} />
+          <LayerButton layers={layers} onToggle={toggleLayer} />
         </div>
 
         {/* TimeRangeSelector at the bottom */}

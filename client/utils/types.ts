@@ -5,6 +5,10 @@ export type CompositeType =
   | "water_vapor"
   | string;
 
+export interface MapLayers {
+  "fir-boundary": boolean;
+}
+
 export interface TileJSON {
   tiles: string[];
   bounds?: [number, number, number, number]; // [minLng, minLat, maxLng, maxLat]
