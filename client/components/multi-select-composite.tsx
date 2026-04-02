@@ -27,7 +27,7 @@ export default function MultiSelectComposite({
   onChange,
   maxSelections = 2
 }: MultiSelectCompositeProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isSelectOpen, setIsSelectOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [isCtrlPressed, setIsCtrlPressed] = useState(false);
 
@@ -93,22 +93,34 @@ export default function MultiSelectComposite({
     }
   };
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside or pressing Escape
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
+    if (!isSelectOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
       if (
         dropdownRef.current &&
         !dropdownRef.current.contains(event.target as Node)
       ) {
-        setIsOpen(false);
+        setIsSelectOpen(false);
       }
-    }
+    };
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault(); // Prevent page scrolling
+        event.stopPropagation(); // Prevent event bubbling
+        setIsSelectOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
+      document.removeEventListener("keydown", handleKeyDown);
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, []);
+  }, [isSelectOpen]);
 
   // Format the display text for the button
   const getDisplayText = () => {
@@ -128,13 +140,13 @@ export default function MultiSelectComposite({
     <div className="multi-select-composite" ref={dropdownRef}>
       <button
         className="multi-select-button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => setIsSelectOpen(!isSelectOpen)}
       >
         {getDisplayText()}
         <ChevronDown size={14} className="dropdown-icon" />
       </button>
 
-      {isOpen && (
+      {isSelectOpen && (
         <div className="multi-select-dropdown">
           {options.map((option) => (
             <div

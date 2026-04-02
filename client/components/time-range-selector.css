@@ -63,38 +63,75 @@
   border: 1px solid var(--border);
   border-radius: 4px;
   font-size: 12px;
+  font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
   height: 28px; /* Fixed height to match other controls */
   box-sizing: border-box;
   text-align: left;
+  box-shadow: 0 1px 5px var(--shadow);
 }
 
-/* Lookback selector wrapper for custom dropdown icon */
+/* Lookback custom dropdown */
 .lookback-wrapper {
   position: relative;
   display: inline-block;
 }
 
-.select-icon {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
-}
-
-.lookback-selector {
+.lookback-button {
   padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background-color: var(--background);
   font-size: 12px;
-  height: 28px; /* Fixed height to match other controls */
+  height: 28px;
   text-align: left;
-  text-align-last: left; /* Left align text in dropdown */
-  vertical-align: middle; /* Ensure text is vertically centered */
-  line-height: 16px; /* Adjust line height for better vertical centering */
-  appearance: none; /* Remove default arrow */
-  padding-right: 24px; /* Make room for custom arrow */
+  vertical-align: middle;
+  line-height: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 1px 5px var(--shadow);
+  min-width: 120px;
+  box-sizing: border-box;
+}
+
+.lookback-button:hover {
+  background-color: var(--background-hover);
+}
+
+.dropdown-icon {
+  margin-left: 5px;
+  flex-shrink: 0;
+}
+
+.lookback-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 4px;
+  background-color: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 2px 10px var(--shadow);
+  z-index: 1000;
+  min-width: 120px;
+  overflow: hidden;
+}
+
+.lookback-option {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s;
+}
+
+.lookback-option:hover {
+  background-color: var(--background-hover);
+}
+
+.lookback-option.selected {
+  background-color: var(--primary-light);
+  font-weight: bold;
 }
 
 /* Timeline container for centering */
@@ -287,8 +324,8 @@
     width: 140px; /* Ensure it fits on small screens */
   }
 
-  .lookback-selector {
-    width: auto;
+  .lookback-dropdown {
+    min-width: 120px;
   }
 
   .marker-label {

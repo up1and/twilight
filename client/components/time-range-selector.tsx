@@ -56,8 +56,10 @@ export default function TimeRangeSelector({
   const [hasMoved, setHasMoved] = useState<boolean>(false); // Track if mouse has moved during drag
   const [isCtrlPressed, setIsCtrlPressed] = useState<boolean>(false);
   const [bufferTick, setBufferTick] = useState(0);
+  const [isLookbackOpen, setIsLookbackOpen] = useState<boolean>(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<HTMLDivElement>(null);
+  const lookbackDropdownRef = useRef<HTMLDivElement>(null);
   const bufferingTimerRef = useRef<dayjs.Dayjs | null>(null);
   const isMobile = useIsMobile();
 
@@ -278,17 +280,19 @@ export default function TimeRangeSelector({
     };
 
     if (isDraggingMarker) {
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("touchmove", handleTouchMove, { passive: false });
-      window.addEventListener("mouseup", handleDragEnd);
-      window.addEventListener("touchend", handleDragEnd);
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("touchmove", handleTouchMove, {
+        passive: false
+      });
+      document.addEventListener("mouseup", handleDragEnd);
+      document.addEventListener("touchend", handleDragEnd);
     }
 
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("touchmove", handleTouchMove);
-      window.removeEventListener("mouseup", handleDragEnd);
-      window.removeEventListener("touchend", handleDragEnd);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("touchmove", handleTouchMove);
+      document.removeEventListener("mouseup", handleDragEnd);
+      document.removeEventListener("touchend", handleDragEnd);
     };
   }, [isDraggingMarker, timeIntervals, updateSelectedTime]);
 
@@ -397,17 +401,19 @@ export default function TimeRangeSelector({
     };
 
     if (isDraggingTimeline) {
-      window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("touchmove", handleTouchMove, { passive: false });
-      window.addEventListener("mouseup", handleDragEnd);
-      window.addEventListener("touchend", handleDragEnd);
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("touchmove", handleTouchMove, {
+        passive: false
+      });
+      document.addEventListener("mouseup", handleDragEnd);
+      document.addEventListener("touchend", handleDragEnd);
     }
 
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("touchmove", handleTouchMove);
-      window.removeEventListener("mouseup", handleDragEnd);
-      window.removeEventListener("touchend", handleDragEnd);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("touchmove", handleTouchMove);
+      document.removeEventListener("mouseup", handleDragEnd);
+      document.removeEventListener("touchend", handleDragEnd);
     };
   }, [
     isDraggingTimeline,
@@ -455,6 +461,16 @@ export default function TimeRangeSelector({
   // Handle keyboard navigation and playback control
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip if focus is on an input element or dropdown is open
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "SELECT" ||
+        target.tagName === "TEXTAREA" ||
+        isLookbackOpen
+      )
+        return;
+
       // Handle spacebar for play/pause
       if (e.key === " " || e.key === "Spacebar") {
         e.preventDefault(); // Prevent page scrolling
@@ -490,9 +506,38 @@ export default function TimeRangeSelector({
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedTime, timeIntervals, togglePlayback, updateSelectedTime]);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [
+    selectedTime,
+    timeIntervals,
+    togglePlayback,
+    updateSelectedTime,
+    isLookbackOpen
+  ]);
+
+  // Track Ctrl key state
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Control") {
+        setIsCtrlPressed(true);
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Control") {
+        setIsCtrlPressed(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("keyup", handleKeyUp);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("keyup", handleKeyUp);
+    };
+  }, []);
 
   // Handle playback
   useEffect(() => {
@@ -566,6 +611,35 @@ export default function TimeRangeSelector({
     setLookbackHours(hours);
   };
 
+  // Close lookback dropdown when clicking outside or pressing Escape
+  useEffect(() => {
+    if (!isLookbackOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        lookbackDropdownRef.current &&
+        !lookbackDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsLookbackOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault(); // Prevent page scrolling
+        event.stopPropagation(); // Prevent event bubbling
+        setIsLookbackOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isLookbackOpen]);
+
   // Handle end time change
   const handleTimelineChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const currentTime = dayjs().utc();
@@ -593,29 +667,6 @@ export default function TimeRangeSelector({
     }
   }, [selectedTime, lookbackHours, timelineTime]);
 
-  // Track Ctrl key state
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Control") {
-        setIsCtrlPressed(true);
-      }
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.key === "Control") {
-        setIsCtrlPressed(false);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
-    };
-  }, []);
-
   // Notify parent component of time range change
   useEffect(() => {
     const startTime = getStartTime();
@@ -635,18 +686,33 @@ export default function TimeRangeSelector({
             {isPlaying ? "Pause" : "Play"}
           </button>
 
-          {/* Lookback hours selector*/}
-          <div className="lookback-wrapper">
-            <select
-              className="lookback-selector"
-              value={lookbackHours}
-              onChange={(e) => handleLookbackChange(Number(e.target.value))}
+          {/* Lookback hours selector */}
+          <div className="lookback-wrapper" ref={lookbackDropdownRef}>
+            <button
+              className="lookback-button"
+              onClick={() => setIsLookbackOpen(!isLookbackOpen)}
             >
-              <option value={6}>Last 6 hours</option>
-              <option value={12}>Last 12 hours</option>
-              <option value={24}>Last 24 hours</option>
-            </select>
-            <ChevronDown size={14} className="select-icon" />
+              Last {lookbackHours} hours
+              <ChevronDown size={14} className="dropdown-icon" />
+            </button>
+            {isLookbackOpen && (
+              <div className="lookback-dropdown">
+                {[6, 12, 24].map((hours) => (
+                  <div
+                    key={hours}
+                    className={`lookback-option ${
+                      lookbackHours === hours ? "selected" : ""
+                    }`}
+                    onClick={() => {
+                      handleLookbackChange(hours);
+                      setIsLookbackOpen(false);
+                    }}
+                  >
+                    Last {hours} hours
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Datetime picker */}
