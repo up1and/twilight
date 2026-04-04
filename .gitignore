@@ -33,5 +33,6 @@ diff.txt
 .pdm-python
 .python-version
 */hsd/*
-server/config.py
-worker/config.py
+.env
+.alma-snapshots
+.opencode

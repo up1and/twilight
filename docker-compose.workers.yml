@@ -1,0 +1,42 @@
+services:
+  # Synchronizes satellite data from NOAA S3 to local MinIO
+  worker-sync:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    image: twilight-worker:latest
+    command: python worker/main.py --sync
+    environment:
+      - SERVER_URL=${SERVER_URL:-http://localhost:5000}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-localhost:9000}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+    restart: always
+
+  # Monitors NOAA data availability and generates processing tasks
+  worker-task:
+    image: twilight-worker:latest
+    command: python worker/main.py --task
+    environment:
+      - SERVER_URL=${SERVER_URL:-http://localhost:5000}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-localhost:9000}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+    restart: always
+
+  # Main satellite image processing worker
+  worker-processor:
+    image: twilight-worker:latest
+    command: python worker/main.py --worker
+    volumes:
+      - worker_cache:/tmp/himawari_cache
+    environment:
+      - SERVER_URL=${SERVER_URL:-http://localhost:5000}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-localhost:9000}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - CACHE_SIZE_LIMIT=${CACHE_SIZE_LIMIT:-200}
+    restart: always
+
+volumes:
+  worker_cache:

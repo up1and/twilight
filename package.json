@@ -1,39 +1,9 @@
 {
-  "name": "twilight",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "chart.js": "^4.5.1",
-    "dayjs": "^1.11.13",
-    "ky": "^1.8.1",
-    "leaflet": "^1.9.4",
-    "leaflet.vectorgrid": "^1.3.0",
-    "lucide-react": "^0.575.0",
-    "react": "^18.3.1",
-    "react-chartjs-2": "^5.3.1",
-    "react-dom": "^18.3.1",
-    "react-leaflet": "^4.2.1",
-    "wouter": "^3.9.0"
-  },
-  "devDependencies": {
-    "@eslint/js": "^9.9.0",
-    "@types/leaflet": "^1.9.12",
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^6.0.1",
-    "eslint": "^9.9.0",
-    "eslint-plugin-react-hooks": "^5.1.0-rc.0",
-    "eslint-plugin-react-refresh": "^0.4.9",
-    "globals": "^15.9.0",
-    "typescript": "^5.5.3",
-    "typescript-eslint": "^8.0.1",
-    "vite": "^8.0.2"
+    "dev": "npm run dev --prefix client",
+    "build": "npm run build --prefix client",
+    "lint": "npm run lint --prefix client",
+    "preview": "npm run preview --prefix client",
+    "install:client": "cd client && npm install"
   }
 }
