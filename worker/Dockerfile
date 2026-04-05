@@ -15,16 +15,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Speedy installation of common dependencies + [worker] extra using uv
+# Copy uv and project definition
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-COPY pyproject.toml uv.lock ./
-RUN uv pip install --system ".[worker]"
+COPY pyproject.toml ./
+
+# Install dependencies directly into system python
+RUN uv pip install . gunicorn --no-cache -U && \
+    rm -rf build/ *.egg-info/
 
 # Pre-download Pyspectral RSR data for satellite composite generation
 RUN python -c "from pyspectral.utils import download_rsr; download_rsr()"
 
-# Copy worker and support source code
+# Copy worker source code
 COPY . .
 
 # No exposed port for worker, it communicates outward to server/redis/minio
-CMD ["python", "worker/main.py", "--worker"]
+CMD ["python", "main.py", "--worker"]

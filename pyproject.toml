@@ -2,43 +2,10 @@
 name = "twilight"
 version = "0.1.0"
 description = "A Himawari Satellite Data Visualization System"
-authors = [
-    {name = "up1and", email = "piratecb@gmail.com"},
-]
-# Core dependencies explicitly imported in shared modules
-dependencies = [
-    "minio>=7.2.15",
-    "rasterio==1.4.3",
-    "numpy",
-]
+authors = [{ name = "up1and", email = "piratecb@gmail.com" }]
 requires-python = ">=3.11"
 readme = "README.md"
-license = {text = "MIT"}
+license = { text = "MIT" }
 
-[project.optional-dependencies]
-# Dependencies specifically for the Flask API and Tile server
-server = [
-    "flask>=3.1.0",
-    "flask-caching>=2.3.1",
-    "redis>=6.2.0",
-    "rio-tiler>=7.6.1",
-    "matplotlib>=3.10.3",
-    "cartopy>=0.24.1",
-    "imageio[ffmpeg]>=2.36.0",
-]
-# Dependencies specifically for satellite data retrieval and compute tasks
-worker = [
-    "satpy>=0.55.0",
-    "pyspectral>=0.13.5",
-    "dask[distributed]>=2025.5.1",
-    "dask[diagnostics]>=2024.12.1",
-    "s3fs>=2025.3.2",
-    "boto3>=1.38.46",
-    "requests",
-]
-
-[dependency-groups]
-test = [
-    "pytest>=8.4.1",
-    "pytest-cov>=6.2.1",
-]
+[tool.uv.workspace]
+members = ["server", "worker"]

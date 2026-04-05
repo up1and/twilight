@@ -1,0 +1,6 @@
+.venv/
+.git/
+__pycache__/
+tests/
+data/
+*.DAT.bz2

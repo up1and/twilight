@@ -16,10 +16,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Speedy installation of common dependencies + [server] extra using uv
+# Copy uv and project definition
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-COPY pyproject.toml uv.lock ./
-RUN uv pip install --system ".[server]" gunicorn
+COPY pyproject.toml ./
+
+# Install dependencies + gunicorn directly into system python
+RUN uv pip install . gunicorn --no-cache -U && \
+    rm -rf build/ *.egg-info/
 
 # Pre-download Cartopy coastline data for map snapshots
 RUN python -c "import cartopy.feature; cartopy.feature.COASTLINE.with_scale('10m')"
@@ -27,10 +30,10 @@ RUN python -c "import cartopy.feature; cartopy.feature.COASTLINE.with_scale('10m
 # Create mounted data directory
 RUN mkdir -p /app/data
 
-# Copy source code (data/ excluded via .dockerignore)
+# Copy source code
 COPY . .
 
 EXPOSE 5000
 
 # Gunicorn server entrypoint for production-grade performance
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "--threads", "2", "--worker-class", "gthread", "server.app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "--threads", "2", "--worker-class", "gthread", "app:app"]

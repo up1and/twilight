@@ -20,8 +20,7 @@ services:
   # Flask API and Tile server
   server:
     build:
-      context: .
-      dockerfile: server/Dockerfile
+      context: ./server
     image: twilight-server:latest
     environment:
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
@@ -40,8 +39,7 @@ services:
   nginx:
     build:
       context: ./client
-      dockerfile: Dockerfile
-    image: twilight-frontend:latest
+    image: twilight-client:latest
     volumes:
       - ./docker/nginx/nginx.conf:/etc/nginx/conf.d/default.conf
     ports: ["80:80"]

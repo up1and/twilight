@@ -1,0 +1,15 @@
+[project]
+name = "worker"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "minio>=7.2.15",
+    "rasterio==1.4.3",
+    "numpy",
+    "satpy>=0.55.0",
+    "pyspectral>=0.13.5",
+    "dask[distributed]>=2025.5.1",
+    "s3fs>=2025.3.2",
+    "boto3>=1.38.46",
+    "requests",
+]

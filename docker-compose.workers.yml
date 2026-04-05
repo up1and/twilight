@@ -2,10 +2,9 @@ services:
   # Synchronizes satellite data from NOAA S3 to local MinIO
   worker-sync:
     build:
-      context: .
-      dockerfile: worker/Dockerfile
+      context: ./worker
     image: twilight-worker:latest
-    command: python worker/main.py --sync
+    command: python main.py --sync
     environment:
       - SERVER_URL=${SERVER_URL:-http://localhost:5000}
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-localhost:9000}
@@ -16,7 +15,7 @@ services:
   # Monitors NOAA data availability and generates processing tasks
   worker-task:
     image: twilight-worker:latest
-    command: python worker/main.py --task
+    command: python main.py --task
     environment:
       - SERVER_URL=${SERVER_URL:-http://localhost:5000}
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-localhost:9000}
@@ -27,7 +26,7 @@ services:
   # Main satellite image processing worker
   worker-processor:
     image: twilight-worker:latest
-    command: python worker/main.py --worker
+    command: python main.py --worker
     volumes:
       - worker_cache:/tmp/himawari_cache
     environment:

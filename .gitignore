@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 *.tsbuildinfo
+*.egg-info
 
 # Editor directories and files
 .vscode/*
@@ -32,7 +33,7 @@ diff.txt
 .coverage
 .pdm-python
 .python-version
-*/hsd/*
+*/data/*
 .env
 .alma-snapshots
 .opencode
