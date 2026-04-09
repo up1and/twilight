@@ -44,10 +44,11 @@ def register_blueprints(app):
     app.register_blueprint(api)
     app.register_blueprint(main)
 
-def create_app():
+def create_app(debug=False):
     """Create and configure Flask application"""
     # Create Flask app
     app = Flask(__name__)
+    app.debug = debug
     app.config["AVAILABLE_COMPOSITES"] = available_composites
 
     # Initialize extensions
@@ -86,9 +87,14 @@ def create_app():
         app.logger.addHandler(handler)
         app.logger.setLevel(logging.INFO)
 
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_host=1, x_proto=1)
+
     return app
 
-app = create_app()
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app = create_app(debug=True)
+    app.run(host="0.0.0.0", port=5000)
+else:
+    app = create_app()

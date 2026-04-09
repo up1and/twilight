@@ -446,9 +446,8 @@ def create_snapshot():
 
     # Only add download_url if object_name exists (successful completion)
     if "object_name" in result:
-        object_name = result.pop("object_name") 
-        result["download_url"] = url_for("main.serve_snapshot", object_name=object_name, _external=True)
-
+        object_name = result.pop("object_name")
+        result["download_url"] = f"/snapshots/{object_name}"
     if result["status"] == "pending":
         return jsonify(result), 202
     else:

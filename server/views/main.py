@@ -117,7 +117,7 @@ def tilejson(composite):
                 "name": f"Himawari {name}",
                 "attribution": f"© Himawari {name}",
                 "tiles": [
-                    f"{request.host_url.rstrip('/')}/tiles/{composite_id}/{'{time}'}/{'{z}'}/{'{x}'}/{'{y}'}.png"
+                    f"/tiles/{composite_id}/{'{time}'}/{'{z}'}/{'{x}'}/{'{y}'}.png"
                 ]
             })
 
