@@ -10,10 +10,14 @@ from utils import logger
 class TaskClient:
     """Client for communicating with the task server"""
 
-    def __init__(self, server_url, worker_id=None):
+    def __init__(self, server_url, auth_key=None, worker_id=None):
         self.server_url = server_url.rstrip("/")
+        self.auth_key = auth_key
         self.worker_id = worker_id or f"worker_{socket.gethostname()}_{os.getpid()}"
         self.session = requests.Session()
+
+    def _auth_headers(self):
+        return {"Authorization": f"Bearer {self.auth_key}"} if self.auth_key else {}
 
     def peek_next_task(self, priorities=None, composites=None):
         """Peek next pending task from server with optional filtering
@@ -34,6 +38,7 @@ class TaskClient:
             response = self.session.get(
                 f"{self.server_url}/api/tasks/next",
                 params=params,
+                headers=self._auth_headers(),
                 timeout=10
             )
 
@@ -66,6 +71,7 @@ class TaskClient:
             response = self.session.put(
                 f"{self.server_url}/api/tasks/{task_id}/claim",
                 json=data,
+                headers=self._auth_headers(),
                 timeout=10
             )
 
@@ -99,6 +105,7 @@ class TaskClient:
             response = self.session.put(
                 f"{self.server_url}/api/tasks/{task_id}/status",
                 json=data,
+                headers=self._auth_headers(),
                 timeout=10
             )
 
@@ -118,6 +125,7 @@ class TaskClient:
             self.session.post(
                 f"{self.server_url}/api/tasks/{task_id}/profile",
                 json={"tasks": tasks, "resources": resources},
+                headers=self._auth_headers(),
                 timeout=10
             )
         except Exception as e:

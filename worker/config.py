@@ -7,6 +7,8 @@ secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
 
 # URL of the main server API
 server_url = os.getenv("SERVER_URL", "http://127.0.0.1:5000")
+# Authentication key for API requests
+auth_key = os.getenv("AUTH_KEY", "twilight-secret")
 
 # Task processor preferences
 # Optional filtering for specific priorities or composites

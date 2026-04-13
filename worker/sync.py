@@ -22,9 +22,13 @@ local_bucket = "raw"
 class SyncClient:
     """Client for communicating with the himawari sync server"""
 
-    def __init__(self, server_url):
+    def __init__(self, server_url, auth_key=None):
         self.server_url = server_url.rstrip("/")
+        self.auth_key = auth_key
         self.session = requests.Session()
+
+    def _auth_headers(self):
+        return {"Authorization": f"Bearer {self.auth_key}"} if self.auth_key else {}
 
     def get_sync(self, target_time):
         """Get current sync progress from server"""
@@ -32,6 +36,7 @@ class SyncClient:
             response = self.session.get(
                 f"{self.server_url}/api/syncs/{target_time.isoformat()}",
                 params={"source": "himawari"},
+                headers=self._auth_headers(),
                 timeout=10
             )
             
@@ -76,6 +81,7 @@ class SyncClient:
             response = self.session.put(
                 f"{self.server_url}/api/syncs",
                 json=data,
+                headers=self._auth_headers(),
                 timeout=10
             )
             
@@ -96,6 +102,7 @@ class SyncClient:
             response = self.session.post(
                 f"{self.server_url}/api/syncs",
                 json=data,
+                headers=self._auth_headers(),
                 timeout=10
             )
             

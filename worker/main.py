@@ -10,7 +10,7 @@ from himawari_processor import available_composites, cache_dir
 from task import TaskClient, TaskProcessor
 from sync import SyncClient, SyncProcessor
 from utils import logger, _available_latest_time, generate_worker_id, CacheManager
-from config import server_url, cache_size_limit
+from config import server_url, auth_key, cache_size_limit
 
 
 def check_files(target_time):
@@ -25,21 +25,24 @@ def check_files(target_time):
         logger.error(f"Error checking files for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC: {e}")
         return []
     
-def resolve_data_source(server_url, timestamp):
+def resolve_data_source(server_url, timestamp, auth_key=None):
     """
     Check sync status to determine data source and processing decision
     
     Args:
         server_url: Server endpoint URL
+        auth_key: Authentication key
         timestamp: Target datetime
         
     Returns:
         string: data_source ("local", "remote" or "pending")
     """
+    headers = {"Authorization": f"Bearer {auth_key}"} if auth_key else {}
     try:
         response = requests.get(
             f"{server_url}/api/syncs/{timestamp.isoformat()}",
             params={"source": "himawari"},
+            headers=headers,
             timeout=10
         )
         
@@ -66,15 +69,18 @@ def resolve_data_source(server_url, timestamp):
         # Default to remote on error
         return "remote"
 
-def run_task_generator(server_url, shutdown_event=None):
+def run_task_generator(server_url, auth_key=None, shutdown_event=None):
     """
     Task generator thread that monitors data availability and creates tasks
     
     Args:
         server_url: Server endpoint URL
+        auth_key: Authentication key
         shutdown_event: threading.Event to control shutdown (new Event created if None)
     """
     logger.info("Starting Himawari task generator thread...")
+
+    headers = {"Authorization": f"Bearer {auth_key}"} if auth_key else {}
 
     current_target_time = None
 
@@ -109,6 +115,7 @@ def run_task_generator(server_url, shutdown_event=None):
                                 "timestamp": current_target_time.isoformat(),
                                 "priority": "normal"
                             },
+                            headers=headers,
                             timeout=10
                         )
                         if response.status_code == 201:
@@ -134,7 +141,7 @@ def run_task_generator(server_url, shutdown_event=None):
             logger.error(f"Unexpected error in task generator: {e}")
             shutdown_event.wait(60)
 
-def run_himawari_sync(shutdown_event=None):
+def run_himawari_sync(auth_key=None, shutdown_event=None):
     """
     Synchronizes Himawari-9 data from NOAA S3 to local MinIO
     
@@ -147,7 +154,7 @@ def run_himawari_sync(shutdown_event=None):
     logger.info("Starting Himawari-9 data synchronization")
     
     # Initialize sync client
-    sync_client = SyncClient(server_url)
+    sync_client = SyncClient(server_url, auth_key)
     sync_processor = SyncProcessor(sync_client)
     
     # Start with available latest time
@@ -197,18 +204,19 @@ def run_himawari_sync(shutdown_event=None):
     
     logger.info("Himawari sync stopped")
 
-def run_task_manager(server_url, worker_id=None, poll_interval=10, shutdown_event=None):
+def run_task_manager(server_url, auth_key=None, worker_id=None, poll_interval=10, shutdown_event=None):
     """
     Run the task manager with shutdown event control
     
     Args:
         server_url: Server endpoint URL
+        auth_key: Authentication key
         worker_id: Optional worker identifier
         poll_interval: Time between task polls in seconds
         shutdown_event: Event to signal shutdown (new Event created if None)
     """
     # Initialize components
-    task_client = TaskClient(server_url, worker_id)
+    task_client = TaskClient(server_url, auth_key, worker_id)
     cache_manager = CacheManager(cache_dir, cache_size_limit)
     task_processor = TaskProcessor(task_client, cache_manager)
     
@@ -235,7 +243,7 @@ def run_task_manager(server_url, worker_id=None, poll_interval=10, shutdown_even
                 timestamp = task_data["timestamp"]
                 
                 # Check raw data status to determine data source
-                source = resolve_data_source(server_url, timestamp)
+                source = resolve_data_source(server_url, timestamp, auth_key)
                 
                 if source != "pending":
                     # Claim the task before processing
@@ -288,15 +296,15 @@ def main():
     should_run_worker = args.worker or (not args.task and not args.sync)
 
     if args.task:
-        t = threading.Thread(target=run_task_generator, args=(server_url,), kwargs={"shutdown_event": shared_event})
+        t = threading.Thread(target=run_task_generator, args=(server_url, auth_key,), kwargs={"shutdown_event": shared_event})
         threads.append(t)
 
     if args.sync:
-        t = threading.Thread(target=run_himawari_sync, kwargs={"shutdown_event": shared_event})
+        t = threading.Thread(target=run_himawari_sync, args=(auth_key,), kwargs={"shutdown_event": shared_event})
         threads.append(t)
 
     if should_run_worker:
-        t = threading.Thread(target=run_task_manager, args=(server_url, worker_id,), kwargs={"shutdown_event": shared_event}, daemon=True)
+        t = threading.Thread(target=run_task_manager, args=(server_url, auth_key, worker_id,), kwargs={"shutdown_event": shared_event}, daemon=True)
         threads.append(t)
 
     for t in threads:
