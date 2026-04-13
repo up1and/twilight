@@ -6,6 +6,7 @@ import datetime
 
 from flask import Flask, request, jsonify
 
+from config import auth_key
 from extensions import init_extensions, redis_client, client
 from services import TaskManager, SyncManager, CompositeStateManager
 from utils import default_json_handler, initialize_composite_state
@@ -50,6 +51,7 @@ def create_app(debug=False):
     app = Flask(__name__)
     app.debug = debug
     app.config["AVAILABLE_COMPOSITES"] = available_composites
+    app.config["AUTH_KEY"] = auth_key
 
     # Initialize extensions
     init_extensions(app)

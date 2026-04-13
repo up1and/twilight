@@ -1,7 +1,10 @@
-import { lazy, Suspense } from "react";
-import { Route, Switch } from "wouter";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { Route, Switch, useLocation } from "wouter";
 import { LoaderCircle } from "lucide-react";
 import Map from "./pages/map";
+import Login from "./pages/login";
+import { verifyToken } from "./utils/api-client";
+import { storage } from "./utils/storage";
 
 const Dashboard = lazy(() => import("./pages/dashboard"));
 
@@ -20,12 +23,54 @@ function Loading() {
   );
 }
 
+function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
+  const [, setLocation] = useLocation();
+  const [isValidating, setIsValidating] = useState(true);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = storage.get("auth-token");
+      if (!token) {
+        setIsAuthorized(false);
+        setIsValidating(false);
+        return;
+      }
+
+      const valid = await verifyToken(token);
+      if (valid) {
+        setIsAuthorized(true);
+      } else {
+        storage.set("auth-token", null);
+        setLocation("/login");
+      }
+      setIsValidating(false);
+    };
+
+    checkAuth();
+  }, [setLocation]);
+
+  if (isValidating) {
+    return <Loading />;
+  }
+
+  if (!isAuthorized) {
+    setLocation("/login");
+    return null;
+  }
+
+  return <Component />;
+}
+
 export default function App() {
   return (
     <Suspense fallback={<Loading />}>
       <Switch>
+        <Route path="/login" component={Login} />
+        <Route path="/dashboard">
+          {() => <ProtectedRoute component={Dashboard} />}
+        </Route>
         <Route path="/" component={Map} />
-        <Route path="/dashboard" component={Dashboard} />
       </Switch>
     </Suspense>
   );

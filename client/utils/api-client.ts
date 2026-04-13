@@ -4,6 +4,7 @@
  */
 import ky from "ky";
 import type { TileJSON, Task, Sync, Profile } from "./types";
+import { storage } from "./storage";
 
 interface TasksResponse {
   tasks: Task[];
@@ -21,21 +22,30 @@ interface SyncsResponse {
   pages: number;
 }
 
-// Get API configuration from localStorage (token only now)
-export function getAuthConfig() {
-  return {
-    token: localStorage.getItem("token") || ""
-  };
+// Get auth token from localStorage
+function getAuthToken(): string {
+  return storage.get("auth-token") || "";
 }
 
-// Set API configuration to localStorage (token only now)
-export function setApiConfig(config: { token: string }) {
-  localStorage.setItem("token", config.token);
+// Verify token with backend
+export async function verifyToken(token: string): Promise<boolean> {
+  try {
+    const response = await ky.post("/api/auth/verify", {
+      json: { token },
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin"
+    });
+    const data = await response.json() as { valid: boolean };
+    return data.valid;
+  } catch (error) {
+    console.error("Error verifying token:", error);
+    return false;
+  }
 }
 
 // Create a ky instance with default options
 const createApiClient = () => {
-  const { token } = getAuthConfig();
+  const token = getAuthToken();
 
   return ky.create({
     headers: {

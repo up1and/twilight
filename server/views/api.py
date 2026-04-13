@@ -5,6 +5,7 @@ import datetime
 
 from flask import Blueprint, request, jsonify, url_for, current_app
 
+from auth import auth_required
 from utils import parse_iso_timestamp
 from snapshot import create_single_snapshot, create_series_snapshot
 
@@ -12,7 +13,20 @@ from snapshot import create_single_snapshot, create_series_snapshot
 api = Blueprint("api", __name__, url_prefix="/api")
 
 
+@api.route("/auth/verify", methods=["POST"])
+def verify_token():
+    data = request.get_json()
+    if not data or "token" not in data:
+        return jsonify({"valid": False}), 400
+
+    token = data["token"]
+    is_valid = token == current_app.config["AUTH_KEY"]
+
+    return jsonify({"valid": is_valid})
+
+
 @api.route("/tasks", methods=["POST"])
+@auth_required
 def create_task():
     """Create a new processing task"""
     data = request.get_json()
@@ -55,6 +69,7 @@ def create_task():
 
 
 @api.route("/tasks/<task_id>", methods=["GET"])
+@auth_required
 def get_task(task_id):
     """Get task details by ID"""
     task = current_app.task_manager.get_task(task_id)
@@ -68,6 +83,7 @@ def get_task(task_id):
 
 
 @api.route("/tasks", methods=["GET"])
+@auth_required
 def get_tasks():
     """Get tasks with optional filtering"""
     try:
@@ -95,6 +111,7 @@ def get_tasks():
 
 
 @api.route("/tasks/next", methods=["GET"])
+@auth_required
 def peek_next_task():
     """Peek next pending task for worker with optional filtering"""
     # Parse query parameters for filtering
@@ -120,6 +137,7 @@ def peek_next_task():
 
 
 @api.route("/tasks/<task_id>/claim", methods=["PUT"])
+@auth_required
 def claim_task(task_id):
     """Claim a specific task for processing"""
     data = request.get_json()
@@ -149,6 +167,7 @@ def claim_task(task_id):
 
 
 @api.route("/tasks/<task_id>/status", methods=["PUT"])
+@auth_required
 def update_task_status(task_id):
     """Update task status"""
     data = request.get_json()
@@ -198,6 +217,7 @@ def update_task_status(task_id):
 
 
 @api.route("/tasks/<task_id>/profile", methods=["POST"])
+@auth_required
 def create_task_profile(task_id):
     """Receive profiler data from worker"""
     data = request.get_json()
@@ -220,6 +240,7 @@ def create_task_profile(task_id):
 
 
 @api.route("/tasks/<task_id>/profile", methods=["GET"])
+@auth_required
 def get_task_profile(task_id):
     """Get profiler data for a task"""
     profile = current_app.task_manager.get_profile(task_id)
@@ -242,6 +263,7 @@ def get_task_profile(task_id):
 
 
 @api.route("/syncs", methods=["POST", "PUT"])
+@auth_required
 def manage_sync():
     """Create or update sync record for a timestamp"""
     data = request.get_json()
@@ -320,6 +342,7 @@ def manage_sync():
 
 
 @api.route("/syncs/<timestamp>", methods=["GET"])
+@auth_required
 def get_sync(timestamp):
     """Get sync progress for a specific timestamp"""
     # Parse timestamp
@@ -343,6 +366,7 @@ def get_sync(timestamp):
 
 
 @api.route("/syncs", methods=["GET"])
+@auth_required
 def get_syncs():
     """Get all sync records with pagination"""
     try:

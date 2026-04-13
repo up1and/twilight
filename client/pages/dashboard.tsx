@@ -21,6 +21,7 @@ import {
   createTask,
   fetchProfile
 } from "../utils/api-client";
+import { useTitle } from "../hooks/use-title";
 import type { Task, Sync, Profile } from "../utils/types";
 import "./dashboard.css";
 
@@ -565,6 +566,8 @@ export default function Dashboard() {
   const fetchingRef = useRef(false);
   const compositesLoadedRef = useRef(false);
 
+  useTitle("Dashboard")
+
   const handleViewProfile = useCallback((taskId: string) => {
     setSelectedTaskId(taskId);
     setShowProfile(true);
@@ -648,7 +651,7 @@ export default function Dashboard() {
     <div className="dashboard">
       <div className="container">
         <header className="header-section">
-          <h1>Twilight Dashboard</h1>
+          <h1>Twilight</h1>
           <nav className="tabs">
             {(["tasks", "syncs"] as const).map((tab) => (
               <button
