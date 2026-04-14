@@ -13,4 +13,5 @@ dependencies = [
     "matplotlib>=3.10.3",
     "cartopy>=0.24.1",
     "imageio[ffmpeg]>=2.36.0",
+    "python-dotenv>=1.2.2",
 ]

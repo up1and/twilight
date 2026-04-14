@@ -12,4 +12,5 @@ dependencies = [
     "s3fs>=2025.3.2",
     "boto3>=1.38.46",
     "requests",
+    "python-dotenv>=1.2.2",
 ]

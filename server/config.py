@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Server configuration with support for environment variables
 # Primarily for MinIO and Redis connections

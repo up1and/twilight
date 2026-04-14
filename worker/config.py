@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # MinIO endpoint for local raw data and processing results
 endpoint = os.getenv("MINIO_ENDPOINT", "127.0.0.1:9000")
