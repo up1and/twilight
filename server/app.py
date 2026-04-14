@@ -6,15 +6,10 @@ import datetime
 
 from flask import Flask, request, jsonify
 
-from config import auth_key
+from config import auth_key, available_composites, task_expire_days, sync_expire_days
 from extensions import init_extensions, redis_client, client
 from services import TaskManager, SyncManager, CompositeStateManager
 from utils import default_json_handler, initialize_composite_state
-
-
-available_composites = [
-    "ir_clouds", "true_color", "ash", "night_microphysics"
-]
 
 def add_cors_headers(response):
     """Add CORS headers and cache control"""
@@ -64,8 +59,8 @@ def create_app(debug=False):
     app.json.default = default_json_handler
 
     # Initialize managers and composite state
-    app.task_manager = TaskManager(redis_client)
-    app.sync_manager = SyncManager(redis_client, app.task_manager)
+    app.task_manager = TaskManager(redis_client, task_expire_days)
+    app.sync_manager = SyncManager(redis_client, app.task_manager, sync_expire_days)
 
     composite_states = initialize_composite_state(client, available_composites)
     app.composite_state = CompositeStateManager(redis_client, composite_states)

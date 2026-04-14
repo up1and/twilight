@@ -8,12 +8,12 @@ from models import TaskModel, SyncModel
 
 
 class TaskManager:
-    def __init__(self, redis_client):
+    def __init__(self, redis_client, expire_days=7):
         self.redis = redis_client
         # Redis keys
         self.tasks_key = "tasks"  # Hash: task_id -> task_json
         self.queue_key = "task_queue"  # Sorted Set: task_id with priority+timestamp score
-        self.expire_time = 3600 * 24 * 7  # 1 week
+        self.expire_time = expire_days * 86400 if expire_days > 0 else None
 
         # Redis lock for distributed locking
         self.lock = self.redis.lock("task_lock", timeout=10, blocking_timeout=10)
@@ -52,7 +52,8 @@ class TaskManager:
             score = self._calculate_score(task)
             self.redis.zadd(self.queue_key, {task.task_id: score})
 
-            self.redis.expire(self.tasks_key, self.expire_time)
+            if self.expire_time:
+                self.redis.expire(self.tasks_key, self.expire_time)
             return task
 
     def _get_all_tasks(self):
@@ -179,7 +180,8 @@ class TaskManager:
 
             # Update task in Redis
             self.redis.hset(self.tasks_key, task.task_id, task.to_json())
-            self.redis.expire(self.tasks_key, self.expire_time)
+            if self.expire_time:
+                self.redis.expire(self.tasks_key, self.expire_time)
             return True
 
     def get_tasks(self, status=None, composite=None, priority=None, limit=20, offset=0):
@@ -208,8 +210,10 @@ class TaskManager:
             self.redis.set(f"{profile_key}:tasks", json.dumps(tasks))
         if resources:
             self.redis.set(f"{profile_key}:resources", json.dumps(resources))
-        self.redis.expire(f"{profile_key}:tasks", self.expire_time)
-        self.redis.expire(f"{profile_key}:resources", self.expire_time)
+        
+        if self.expire_time:
+            self.redis.expire(f"{profile_key}:tasks", self.expire_time)
+            self.redis.expire(f"{profile_key}:resources", self.expire_time)
 
     def get_profile(self, task_id):
         """Get profiler data for a task"""
@@ -221,13 +225,13 @@ class TaskManager:
         return {"tasks": json.loads(tasks_data), "resources": json.loads(resources_data)}
 
 class SyncManager:
-    def __init__(self, redis_client, task_manager=None):
+    def __init__(self, redis_client, task_manager=None, expire_days=30):
         self.redis = redis_client
         self.task_manager = task_manager
         # Redis keys
         self.syncs_key = "syncs"  # Hash: timestamp_key -> sync_json
         self.timestamps_key = "syncs_timestamps"  # Sorted Set: timestamp_key with unix timestamp score
-        self.expire_time = 3600 * 24 * 30  # 30 days
+        self.expire_time = expire_days * 86400 if expire_days > 0 else None
 
         # Redis lock for distributed locking
         self.lock = self.redis.lock("syncs_lock", timeout=10, blocking_timeout=10)
@@ -253,11 +257,11 @@ class SyncManager:
             # Add to sorted set with unix timestamp as score
             score = int(timestamp.timestamp())
             self.redis.zadd(self.timestamps_key, {timestamp_key: score})
-            
+
             # Set expiration
-            self.redis.expire(self.syncs_key, self.expire_time)
-            self.redis.expire(self.timestamps_key, self.expire_time)
-        
+            if self.expire_time:
+                self.redis.expire(self.syncs_key, self.expire_time)
+                self.redis.expire(self.timestamps_key, self.expire_time)
     def update_progress(self, source, timestamp, status=None, files=None, size=None):
         """Update sync progress for a timestamp with partial updates
         
@@ -308,8 +312,9 @@ class SyncManager:
             self.redis.zadd(self.timestamps_key, {timestamp_key: score})
             
             # Set expiration
-            self.redis.expire(self.syncs_key, self.expire_time)
-            self.redis.expire(self.timestamps_key, self.expire_time)
+            if self.expire_time:
+                self.redis.expire(self.syncs_key, self.expire_time)
+                self.redis.expire(self.timestamps_key, self.expire_time)
         
     def get_sync(self, source, timestamp):
         """Get sync status for a timestamp"""
