@@ -10,7 +10,7 @@ from himawari_processor import available_composites, cache_dir
 from task import TaskClient, TaskProcessor
 from sync import SyncClient, SyncProcessor
 from utils import logger, _available_latest_time, generate_worker_id, CacheManager
-from config import server_url, auth_key, cache_size_limit
+from config import server_url, auth_key, cache_size_limit, priorities, composites, max_resolution, bbox
 
 
 def check_files(target_time):
@@ -218,7 +218,12 @@ def run_task_manager(server_url, auth_key=None, worker_id=None, poll_interval=10
     # Initialize components
     task_client = TaskClient(server_url, auth_key, worker_id)
     cache_manager = CacheManager(cache_dir, cache_size_limit)
-    task_processor = TaskProcessor(task_client, cache_manager)
+    task_processor = TaskProcessor(
+        task_client, 
+        cache_manager, 
+        max_resolution=max_resolution, 
+        bbox=bbox
+    )
     
     logger.info("Starting task manager (Worker ID: %s)", task_client.worker_id)
     logger.info("Server URL: %s", task_client.server_url)
@@ -229,13 +234,10 @@ def run_task_manager(server_url, auth_key=None, worker_id=None, poll_interval=10
 
     while not shutdown_event.is_set():
         try:
-            # Import worker config for task filtering
-            from config import processing_profile
-            
             # Peek at next task with filtering
             task_data = task_client.peek_next_task(
-                priorities=processing_profile.get("priorities", []),
-                composites=processing_profile.get("composites", [])
+                priorities=priorities,
+                composites=composites
             )
 
             if task_data:

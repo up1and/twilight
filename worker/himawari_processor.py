@@ -222,7 +222,7 @@ def get_custom_area(bbox, res_meters):
     max_lat = min_lat + height * res_lat
 
     area_def = create_area_def(
-        area_id="china_area",
+        area_id="area",
         projection="EPSG:4326",
         area_extent=(min_lon, min_lat, max_lon, max_lat),
         width=width,
@@ -232,8 +232,11 @@ def get_custom_area(bbox, res_meters):
     return area_def
 
 @timing
-def process_composite(composite_name, target_time, data_source="remote"):
+def process_composite(composite_name, target_time, data_source="remote", max_resolution=1000, bbox=None):
     """Process a single composite for the given time"""
+    if bbox is None:
+        bbox = [75, 0, 160, 55] # lon: 75°-160°，lat 0°-55°
+
     try:
         logger.info(f"Processing composite '{composite_name}' for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC from {data_source}")
 
@@ -262,21 +265,20 @@ def process_composite(composite_name, target_time, data_source="remote"):
             if scn[ds_id].attrs.get('resolution')
         ]
         max_res = min(loaded_res)
-        target_res = max(1000, max_res)
+        target_res = max(max_resolution, max_res)
 
         # Native Resampling
         scn = scn.resample(resampler='native')
 
-        china_bbox = [75, 0, 160, 55]  # lon: 75°-160°，lat 0°-55°
-        china_area = get_custom_area(china_bbox, target_res)
-        logger.info(f"Target Area: {china_area.width}x{china_area.height} at {target_res}m")
+        area = get_custom_area(bbox, target_res)
+        logger.info(f"Target Area: {area.width}x{area.height} at {target_res}m")
 
         # Resample with chunking for memory efficiency
         chunks = {"y": 1024, "x": 1024}
-        scn_china = scn.resample(china_area, resampler="nearest", chunks=chunks)
+        scn_resampled = scn.resample(area, resampler="nearest", chunks=chunks)
         filename = os.path.join(cache_dir, name)
 
-        scn_china.save_dataset(
+        scn_resampled.save_dataset(
             satpy_composite_name,
             filename=filename,
             driver="COG",
@@ -291,7 +293,7 @@ def process_composite(composite_name, target_time, data_source="remote"):
         logger.info(f"Successfully processed and uploaded composite '{composite_name}' for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC")
 
         del scn
-        del scn_china
+        del scn_resampled
 
     except Exception as e:
         logger.error(f"Error processing composite '{composite_name}' for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC: {e}", exc_info=True)

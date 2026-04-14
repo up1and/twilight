@@ -12,13 +12,14 @@ auth_key = os.getenv("AUTH_KEY", "twilight-secret")
 
 # Task processor preferences
 # Optional filtering for specific priorities or composites
-processing_profile = {
-    # Priority filter: "high", "normal", "low"
-    "priorities": [],
-    
-    # Composite filter: "ir_clouds", "true_color", "ash", "night_microphysics"
-    "composites": []
-}
+# Priority filter: "high", "normal", "low"
+priorities = [p.strip() for p in os.getenv("PRIORITIES", "").split(",") if p.strip()]
+# Composite filter: "ir_clouds", "true_color", "ash", "night_microphysics"
+composites = [c.strip() for c in os.getenv("COMPOSITES", "").split(",") if c.strip()]
+# Maximum resolution in meters (500, 1000, or 2000). Smaller value means higher resolution.
+max_resolution = int(os.getenv("MAX_RESOLUTION", 1000))
+# Region bounding box: [lon_min, lat_min, lon_max, lat_max]
+bbox = [float(b.strip()) for b in os.getenv("BBOX", "75,0,160,55").split(",") if b.strip()]
 
 # Cache management settings
 # Maximum cache size in GB (default 200GB)

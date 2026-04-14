@@ -135,9 +135,11 @@ class TaskClient:
 class TaskProcessor:
     """Processes individual tasks"""
 
-    def __init__(self, task_client: TaskClient, cache_manager):
+    def __init__(self, task_client: TaskClient, cache_manager, max_resolution=1000, bbox=None):
         self.task_client = task_client
         self.cache_manager = cache_manager
+        self.max_resolution = max_resolution
+        self.bbox = bbox
 
     def process_task(self, task_data, data_source="remote"):
         """Process a single task"""
@@ -154,8 +156,14 @@ class TaskProcessor:
             self.cache_manager.cleanup_cache()
 
             with dask_scope() as (prof, rprof):
-                # Process the composite
-                process_composite(composite, timestamp, data_source)
+                # Process the composite with injected parameters
+                process_composite(
+                    composite, 
+                    timestamp, 
+                    data_source, 
+                    max_resolution=self.max_resolution, 
+                    bbox=self.bbox
+                )
 
             self.update_profile(task_id, prof, rprof)
 
