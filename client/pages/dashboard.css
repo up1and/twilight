@@ -33,6 +33,11 @@
   color: var(--dashboard-black);
 }
 
+.header-section h1 a {
+  color: inherit;
+  text-decoration: none;
+}
+
 /* --- Tabs --- */
 .tabs {
   display: flex;

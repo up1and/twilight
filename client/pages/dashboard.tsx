@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { storage } from "../utils/storage";
 import dayjs from "dayjs";
 import {
   Chart as ChartJS,
@@ -568,6 +569,13 @@ export default function Dashboard() {
 
   useTitle("Dashboard")
 
+  const [, setLocation] = useLocation();
+
+  const handleLogout = useCallback(() => {
+    storage.set("auth-token", null);
+    setLocation("/");
+  }, [setLocation]);
+
   const handleViewProfile = useCallback((taskId: string) => {
     setSelectedTaskId(taskId);
     setShowProfile(true);
@@ -651,7 +659,7 @@ export default function Dashboard() {
     <div className="dashboard">
       <div className="container">
         <header className="header-section">
-          <h1>Twilight</h1>
+          <h1><Link href="/">Twilight</Link></h1>
           <nav className="tabs">
             {(["tasks", "syncs"] as const).map((tab) => (
               <button
@@ -662,9 +670,9 @@ export default function Dashboard() {
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
-            <Link className="tab-button" href="/">
-              Back
-            </Link>
+            <button className="tab-button" onClick={handleLogout}>
+              Logout
+            </button>
           </nav>
         </header>
 
