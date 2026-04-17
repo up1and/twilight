@@ -10,7 +10,8 @@ from himawari_processor import available_composites, cache_dir
 from task import TaskClient, TaskProcessor
 from sync import SyncClient, SyncProcessor
 from utils import logger, _available_latest_time, generate_worker_id, CacheManager
-from config import server_url, auth_key, cache_size_limit, priorities, composites, max_resolution, bbox
+from config import server_url, auth_key, cache_size_limit, priorities, available_composites, composites, \
+    max_resolution, bbox, resampler, mem_per_worker, system_margin
 
 
 def check_files(target_time):
@@ -222,7 +223,10 @@ def run_task_manager(server_url, auth_key=None, worker_id=None, poll_interval=10
         task_client, 
         cache_manager, 
         max_resolution=max_resolution, 
-        bbox=bbox
+        bbox=bbox,
+        resampler=resampler,
+        mem_per_worker=mem_per_worker,
+        system_margin=system_margin
     )
     
     logger.info("Starting task manager (Worker ID: %s)", task_client.worker_id)

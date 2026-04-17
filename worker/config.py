@@ -24,6 +24,12 @@ max_resolution = int(os.getenv("MAX_RESOLUTION", 1000))
 # Region bounding box: [lon_min, lat_min, lon_max, lat_max]
 bbox = [float(b.strip()) for b in os.getenv("BBOX", "75,0,160,55").split(",") if b.strip()]
 
-# Cache management settings
 # Maximum cache size in GB (default 200GB)
-cache_size_limit = int(os.getenv("CACHE_SIZE_LIMIT", "200"))
+cache_size_limit = int(os.getenv("CACHE_SIZE_LIMIT", 200))
+
+# Resampler algorithm (e.g., "nearest", "bilinear", "native")
+resampler = os.getenv("RESAMPLER", "nearest")
+# Estimated RAM consumption per worker in GB
+mem_per_worker = float(os.getenv("MEM_PER_WORKER", 7.0))
+# RAM to keep free for OS and other tasks in GB
+system_margin = float(os.getenv("SYSTEM_MARGIN", 4.0))

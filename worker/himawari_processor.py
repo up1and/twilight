@@ -34,12 +34,22 @@ def compute_worker_allocation(mem_per_worker=7.0, system_margin=4.0):
 
     Returns:
         int: The calculated number of workers, constrained between 1 and the CPU core count.
+        float: The effective available memory in GB.
     """
+    vm = psutil.virtual_memory()
+
     # Get available physical memory in GB
-    available_mem = psutil.virtual_memory().available / (1024**3)
+    if os.name == 'posix':  # Linux/Unix
+        actual_used = vm.total - vm.free - getattr(vm, 'cached', 0) - getattr(vm, 'buffers', 0)
+        available_mem = (vm.total - actual_used) / (1024**3)
+    else:
+        available_mem = vm.available / (1024**3)
 
     # Get the number of logical CPU cores
-    logical_cores = psutil.cpu_count(logical=True) or 8
+    try:
+        logical_cores = len(os.sched_getaffinity(0))
+    except AttributeError:
+        logical_cores = psutil.cpu_count(logical=True) or 8
 
     # Calculate how many workers the available RAM can support
     effective_mem = max(0, available_mem - system_margin)
@@ -49,15 +59,16 @@ def compute_worker_allocation(mem_per_worker=7.0, system_margin=4.0):
     return n_workers, effective_mem
 
 @contextmanager
-def dask_scope():
+def dask_scope(mem_per_worker=7.0, system_margin=4.0):
     """
     Dynamic resource management context: 
     Calculates the safe number of Dask threads based on real-time RAM availability.
     
     Args:
-        mem_per_worker: Estimated peak RAM per parallel AHI TrueColor task.
+        mem_per_worker: Estimated peak RAM per parallel AHI task.
+        system_margin: RAM to keep free for OS and other tasks.
     """
-    n_workers, available_mem = compute_worker_allocation()
+    n_workers, available_mem = compute_worker_allocation(mem_per_worker, system_margin)
 
     logger.info(f"Dask Scope Started: {n_workers} workers, RAM {available_mem:.1f} GB")
 
@@ -73,13 +84,13 @@ def dask_scope():
                 gc.collect()
 
 @contextmanager
-def dask_scope_with_cluster():
+def dask_scope_with_cluster(mem_per_worker=7.0, system_margin=4.0):
     """
     Context manager to handle Dask lifecycle.
     Ensures memory is fully released after each processing task.
     """
     # Constrain within [1, logical_cores] range
-    n_workers, available_mem = compute_worker_allocation()
+    n_workers, available_mem = compute_worker_allocation(mem_per_worker, system_margin)
     threads_per_worker = 1
     memory_limit = available_mem / n_workers
 
@@ -232,7 +243,7 @@ def get_custom_area(bbox, res_meters):
     return area_def
 
 @timing
-def process_composite(composite_name, target_time, data_source="remote", max_resolution=1000, bbox=None):
+def process_composite(composite_name, target_time, data_source="remote", max_resolution=1000, bbox=None, resampler="nearest"):
     """Process a single composite for the given time"""
     if bbox is None:
         bbox = [75, 0, 160, 55] # lon: 75°-160°，lat 0°-55°
@@ -275,7 +286,7 @@ def process_composite(composite_name, target_time, data_source="remote", max_res
 
         # Resample with chunking for memory efficiency
         chunks = {"y": 1024, "x": 1024}
-        scn_resampled = scn.resample(area, resampler="nearest", chunks=chunks)
+        scn_resampled = scn.resample(area, resampler=resampler, chunks=chunks)
         filename = os.path.join(cache_dir, name)
 
         scn_resampled.save_dataset(
