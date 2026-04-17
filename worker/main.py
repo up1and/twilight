@@ -6,7 +6,7 @@ import requests
 
 import s3fs
 
-from himawari_processor import available_composites, cache_dir
+from himawari_processor import cache_dir
 from task import TaskClient, TaskProcessor
 from sync import SyncClient, SyncProcessor
 from utils import logger, _available_latest_time, generate_worker_id, CacheManager

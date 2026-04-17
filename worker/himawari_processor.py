@@ -121,16 +121,22 @@ def dask_scope_with_cluster(mem_per_worker=7.0, system_margin=4.0):
             cluster.close()
             gc.collect()
 
-available_composites = [
-    "true_color", "ir_clouds", "ash", "night_microphysics"
-]
-
 # Mapping from our naming to satpy composite names
 composite_mapping = {
-    "true_color": "true_color",
+    "true_color": "true_color_with_night_ir",
     "night_microphysics": "night_microphysics",
+    "day_microphysics": "day_microphysics_ahi",
     "ir_clouds": "B13",
-    "ash": "ash"
+    "ash": "ash",
+    "airmass": "airmass",
+    "fog": "fog",
+    "upper_vapor": "water_vapors1",
+    "mid_vapor": "mid_vapor",
+    "lower_vapor": "water_vapors2",
+    "geo_color": "geo_color",
+    "natural_color": "natural_color",
+    "dust": "dust",
+    "convection": "convection"
 }
 
 def get_reader_kwargs(data_source, cache=True):
