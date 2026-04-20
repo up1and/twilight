@@ -3,8 +3,12 @@ import hashlib
 import datetime
 
 from io import BytesIO
-
+from PIL import Image
+from pycoast import ContourWriterAGG
 from rio_tiler.io import Reader
+from rio_tiler.colormap import cmap
+
+from config import get_pycoast_dir
 
 
 def generate_bbox_hash(bbox):
@@ -25,63 +29,46 @@ def generate_filename(composite, timestamp, bbox, file_type="image", end_timesta
 
 def create_snapshot_image(presigned_url, bbox):
     """
-    Read raster data from COG, create cartopy figure with raster data and coastlines
+    Read raster data from COG, create PIL Image with raster data and coastlines using pycoast
     Returns BytesIO buffer with PNG image
     """
-    import matplotlib
-    matplotlib.use("Agg")
-    import cartopy.crs as ccrs
-    import matplotlib.pyplot as plt
-
     with Reader(presigned_url) as cog:
         img = cog.part(bbox)
-        data = img.data
         bounds = img.bounds
+        crs = cog.crs
+        
+        # Determine if we need a colormap (single channel data)
+        colormap = None
+        if img.data.shape[0] == 1:
+            colormap = cmap.get("RdGy")
+            
+        # Render image to bytes using rio-tiler
+        buffer = img.render(colormap=colormap)
+        # Convert to PIL Image for pycoast
+        image = Image.open(BytesIO(buffer))
 
-    data = data.transpose(1, 2, 0)
-    extent = [bounds[0], bounds[2], bounds[1], bounds[3]]
+    # Get pycoast data directory
+    coast_dir = get_pycoast_dir()
+    cw = ContourWriterAGG(coast_dir)
 
-    # Calculate figure size based on data dimensions to maintain original size
-    height, width = data.shape[:2]
-    dpi = 100
-    fig_width = width / dpi
-    fig_height = height / dpi
-
-    fig = plt.figure(figsize=(fig_width, fig_height), dpi=dpi)
-    ax = fig.add_subplot(projection=ccrs.PlateCarree())
-
-    # Remove all margins and padding
-    ax.set_position([0, 0, 1, 1])
-
-    # Disable axis and spines to prevent any border artifacts
-    ax.axis("off")
-    ax.set_frame_on(False)
-
-    if data.shape[-1] == 1:
-        ax.imshow(
-            data[:, :, 0],
-            extent=extent,
-            origin="upper",
-            cmap="RdGy",
-            transform=ccrs.PlateCarree()
-        )
+    # Use CRS from COG if available, otherwise default to latlong
+    if crs:
+        proj_str = crs.to_proj4()
     else:
-        ax.imshow(
-            data,
-            extent=extent,
-            origin="upper",
-            transform=ccrs.PlateCarree()
-        )
+        proj_str = "+proj=latlong +datum=WGS84"
 
-    # Add coastlines using cartopy
-    ax.coastlines(resolution="10m", color="#828282", linewidth=1)
-    ax.set_extent([bounds[0], bounds[2], bounds[1], bounds[3]], crs=ccrs.PlateCarree())
+    area_extent = (bounds[0], bounds[1], bounds[2], bounds[3])
+    
+    # pycoast supports area_def as a tuple: (proj4_string, area_extent)
+    area_def = (proj_str, area_extent)
 
-    # Save to BytesIO buffer with exact dimensions
+    # Add coastlines using pycoast
+    # resolution 'h' for high quality, or 'i' for intermediate, 'l' for low
+    cw.add_coastlines(image, area_def, resolution='i', outline=(130, 130, 130), width=1)
+
+    # Save to BytesIO buffer
     buffer = BytesIO()
-    plt.savefig(buffer, format="png", dpi=dpi, pad_inches=0,
-               facecolor="none", edgecolor="none")
-    plt.close()
+    image.save(buffer, format="png")
     buffer.seek(0)
 
     return buffer

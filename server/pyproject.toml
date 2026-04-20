@@ -10,8 +10,8 @@ dependencies = [
     "flask-caching>=2.3.1",
     "redis>=6.2.0",
     "rio-tiler>=7.6.1",
-    "matplotlib>=3.10.3",
-    "cartopy>=0.24.1",
+    "pycoast>=1.7.0",
     "imageio[ffmpeg]>=2.36.0",
     "python-dotenv>=1.2.2",
+    "platformdirs>=4.9.4",
 ]

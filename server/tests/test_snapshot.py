@@ -62,6 +62,42 @@ class TestCreateSnapshotImage:
         # Just test that the function exists and can be imported
         from server.snapshot import create_snapshot_image
         assert callable(create_snapshot_image)
+
+    @patch('server.snapshot.Reader')
+    @patch('server.snapshot.ContourWriterAGG')
+    @patch('server.snapshot.get_gshhs_dir')
+    @patch('PIL.Image.open')
+    def test_create_snapshot_image_success(self, mock_image_open, mock_get_gshhs, mock_cw, mock_reader):
+        mock_get_gshhs.return_value = "/tmp/gshhs"
+        
+        # Mock rio-tiler Reader
+        mock_cog = Mock()
+        mock_reader.return_value.__enter__.return_value = mock_cog
+        
+        # Mock image
+        import numpy as np
+        mock_img = Mock()
+        mock_img.data = np.zeros((3, 10, 10), dtype=np.uint8)
+        mock_img.bounds = (100, 20, 110, 30)
+        mock_img.render.return_value = b"mock_png"
+        mock_cog.part.return_value = mock_img
+        mock_cog.crs.to_string.return_value = "EPSG:4326"
+        
+        # Mock PIL Image
+        mock_pil = Mock()
+        mock_image_open.return_value.convert.return_value = mock_pil
+        
+        from server.snapshot import create_snapshot_image
+        result = create_snapshot_image("http://mock-url", [100, 20, 110, 30])
+        
+        assert isinstance(result, BytesIO)
+        mock_cw.assert_called_once_with("/tmp/gshhs")
+        mock_cw.return_value.add_coastlines.assert_called_once()
+        # Verify area_def passed to add_coastlines is a tuple
+        args = mock_cw.return_value.add_coastlines.call_args[0]
+        assert isinstance(args[1], tuple)
+        assert args[1][0] == "+proj=latlong +datum=WGS84"
+        assert args[1][1] == (100, 20, 110, 30)
     
 
 

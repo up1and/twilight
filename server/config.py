@@ -1,7 +1,19 @@
 import os
 from dotenv import load_dotenv
+from platformdirs import user_data_dir
 
 load_dotenv()
+
+def get_pycoast_dir():
+    """Get pycoast data directory containing GSHHS and WDBII shapefiles.
+
+    Returns:
+        Path to pycoast data directory (parent of GSHHS_shp, WDBII_shp)
+    """
+    pycoast_dir = os.environ.get("PYCOAST_DATA_ROOT")
+    if pycoast_dir and os.path.isdir(pycoast_dir):
+        return pycoast_dir
+    return user_data_dir("pycoast") 
 
 # Server configuration with support for environment variables
 # Primarily for MinIO and Redis connections
