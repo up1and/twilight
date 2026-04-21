@@ -30,7 +30,7 @@ auth_key = os.getenv("AUTH_KEY", "twilight-secret")
 # Available composite list, comma-separated
 available_composites = os.getenv(
     "AVAILABLE_COMPOSITES", 
-    "ir_clouds,true_color,ash,airmass,day_microphysics,night_microphysics,fog,convection,lower_vapor,upper_vapor"
+    "ir_clouds,true_color,ash,airmass,day_microphysics,night_microphysics,fog,convection,vapor"
 ).split(",")
 
 # Task expiration days, 0 means no expiration

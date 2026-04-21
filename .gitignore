@@ -37,3 +37,5 @@ diff.txt
 .env
 .alma-snapshots
 .opencode
+_build
+_static

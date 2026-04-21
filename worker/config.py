@@ -19,7 +19,7 @@ auth_key = os.getenv("AUTH_KEY", "twilight-secret")
 priorities = [p.strip() for p in os.getenv("PRIORITIES", "").split(",") if p.strip()]
 # Composite filter for task processor: "ir_clouds", "true_color", "ash", "airmass",
 # "night_microphysics", "day_microphysics", 
-# "fog", "convection", "lower_vapor", "upper_vapor"
+# "fog", "convection", "vapor"
 composites = [c.strip() for c in os.getenv("COMPOSITES", "").split(",") if c.strip()]
 # Maximum resolution in meters (500, 1000, or 2000). Smaller value means higher resolution.
 max_resolution = int(os.getenv("MAX_RESOLUTION", 1000))
@@ -28,7 +28,7 @@ bbox = [float(b.strip()) for b in os.getenv("BBOX", "75,0,160,55").split(",") if
 # Available composite list, comma-separated, task generator
 available_composites = os.getenv(
     "AVAILABLE_COMPOSITES", 
-    "ir_clouds,true_color,ash,airmass,day_microphysics,night_microphysics,fog,convection,lower_vapor,upper_vapor"
+    "ir_clouds,true_color,ash,airmass,day_microphysics,night_microphysics,fog,convection,vapor"
 ).split(",")
 
 # Maximum cache size in GB (default 200GB)
