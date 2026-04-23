@@ -12,11 +12,12 @@ import TimeDimensionLayer, {
 import TimeRangeSelector from "../components/time-range-selector";
 import MultiSelectComposite from "../components/multi-select-composite";
 import CoordinatesDisplay from "../components/coordinates-display";
+import Legend from "../components/legend";
 import SideBySide from "../components/side-by-side";
 import SnapshotButton from "../components/snapshot-button";
 import LayerButton from "../components/layer-button";
 import { useIsMobile } from "../hooks/use-mobile";
-import { fetchLatestComposites, fetchTileJSON } from "../utils/api-client";
+import { fetchLatestComposites, fetchTileJSON, fetchLegend } from "../utils/api-client";
 import { roundToNearestTenMinutes } from "../utils/time-utils";
 
 import type { CompositeType, MapConfig, MapLayers } from "../utils/types";
@@ -223,6 +224,11 @@ export default function MapView() {
 
   // Store map configurations for each selected composite
   const [mapConfigs, setMapConfigs] = useState<Record<string, MapConfig>>({});
+
+  // Store legend data for each composite
+  const [legendData, setLegendData] = useState<
+    Record<string, { color: string; label: string }[]>
+  >({});
 
   // Fixed zoom levels and center
   const center: [number, number] = [27.5, 117.5];
@@ -439,6 +445,25 @@ export default function MapView() {
     updateMapConfigs();
   }, [selectedComposites, composites]);
 
+  // Fetch legend data when selected composites change
+  useEffect(() => {
+    const fetchLegendData = async () => {
+      for (const composite of selectedComposites) {
+        if (!legendData[composite]) {
+          const data = await fetchLegend(composite);
+          if (data) {
+            setLegendData((prev) => ({
+              ...prev,
+              [composite]: data
+            }));
+          }
+        }
+      }
+    };
+
+    fetchLegendData();
+  }, [selectedComposites]);
+
   return (
     <main style={{ height: "100vh", width: "100vw", overflow: "hidden" }}>
       <div className="map-container">
@@ -535,6 +560,39 @@ export default function MapView() {
         {/* Coordinates Display */}
         {mousePosition && (
           <CoordinatesDisplay lat={mousePosition.lat} lng={mousePosition.lng} />
+        )}
+
+        {/* Legend for single composite - bottom right only */}
+        {selectedComposites.length === 1 &&
+          legendData[selectedComposites[0]] && (
+            <div className="legend-position-right">
+              <Legend
+                items={legendData[selectedComposites[0]]}
+                defaultExpanded={false}
+              />
+            </div>
+          )}
+
+        {/* Legends for side-by-side mode - left and right */}
+        {selectedComposites.length > 1 && (
+          <>
+            {legendData[selectedComposites[0]] && (
+              <div className="legend-position-left">
+                <Legend
+                  items={legendData[selectedComposites[0]]}
+                  defaultExpanded={false}
+                />
+              </div>
+            )}
+            {legendData[selectedComposites[1]] && (
+              <div className="legend-position-right">
+                <Legend
+                  items={legendData[selectedComposites[1]]}
+                  defaultExpanded={false}
+                />
+              </div>
+            )}
+          </>
         )}
 
         {/* Controls Overlay */}

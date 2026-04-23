@@ -131,6 +131,32 @@ def tilejson(composite):
         return jsonify(error_msg), 500
 
 
+@main.route("/tiles/<composite>/legend.json")
+def legend(composite):
+    composite = composite.replace("-", "_")
+
+    legends = {
+        "airmass": [
+            {"color": "#42108e", "label": "Cold"},
+            {"color": "#2b761d", "label": "Warm"},
+            {"color": "#42440b", "label": "Warm airmass with low upper tropospheric humidity"},
+            {"color": "#89070d", "label": "Dry airmass"},
+            {"color": "#ffffff", "label": "High-level thin clouds"},
+            {"color": "#766e13", "label": "Mid-level ice and water clouds"}
+        ],
+        "ash": [
+            {"color": "#FF6B6B", "label": "Thick Ash"},
+            {"color": "#FFE66D", "label": "Moderate Ash"},
+            {"color": "#4ECDC4", "label": "Thin Ash"}
+        ]
+    }
+    
+    if composite in legends:
+        return jsonify(legends[composite])
+    
+    return jsonify([]) # Return empty list if no legend available
+
+
 @main.route("/tiles/<composite>/<timestamp>/<int:z>/<int:x>/<int:y>.png")
 @cache.cached(timeout=43200, response_filter=cache_filter)  # Cache for 12 hours
 def tile(composite, timestamp, z, x, y):

@@ -1,0 +1,139 @@
+.legend-container {
+  pointer-events: auto;
+  font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
+  display: flex;
+  align-items: flex-end;
+}
+
+/* Collapsed badge */
+.legend-badge {
+  display: inline-block;
+  background-color: rgba(255, 255, 255, 0.8);
+  padding: 6px 3px;
+  font-size: 10px;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  border-radius: 0;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.legend-badge:hover {
+  background-color: rgba(255, 255, 255, 0.95);
+  color: var(--text-primary, #333);
+}
+
+/* Expanded wrapper - same style as attribution */
+.legend-wrapper {
+  position: relative;
+  background-color: rgba(255, 255, 255, 0.8);
+  padding: 5px;
+  font-size: 10px;
+  color: var(--text-muted, #888);
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  width: 13vw;
+}
+
+/* Close button */
+.legend-close {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  color: var(--text-muted, #888);
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.legend-close:hover {
+  color: var(--text-primary, #333);
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Panel content */
+.legend-panel {
+  padding-right: 14px; /* Make room for close button */
+}
+
+.legend-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-color-block {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
+.legend-label {
+  color: var(--text-primary, #333);
+  overflow-wrap: break-word;
+  word-break: break-word;
+  white-space: normal;
+}
+
+/* Position variants for map integration */
+.legend-position-left {
+  position: absolute;
+  bottom: 20px;
+  left: 0;
+  z-index: 1000;
+}
+
+.legend-position-right {
+  position: absolute;
+  bottom: 20px;
+  right: 0;
+  z-index: 1000;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .legend-position-left {
+    bottom: 20px;
+    left: 0;
+    font-size: 10px;
+  }
+
+  .legend-position-right {
+    bottom: 20px;
+    right: 0;
+    font-size: 10px;
+  }
+
+  .legend-wrapper {
+    padding: 8px;
+    width: 13vw;
+    min-width: 60px;
+  }
+
+  .legend-color-block {
+    width: 12px;
+    height: 12px;
+  }
+
+  .legend-badge {
+    padding: 8px 5px;
+    font-size: 10px;
+  }
+}

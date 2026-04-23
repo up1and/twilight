@@ -87,6 +87,34 @@ export async function fetchLatestComposites(): Promise<Record<string, string>> {
 }
 
 /**
+ * Fetch legend data for a specific composite type
+ *
+ * @param composite - The composite name (e.g., 'true_color', 'ir_clouds', 'ash')
+ * @returns A Promise resolving to an array of legend items or null if the request fails
+ *
+ * Example response:
+ * [
+ *   { "color": "#FF6B6B", "label": "Ash" },
+ *   { "color": "#4ECDC4", "label": "Clear" }
+ * ]
+ */
+export async function fetchLegend(
+  composite: string
+): Promise<{ color: string; label: string }[] | null> {
+  try {
+    const compositeId = composite.replace(/_/g, "-");
+    const apiClient = createApiClient();
+    const data = await apiClient
+      .get(`/tiles/${compositeId}/legend.json`)
+      .json<{ color: string; label: string }[]>();
+    return data;
+  } catch (error) {
+    // Silently return null for composites without legend data
+    return null;
+  }
+}
+
+/**
  * Fetches TileJSON metadata for a specific composite type
  *
  * @param composite - The composite name (e.g., 'true_color', 'ir_clouds', 'ash')
