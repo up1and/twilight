@@ -100,6 +100,7 @@ interface TimeDimensionLayerProps {
   timelineTime?: dayjs.Dayjs;
   bounds?: L.LatLngBoundsExpression;
   onBufferingChange?: (isBuffering: boolean) => void;
+  attribution?: string;
 }
 
 export interface TimeDimensionLayerHandles {
@@ -112,7 +113,7 @@ const TimeDimensionLayer = forwardRef<
   TimeDimensionLayerProps
 >(
   (
-    { urlTemplate, currentTime, timelineTime, bounds, onBufferingChange },
+    { urlTemplate, currentTime, timelineTime, bounds, onBufferingChange, attribution },
     ref
   ) => {
     const zIndex = 100;
@@ -177,7 +178,8 @@ const TimeDimensionLayer = forwardRef<
         opacity: 0,
         className: "time-dimension-layer",
         noWrap: true,
-        bounds
+        bounds,
+        attribution
       });
 
       // Track layer state
