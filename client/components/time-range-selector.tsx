@@ -55,7 +55,6 @@ export default function TimeRangeSelector({
   const [recentlyDragged, setRecentlyDragged] = useState<boolean>(false);
   const [hasMoved, setHasMoved] = useState<boolean>(false); // Track if mouse has moved during drag
   const [isCtrlPressed, setIsCtrlPressed] = useState<boolean>(false);
-  const [bufferTick, setBufferTick] = useState(0);
   const [isLookbackOpen, setIsLookbackOpen] = useState<boolean>(false);
   const timelineRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<HTMLDivElement>(null);
@@ -116,7 +115,7 @@ export default function TimeRangeSelector({
 
     // First try to find exact match
     const exactIndex = timeIntervals.findIndex(
-      (interval) => interval.time.format() === targetTime.format()
+      (interval) => interval.time.valueOf() === targetTime.valueOf()
     );
 
     if (exactIndex !== -1) return exactIndex;
@@ -430,7 +429,7 @@ export default function TimeRangeSelector({
       setIsPlaying(false);
     } else {
       // If at the end, restart from beginning
-      if (selectedTime.format() === timelineTime.format()) {
+      if (selectedTime.valueOf() === timelineTime.valueOf()) {
         updateSelectedTime(getStartTime());
       } else {
         // Ensure the selected time is in the timeIntervals array
@@ -439,7 +438,7 @@ export default function TimeRangeSelector({
         // If current time is not found in intervals, snap to the closest one
         if (currentIndex !== -1 && timeIntervals[currentIndex]) {
           const exactIndex = timeIntervals.findIndex(
-            (interval) => interval.time.format() === selectedTime.format()
+            (interval) => interval.time.valueOf() === selectedTime.valueOf()
           );
 
           // If not exact match, update to the closest valid time before starting playback
@@ -488,7 +487,7 @@ export default function TimeRangeSelector({
 
         // Find current index
         const currentIndex = timeIntervals.findIndex(
-          (interval) => interval.time.format() === selectedTime.format()
+          (interval) => interval.time.valueOf() === selectedTime.valueOf()
         );
 
         if (currentIndex === -1) return;
@@ -543,68 +542,70 @@ export default function TimeRangeSelector({
   useEffect(() => {
     if (!isPlaying || timeIntervals.length === 0) return;
 
-    const currentIndex = timeIntervals.findIndex(
-      (interval) => interval.time.format() === selectedTime.format()
-    );
+    let timeoutId: ReturnType<typeof setTimeout>;
+    let isCancelled = false;
 
-    // If at the end or not found, stop playback
-    if (currentIndex === -1 || currentIndex >= timeIntervals.length - 1) {
-      setIsPlaying(false);
-      bufferingTimerRef.current = null;
-      return;
-    }
+    const playback = () => {
+      if (isCancelled) return;
 
-    // If buffering is enabled and currently buffering
-    if (isBuffering) {
-      // Record when buffering started
-      if (!bufferingTimerRef.current) {
-        bufferingTimerRef.current = dayjs();
+      const currentIndex = timeIntervals.findIndex(
+        (interval) => interval.time.valueOf() === selectedTime.valueOf()
+      );
+
+      // If at the end or not found, stop playback
+      if (currentIndex === -1 || currentIndex >= timeIntervals.length - 1) {
+        setIsPlaying(false);
+        bufferingTimerRef.current = null;
+        return;
       }
 
-      // Check if buffering timeout exceeded
-      const bufferingDuration = dayjs().diff(bufferingTimerRef.current);
-      if (bufferingDuration < 3000) {
-        // Still waiting for buffer, check again later
-        const bufferCheckTimer = setTimeout(() => {
-          // Re-trigger this effect to check buffering state again
-          setBufferTick((prev) => (prev + 1) % 1000);
-        }, 100);
-        return () => clearTimeout(bufferCheckTimer);
+      // If buffering is enabled and currently buffering
+      if (isBuffering) {
+        // Record when buffering started
+        if (!bufferingTimerRef.current) {
+          bufferingTimerRef.current = dayjs();
+        }
+
+        // Check if buffering timeout exceeded
+        const bufferingDuration = dayjs().diff(bufferingTimerRef.current);
+        if (bufferingDuration < 3000) {
+          // Still waiting for buffer, check again later
+          timeoutId = setTimeout(playback, 100);
+          return;
+        } else {
+          // Force playback to continue despite buffering
+          console.log(
+            `buffering timeout exceeded (${bufferingDuration}ms), forcing playback to continue`
+          );
+          bufferingTimerRef.current = null;
+        }
       } else {
-        // Force playback to continue despite buffering
-        console.log(
-          `buffering timeout exceeded (${bufferingDuration}ms), forcing playback to continue`
-        );
+        // Not buffering, reset the timer
         bufferingTimerRef.current = null;
       }
-    } else {
-      // Not buffering, reset the timer
-      bufferingTimerRef.current = null;
-    }
 
-    // Set up timer to advance to next interval
-    const timer = setTimeout(() => {
-      const nextIndex = currentIndex + 1;
-      if (
-        nextIndex < timeIntervals.length &&
-        timeIntervals[nextIndex] &&
-        timeIntervals[nextIndex].time
-      ) {
-        updateSelectedTime(timeIntervals[nextIndex].time);
-      } else {
-        setIsPlaying(false);
-      }
-    }, 500);
+      // Set up timer to advance to next interval
+      timeoutId = setTimeout(() => {
+        const nextIndex = currentIndex + 1;
+        if (
+          nextIndex < timeIntervals.length &&
+          timeIntervals[nextIndex] &&
+          timeIntervals[nextIndex].time
+        ) {
+          updateSelectedTime(timeIntervals[nextIndex].time);
+        } else {
+          setIsPlaying(false);
+        }
+      }, 500);
+    };
 
-    return () => clearTimeout(timer);
-  }, [
-    isPlaying,
-    selectedTime,
-    timeIntervals,
-    updateSelectedTime,
-    isBuffering,
-    bufferTick
-  ]);
+    playback();
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [isPlaying, selectedTime, timeIntervals, updateSelectedTime, isBuffering]);
 
   // Handle lookback hours change
   const handleLookbackChange = (hours: number) => {
