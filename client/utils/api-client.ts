@@ -43,19 +43,24 @@ export async function verifyToken(token: string): Promise<boolean> {
   }
 }
 
-// Create a ky instance with default options
-const createApiClient = () => {
-  const token = getAuthToken();
-
-  return ky.create({
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    retry: 1,
-    timeout: 30000
-  });
-};
+// Create a ky instance with default options and dynamic auth token
+export const apiClient = ky.create({
+  headers: {
+    "Content-Type": "application/json"
+  },
+  retry: 1,
+  timeout: 30000,
+  hooks: {
+    beforeRequest: [
+      (request) => {
+        const token = getAuthToken();
+        if (token) {
+          request.headers.set("Authorization", `Bearer ${token}`);
+        }
+      }
+    ]
+  }
+});
 
 /**
  * Fetches the latest available timestamps for each composite type
@@ -75,7 +80,6 @@ const createApiClient = () => {
  */
 export async function fetchLatestComposites(): Promise<Record<string, string>> {
   try {
-    const apiClient = createApiClient();
     const data = await apiClient
       .get("/api/composites/latest")
       .json<Record<string, string>>();
@@ -103,7 +107,6 @@ export async function fetchLegend(
 ): Promise<{ color: string; label: string }[] | null> {
   try {
     const compositeId = composite.replace(/_/g, "-");
-    const apiClient = createApiClient();
     const data = await apiClient
       .get(`/tiles/${compositeId}/legend.json`)
       .json<{ color: string; label: string }[]>();
@@ -137,7 +140,7 @@ export async function fetchTileJSON(
 ): Promise<TileJSON | null> {
   try {
     const compositeId = composite.replace(/_/g, "-");
-    const apiClient = createApiClient();
+
     const data = await apiClient
       .get(`/tiles/${compositeId}/tile.json`)
       .json<TileJSON>();
@@ -173,7 +176,7 @@ export async function fetchTasks(
     if (composite) params.append("composite", composite);
     if (priority) params.append("priority", priority);
 
-    const apiClient = createApiClient();
+
     const data = await apiClient
       .get(`/api/tasks?${params.toString()}`)
       .json<TasksResponse>();
@@ -206,7 +209,7 @@ export async function fetchSyncs(
     if (source) params.append("source", source);
     if (status) params.append("status", status);
 
-    const apiClient = createApiClient();
+
     const data = await apiClient
       .get(`/api/syncs?${params.toString()}`)
       .json<SyncsResponse>();
@@ -256,7 +259,7 @@ export async function createSnapshot(params: {
   };
 } | null> {
   try {
-    const apiClient = createApiClient();
+
     const data = await apiClient.post("/api/snapshots", { json: params }).json<{
       status: string;
       download_url?: string;
@@ -286,7 +289,7 @@ export async function createTask(params: {
   created: string;
 } | null> {
   try {
-    const apiClient = createApiClient();
+
     const data = await apiClient.post("/api/tasks", { json: params }).json<{
       task_id: string;
       status: string;
@@ -307,7 +310,7 @@ export async function createTask(params: {
  */
 export async function fetchProfile(taskId: string): Promise<Profile | null> {
   try {
-    const apiClient = createApiClient();
+
     const data = await apiClient
       .get(`/api/tasks/${taskId}/profile`)
       .json<Profile>();
