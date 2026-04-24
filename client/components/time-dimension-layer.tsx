@@ -72,20 +72,29 @@ class TimeLayerCache {
     const maxTime = baseTimestamp + milliseconds;
 
     // Remove layers outside time window
+    const keysToDelete: number[] = [];
     this.cache.forEach((_, timestamp) => {
       if (timestamp < minTime || timestamp > maxTime) {
-        this.delete(timestamp);
+        keysToDelete.push(timestamp);
       }
     });
+    keysToDelete.forEach((timestamp) => this.delete(timestamp));
   }
 
   // Clear cache with option to keep specific layer
   clear(keepLayer: L.TileLayer | null = null): void {
+    const keysToDelete: number[] = [];
     this.cache.forEach((state, timestamp) => {
       if (state.layer !== keepLayer) {
-        this.delete(timestamp);
+        keysToDelete.push(timestamp);
       }
     });
+    keysToDelete.forEach((timestamp) => this.delete(timestamp));
+  }
+
+  // Get all cached layers
+  getLayers(): L.TileLayer[] {
+    return Array.from(this.cache.values()).map((state) => state.layer);
   }
 
   // Get cache size
@@ -121,7 +130,10 @@ const TimeDimensionLayer = forwardRef<
     const isBufferingRef = useRef<boolean>(false);
 
     // Cache system using Map<timestamp, TileLayer>
-    const layerCache = useRef(new TimeLayerCache(map, 60));
+    const layerCache = useRef<TimeLayerCache>(null!);
+    if (!layerCache.current) {
+      layerCache.current = new TimeLayerCache(map, 60);
+    }
     const currentLayerRef = useRef<L.TileLayer | null>(null);
 
     // Expose handle
@@ -129,13 +141,7 @@ const TimeDimensionLayer = forwardRef<
       ref,
       () => ({
         getCurrentLayer: () => currentLayerRef.current,
-        getCachedLayers: () => {
-          const layers: L.TileLayer[] = [];
-          layerCache.current["cache"].forEach((state) => {
-            layers.push(state.layer);
-          });
-          return layers;
-        }
+        getCachedLayers: () => layerCache.current.getLayers()
       }),
       []
     );
