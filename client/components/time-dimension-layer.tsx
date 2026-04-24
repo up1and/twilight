@@ -225,19 +225,23 @@ const TimeDimensionLayer = forwardRef<
       } else {
         targetLayer = createTileLayer(targetTime);
         layerCache.current.set(timestamp, targetLayer);
+        // Update ref before addTo so layeradd listeners see the new layer immediately
+        currentLayerRef.current = targetLayer;
         targetLayer.addTo(map);
       }
 
       // Instant switch
-      if (currentLayer) {
+      if (currentLayer && currentLayer !== targetLayer) {
         currentLayer.setOpacity(0);
         currentLayer.setZIndex(zIndex - 1);
       }
 
-      // Update current layer reference
       targetLayer.setOpacity(1);
       targetLayer.setZIndex(zIndex);
-      currentLayerRef.current = targetLayer;
+      // For cached layers, update ref here since it wasn't done above
+      if (cachedLayer) {
+        currentLayerRef.current = targetLayer;
+      }
 
       // Check if we can stop buffering after switching
       if (checkNextLayer(targetTime)) {
@@ -284,10 +288,11 @@ const TimeDimensionLayer = forwardRef<
       if (!currentLayerRef.current) {
         const initialLayer = createTileLayer(currentTime);
         layerCache.current.set(timestamp, initialLayer);
+        // Update ref before addTo so layeradd listeners see the new layer immediately
+        currentLayerRef.current = initialLayer;
         initialLayer.addTo(map);
         initialLayer.setOpacity(1);
         initialLayer.setZIndex(zIndex);
-        currentLayerRef.current = initialLayer;
       } else {
         switchToTime(currentTime);
       }

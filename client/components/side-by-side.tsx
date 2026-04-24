@@ -70,11 +70,16 @@ export default function SideBySide({
     const onZoomEnd = () => updateClip();
     const onResize = () => updateClip();
     const onMove = () => updateClip(); // Add handler for move event for more responsive updates
+    const onLayerAdd = () => {
+      // Defer to next frame so the layer's DOM container is fully attached
+      requestAnimationFrame(updateClip);
+    };
 
     map.on("moveend", onMoveEnd);
     map.on("zoomend", onZoomEnd);
     map.on("resize", onResize);
     map.on("move", onMove); // Listen for move events
+    map.on("layeradd", onLayerAdd);
 
     // Initial update with delay
     setTimeout(updateClip, 100);
@@ -85,6 +90,7 @@ export default function SideBySide({
       map.off("zoomend", onZoomEnd);
       map.off("resize", onResize);
       map.off("move", onMove);
+      map.off("layeradd", onLayerAdd);
 
       // Get all cached layers from both layer handles
       const leftLayers = leftLayer.getCachedLayers();
