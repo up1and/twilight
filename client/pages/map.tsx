@@ -450,7 +450,6 @@ export default function MapView() {
             urlTemplate={tileUrlTemplate(selectedComposites[0])}
             attribution={mapConfigs[selectedComposites[0]]?.attribution}
             ref={leftLayerRef}
-            key={`layer-${selectedComposites[0]}`}
             bounds={compositeBounds || undefined}
             onBufferingChange={(isBuffering) =>
               handleLayerBufferingChange("left", isBuffering)
@@ -465,7 +464,6 @@ export default function MapView() {
               urlTemplate={tileUrlTemplate(selectedComposites[1])}
               attribution={mapConfigs[selectedComposites[1]]?.attribution}
               ref={rightLayerRef}
-              key={`layer-${selectedComposites[1]}`}
               bounds={compositeBounds || undefined}
               onBufferingChange={(isBuffering) =>
                 handleLayerBufferingChange("right", isBuffering)

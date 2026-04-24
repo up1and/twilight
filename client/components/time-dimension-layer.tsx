@@ -135,6 +135,7 @@ const TimeDimensionLayer = forwardRef<
       layerCache.current = new TimeLayerCache(map, 60);
     }
     const currentLayerRef = useRef<L.TileLayer | null>(null);
+    const prevUrlTemplateRef = useRef<string>(urlTemplate);
 
     // Expose handle
     useImperativeHandle(
@@ -264,13 +265,22 @@ const TimeDimensionLayer = forwardRef<
       });
     };
 
-    // Main effect - handles time changes
+    // Main effect - handles time changes and composite changes
     useEffect(() => {
-      if (!map || !urlTemplate) return;
+      if (!map) return;
+
+      // Composite changed or became unavailable: old cache is invalid
+      if (prevUrlTemplateRef.current !== urlTemplate) {
+        layerCache.current.clear();
+        currentLayerRef.current = null;
+        prevUrlTemplateRef.current = urlTemplate;
+      }
+
+      if (!urlTemplate) return;
 
       const timestamp = currentTime.valueOf();
 
-      // Initial setup
+      // Initial setup or after composite switch
       if (!currentLayerRef.current) {
         const initialLayer = createTileLayer(currentTime);
         layerCache.current.set(timestamp, initialLayer);
