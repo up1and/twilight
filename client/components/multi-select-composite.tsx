@@ -12,15 +12,6 @@ interface MultiSelectCompositeProps {
   maxSelections?: number;
 }
 
-// Types of formatted names for display in the UI
-type DisplayNameType = string;
-
-// Stores a mapping of snake_case names to display names
-interface CompositeMapping {
-  value: CompositeType;
-  display: DisplayNameType;
-}
-
 export default function MultiSelectComposite({
   options,
   selectedOptions,
@@ -42,11 +33,6 @@ export default function MultiSelectComposite({
       )
       .join(" ");
   };
-
-  options.map((option) => ({
-    value: option,
-    display: upperCase(option)
-  })) as CompositeMapping[];
 
   // Track Ctrl key state
   useEffect(() => {
