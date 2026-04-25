@@ -19,7 +19,6 @@ import LayerButton from "../components/layer-button";
 import { useIsMobile } from "../hooks/use-mobile";
 import { fetchLatestComposites, fetchTileJSON, fetchLegend } from "../utils/api-client";
 import { roundToNearestTenMinutes } from "../utils/time-utils";
-
 import type { CompositeType, MapConfig, MapLayers } from "../utils/types";
 
 import "leaflet/dist/leaflet.css";
@@ -192,6 +191,9 @@ export default function MapView() {
     Record<string, { color: string; label: string }[]>
   >({});
 
+  // Block time-dependent layers until the real latest composite time is resolved.
+  const [isTimeSettled, setIsTimeSettled] = useState(false);
+
   // Fixed zoom levels and center
   const center: [number, number] = [27.5, 117.5];
   const minZoom = 5;
@@ -209,6 +211,11 @@ export default function MapView() {
   // References to the TimeDimensionLayer handles
   const leftLayerRef = useRef<TimeDimensionLayerHandles | null>(null);
   const rightLayerRef = useRef<TimeDimensionLayerHandles | null>(null);
+
+  // Snapshot initial selected composites at mount-time for the init effect.
+  // Using a ref guarantees we read the value that existed when the component
+  // first rendered, even if selectedComposites changes before the effect runs.
+  const initialSelectionRef = useRef(selectedComposites);
 
   // Track buffering state for each layer
   const [layerBufferingStates, setLayerBufferingStates] = useState<
@@ -358,30 +365,64 @@ export default function MapView() {
     localStorage.setItem("selected-composites", JSON.stringify(selected));
   };
 
-  // Fetch latest composites on component mount and every minute
+  // Initialization: resolve the real latest composite time before enabling
+  // time-dependent layers. On success selectedTime / timelineTime snap to the
+  // earliest available timestamp among the initially selected composites; on
+  // failure or timeout the fallback set in useState is kept.  Either way the
+  // gate opens inside `finally` and background polling starts immediately.
   useEffect(() => {
-    // Function to fetch composites
-    const fetchComposites = async () => {
-      try {
-        const data = await fetchLatestComposites();
+    let intervalId: ReturnType<typeof setInterval>;
+
+    Promise.race([
+      fetchLatestComposites(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("init timeout")), 5000)
+      )
+    ])
+      .then((data) => {
         setComposites(data);
-        console.log("latest composites:", data);
-      } catch (error) {
-        console.error("error fetching composites:", error);
-      }
-    };
 
-    // Fetch immediately on mount
-    fetchComposites();
+        // Derive the earliest timestamp from the initially selected composites.
+        // initialSelectionRef snapshots selectedComposites at mount-time
+        // so this effect always uses the user's initial selection regardless
+        // of any state changes that may have occurred.
+        const initialSelected = initialSelectionRef.current;
+        const timestamps = initialSelected
+          .filter((c) => c in data && data[c] !== null)
+          .map((c) => dayjs(data[c]));
 
-    // Set up interval to fetch every minute
-    const intervalId = setInterval(fetchComposites, 60000);
+        if (timestamps.length > 0) {
+          const earliest = timestamps.reduce((a, b) =>
+            a.isBefore(b) ? a : b
+          );
+          setSelectedTime(earliest);
+          setTimelineTime(earliest);
+        }
+      })
+      .catch((error) => {
+        console.error(
+          "Failed to fetch latest composites during init, using fallback time:",
+          error
+        );
+      })
+      .finally(() => {
+        // Open the time gate and start background polling in one atomic step.
+        setIsTimeSettled(true);
+        intervalId = setInterval(async () => {
+          try {
+            const data = await fetchLatestComposites();
+            setComposites(data);
+          } catch (err) {
+            console.error("Error fetching composites in polling:", err);
+          }
+        }, 60000);
+      });
 
-    // Clean up interval on component unmount
     return () => clearInterval(intervalId);
   }, []);
 
   useEffect(() => {
+    if (!isTimeSettled) return;
     if (latestCompositeTime && !latestCompositeTime.isSame(selectedTime)) {
       const diffMinutes = selectedTime.diff(latestCompositeTime, "minute");
 
@@ -392,9 +433,9 @@ export default function MapView() {
         setSelectedTime(latestCompositeTime);
       }
     }
-  }, [latestCompositeTime]);
+  }, [latestCompositeTime, isTimeSettled]);
 
-  // Update map configurations when selected composites change
+  // Update map configurations when selected composites change.
   useEffect(() => {
     const updateMapConfigs = async () => {
       for (const composite of selectedComposites) {
@@ -405,7 +446,7 @@ export default function MapView() {
     };
 
     updateMapConfigs();
-  }, [selectedComposites, composites]);
+  }, [selectedComposites]);
 
   // Fetch legend data when selected composites change
   useEffect(() => {
@@ -444,20 +485,22 @@ export default function MapView() {
           <MapBoundsUpdater bounds={compositeBounds} />
 
           {/* First Layer */}
-          <TimeDimensionLayer
-            currentTime={selectedTime}
-            timelineTime={timelineTime}
-            urlTemplate={tileUrlTemplate(selectedComposites[0])}
-            attribution={mapConfigs[selectedComposites[0]]?.attribution}
-            ref={leftLayerRef}
-            bounds={compositeBounds || undefined}
-            onBufferingChange={(isBuffering) =>
-              handleLayerBufferingChange("left", isBuffering)
-            }
-          />
+          {isTimeSettled && (
+            <TimeDimensionLayer
+              currentTime={selectedTime}
+              timelineTime={timelineTime}
+              urlTemplate={tileUrlTemplate(selectedComposites[0])}
+              attribution={mapConfigs[selectedComposites[0]]?.attribution}
+              ref={leftLayerRef}
+              bounds={compositeBounds || undefined}
+              onBufferingChange={(isBuffering) =>
+                handleLayerBufferingChange("left", isBuffering)
+              }
+            />
+          )}
 
-          {/* Second Layer (only if two composites are selected) */}
-          {selectedComposites.length > 1 && (
+          {/* Second Layer */}
+          {isTimeSettled && selectedComposites.length > 1 && (
             <TimeDimensionLayer
               currentTime={selectedTime}
               timelineTime={timelineTime}
@@ -497,8 +540,8 @@ export default function MapView() {
             />
           )}
 
-          {/* Side-by-side control - only show if two layers are selected */}
-          {selectedComposites.length > 1 &&
+          {/* Side-by-side control */}
+          {isTimeSettled && selectedComposites.length > 1 &&
             leftLayerRef.current &&
             rightLayerRef.current && (
               <SideBySide
@@ -571,15 +614,17 @@ export default function MapView() {
         </div>
 
         {/* TimeRangeSelector at the bottom */}
-        <div className={`time-selector-container ${isMobile ? "mobile" : ""}`}>
-          <TimeRangeSelector
-            selectedTime={selectedTime}
-            latestCompositeTime={latestCompositeTime}
-            onSelectedTimeChange={handleTimeChange}
-            onTimeRangeChange={handleTimeRangeChange}
-            isBuffering={isBuffering}
-          />
-        </div>
+        {isTimeSettled && (
+          <div className={`time-selector-container ${isMobile ? "mobile" : ""}`}>
+            <TimeRangeSelector
+              selectedTime={selectedTime}
+              latestCompositeTime={latestCompositeTime}
+              onSelectedTimeChange={handleTimeChange}
+              onTimeRangeChange={handleTimeRangeChange}
+              isBuffering={isBuffering}
+            />
+          </div>
+        )}
       </div>
     </main>
   );
