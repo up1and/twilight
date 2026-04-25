@@ -16,6 +16,13 @@ export type CompositeType =
   | "true_color"
   | "water_vapor";
 
+export type AvailabilityType = "day" | "night" | "all";
+
+export interface CompositeInfo {
+  timestamp: string | null;
+  availability: AvailabilityType;
+}
+
 export interface MapLayers {
   "fir-boundary": boolean;
 }

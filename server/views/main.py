@@ -258,12 +258,12 @@ def index():
                 "standard": "/tiles/{composite}/{time}/{z}/{x}/{y}.png (ISO 8601 time format)"
             },
             "tilejson": "/tiles/{composite}/tile.json",
-            "latest_times": "/api/composites/latest"
+            "composites": "/api/composites"
         },
         "examples": {
             "standard_tile": f"/tiles/ir-clouds/2025-04-20T04-00-00Z/5/25/15.png",
             "tilejson": f"/tiles/ir-clouds/tile.json",
-            "latest_times": "/api/composites/latest"
+            "composites": "/api/composites"
         }
     }
     return jsonify(info)

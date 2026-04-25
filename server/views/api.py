@@ -391,12 +391,26 @@ def get_syncs():
     })
 
 
-@api.route("/composites/latest", methods=["GET"])
-def latest_composite_state():
-    """
-    Get the latest update time for all composites
-    """
-    return jsonify(current_app.composite_state.get())
+composite_availability = {
+    "day_microphysics": "day",
+    "night_microphysics": "night",
+    "true_color": "day",
+    "fog": "night",
+    "convection": "day",
+}
+
+
+@api.route("/composites", methods=["GET"])
+def composites():
+    """Get all composites with latest timestamp and availability."""
+    state = current_app.composite_state.get()
+    result = {}
+    for composite, timestamp in state.items():
+        result[composite] = {
+            "timestamp": timestamp,
+            "availability": composite_availability.get(composite, "all"),
+        }
+    return jsonify(result)
 
 
 @api.route("/snapshots", methods=["POST"])

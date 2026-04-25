@@ -18,12 +18,18 @@ import SnapshotButton from "../components/snapshot-button";
 import LayerButton from "../components/layer-button";
 import { useIsMobile } from "../hooks/use-mobile";
 import {
-  fetchLatestComposites,
+  fetchComposites,
   fetchTileJSON,
   fetchLegend
 } from "../utils/api-client";
 import { roundToNearestTenMinutes } from "../utils/time-utils";
-import type { CompositeType, MapConfig, MapLayers } from "../utils/types";
+import type {
+  CompositeType,
+  MapConfig,
+  MapLayers,
+  CompositeInfo,
+  AvailabilityType
+} from "../utils/types";
 
 import "leaflet/dist/leaflet.css";
 import "./map.css";
@@ -160,8 +166,10 @@ function MapBoundsUpdater({
 }
 
 export default function MapView() {
-  // State for storing composites data from API (raw data)
-  const [composites, setComposites] = useState<Record<string, string>>({});
+  // State for storing composites data from API
+  const [composites, setComposites] = useState<Record<string, CompositeInfo>>(
+    {}
+  );
 
   const [selectedComposites, setSelectedComposites] = useState<CompositeType[]>(
     () => {
@@ -254,6 +262,17 @@ export default function MapView() {
     return Object.values(layerBufferingStates).some((state) => state);
   }, [layerBufferingStates]);
 
+  // Extract availability map from composites data
+  const compositeAvailability = useMemo<
+    Record<string, AvailabilityType>
+  >(() => {
+    const map: Record<string, AvailabilityType> = {};
+    for (const [name, info] of Object.entries(composites)) {
+      map[name] = info.availability;
+    }
+    return map;
+  }, [composites]);
+
   // Handle buffering state change for a specific layer
   const handleLayerBufferingChange = useCallback(
     (layerId: string, isBuffering: boolean) => {
@@ -270,9 +289,10 @@ export default function MapView() {
     // Filter selected composites that have valid (non-null) timestamps
     const selectedTimestamps = selectedComposites
       .filter(
-        (composite) => composite in composites && composites[composite] !== null
+        (composite) =>
+          composite in composites && composites[composite]?.timestamp !== null
       )
-      .map((composite) => dayjs(composites[composite]));
+      .map((composite) => dayjs(composites[composite].timestamp!));
 
     if (selectedTimestamps.length > 0) {
       // Use earliest time from selected composites if available
@@ -378,7 +398,7 @@ export default function MapView() {
     let intervalId: ReturnType<typeof setInterval>;
 
     Promise.race([
-      fetchLatestComposites(),
+      fetchComposites(),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("init timeout")), 5000)
       )
@@ -392,8 +412,8 @@ export default function MapView() {
         // of any state changes that may have occurred.
         const initialSelected = initialSelectionRef.current;
         const timestamps = initialSelected
-          .filter((c) => c in data && data[c] !== null)
-          .map((c) => dayjs(data[c]));
+          .filter((c) => c in data && data[c]?.timestamp !== null)
+          .map((c) => dayjs(data[c].timestamp!));
 
         if (timestamps.length > 0) {
           const earliest = timestamps.reduce((a, b) => (a.isBefore(b) ? a : b));
@@ -412,7 +432,7 @@ export default function MapView() {
         setIsTimeSettled(true);
         intervalId = setInterval(async () => {
           try {
-            const data = await fetchLatestComposites();
+            const data = await fetchComposites();
             setComposites(data);
           } catch (err) {
             console.error("Error fetching composites in polling:", err);
@@ -586,6 +606,7 @@ export default function MapView() {
             selectedOptions={selectedComposites}
             onChange={handleCompositeChange}
             maxSelections={2}
+            availability={compositeAvailability}
           />
           <SnapshotButton
             composites={selectedComposites}

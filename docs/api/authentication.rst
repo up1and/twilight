@@ -66,7 +66,7 @@ Endpoint group                                Auth required
 ``Task management (/api/tasks/*)``            Yes
 ``Sync management (/api/syncs/*)``            Yes
 ``Tile serving (/tiles/*)``                   No
-``Composite state (/api/composites/latest)``  No
+``Composite state (/api/composites)``  No
 ``Snapshots (/api/snapshots, /snapshots/*)``  No
 ``Token verification (/api/auth/verify)``     No
 ``Vector tiles (/tiles/*.pbf)``               No

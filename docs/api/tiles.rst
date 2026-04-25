@@ -89,12 +89,12 @@ Status  Description
 500     Error reading the source raster
 ======  =======================================
 
-Composites Latest
------------------
+Composites
+----------
 
-``GET /api/composites/latest``
+``GET /api/composites``
 
-Returns the most recent available observation timestamp for every configured composite. Use this to seed the time slider or to know which timestamps are safe to request.
+Returns the latest timestamp and availability (day / night / all) for every configured composite. Use this to seed the time slider and display availability icons in the UI.
 
 No authentication required.
 
@@ -103,12 +103,21 @@ No authentication required.
 .. code-block:: json
 
    {
-     "ir_clouds": "2025-04-20T04:00:00+00:00",
-     "true_color": "2025-04-20T04:00:00+00:00",
-     "ash": null
+     "ir_clouds": {
+       "timestamp": "2025-04-20T04:00:00+00:00",
+       "availability": "all"
+     },
+     "true_color": {
+       "timestamp": "2025-04-20T04:00:00+00:00",
+       "availability": "day"
+     },
+     "ash": {
+       "timestamp": null,
+       "availability": "all"
+     }
    }
 
-Composites that have no data yet return ``null``.
+Composites with no data yet return ``null`` for the timestamp field.
 
 Vector Tiles
 ------------

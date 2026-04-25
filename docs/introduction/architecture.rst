@@ -68,7 +68,7 @@ Endpoint                                                                 Descrip
 =======================================================================  =========================================================================
 ``GET /tiles/{composite}/{timestamp}/{z}/{x}/{y}.png``                   Returns a PNG tile. Timestamp in ISO 8601 format with dashes
 ``GET /tiles/{composite}/tile.json``                                     Returns TileJSON metadata for the Leaflet layer
-``GET /api/composites/latest``                                           Returns the latest available timestamp for each composite
+``GET /api/composites``                                           Returns the latest available timestamp for each composite
 =======================================================================  =========================================================================
 
 **Task and sync API**

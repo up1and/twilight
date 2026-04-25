@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import type React from "react";
-import { ChevronDown, Check } from "lucide-react";
+import { ChevronDown, Check, Sun, Moon } from "lucide-react";
 
-import type { CompositeType } from "../utils/types";
+import type { CompositeType, AvailabilityType } from "../utils/types";
 import "./multi-select-composite.css";
 
 interface MultiSelectCompositeProps {
@@ -10,13 +10,26 @@ interface MultiSelectCompositeProps {
   selectedOptions: CompositeType[];
   onChange: (selected: CompositeType[]) => void;
   maxSelections?: number;
+  availability?: Record<string, AvailabilityType>;
 }
+
+const iconFor = (type?: AvailabilityType) => {
+  switch (type) {
+    case "day":
+      return <Sun size={10} className="availability-icon" />;
+    case "night":
+      return <Moon size={10} className="availability-icon" />;
+    default:
+      return null;
+  }
+};
 
 export default function MultiSelectComposite({
   options,
   selectedOptions,
   onChange,
-  maxSelections = 2
+  maxSelections = 2,
+  availability = {}
 }: MultiSelectCompositeProps) {
   const [isSelectOpen, setIsSelectOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -108,27 +121,20 @@ export default function MultiSelectComposite({
     };
   }, [isSelectOpen]);
 
-  // Format the display text for the button
-  const getDisplayText = () => {
-    if (selectedOptions.length === 0) {
-      return "Select layers";
-    } else if (selectedOptions.length === 1) {
-      return upperCase(selectedOptions[0]);
-    } else {
-      // Show both selected options with comma separator
-      return `${upperCase(selectedOptions[0])}, ${upperCase(
-        selectedOptions[1]
-      )}`;
-    }
-  };
-
   return (
     <div className="multi-select-composite" ref={dropdownRef}>
       <button
         className="multi-select-button"
         onClick={() => setIsSelectOpen(!isSelectOpen)}
       >
-        {getDisplayText()}
+        <span className="selected-content">
+          {selectedOptions.map((opt, i) => (
+            <span key={opt} className="selected-item">
+              <span>{upperCase(opt)}</span>
+              {i < selectedOptions.length - 1 && <span className="sep">,</span>}
+            </span>
+          ))}
+        </span>
         <ChevronDown size={14} className="dropdown-icon" />
       </button>
 
@@ -143,11 +149,16 @@ export default function MultiSelectComposite({
               onClick={(e) => toggleOption(option, e)}
             >
               <span>{upperCase(option)}</span>
-              {selectedOptions.includes(option) && (
-                <span className="check-mark">
-                  <Check size={14} strokeWidth={2.5} />
-                </span>
-              )}
+              {iconFor(availability[option])}
+              <span
+                className={
+                  selectedOptions.includes(option)
+                    ? "check-mark"
+                    : "check-mark check-hidden"
+                }
+              >
+                <Check size={14} strokeWidth={2.5} />
+              </span>
             </div>
           ))}
         </div>

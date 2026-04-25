@@ -3,7 +3,7 @@
  * Handles API requests using ky HTTP client
  */
 import ky from "ky";
-import type { TileJSON, Task, Sync, Profile } from "./types";
+import type { TileJSON, Task, Sync, Profile, CompositeInfo } from "./types";
 import { storage } from "./storage";
 
 interface TasksResponse {
@@ -63,29 +63,27 @@ export const apiClient = ky.create({
 });
 
 /**
- * Fetches the latest available timestamps for each composite type
+ * Fetches composite metadata — latest timestamp and availability for each composite type.
  *
  * @returns A Promise resolving to a Record where:
  *   - Keys are composite names (e.g., 'true_color', 'ir_clouds', 'ash')
- *   - Values are ISO 8601 timestamp strings (e.g., '2025-04-20T04:00:00')
+ *   - Values are CompositeInfo objects with `timestamp` and `availability`
  *
  * Example response:
  * {
- *   "true_color": "2025-04-20T04:00:00",
- *   "ir_clouds": "2025-04-20T04:00:00",
- *   "ash": "2025-04-20T03:30:00"
+ *   "true_color": { "timestamp": "2025-04-20T04:00:00", "availability": "day" },
+ *   "ir_clouds": { "timestamp": "2025-04-20T04:00:00", "availability": "all" },
+ *   "ash": { "timestamp": "2025-04-20T03:30:00", "availability": "all" }
  * }
- *
- * This data is used to determine the most recent available imagery for each composite type.
  */
-export async function fetchLatestComposites(): Promise<Record<string, string>> {
+export async function fetchComposites(): Promise<Record<string, CompositeInfo>> {
   try {
     const data = await apiClient
-      .get("/api/composites/latest")
-      .json<Record<string, string>>();
+      .get("/api/composites")
+      .json<Record<string, CompositeInfo>>();
     return data;
   } catch (error) {
-    console.error("Error fetching latest composites:", error);
+    console.error("Error fetching composites:", error);
     return {};
   }
 }

@@ -18,7 +18,7 @@ import { Line } from "react-chartjs-2";
 import {
   fetchTasks,
   fetchSyncs,
-  fetchLatestComposites,
+  fetchComposites,
   createTask,
   fetchProfile
 } from "../utils/api-client";
@@ -567,7 +567,7 @@ export default function Dashboard() {
   const fetchingRef = useRef(false);
   const compositesLoadedRef = useRef(false);
 
-  useTitle("Dashboard")
+  useTitle("Dashboard");
 
   const [, setLocation] = useLocation();
 
@@ -632,7 +632,7 @@ export default function Dashboard() {
   // Initial lookup data load
   useEffect(() => {
     if (compositesLoadedRef.current) return;
-    fetchLatestComposites()
+    fetchComposites()
       .then((data) => {
         if (data) {
           setComposites(Object.keys(data));
@@ -659,7 +659,9 @@ export default function Dashboard() {
     <div className="dashboard">
       <div className="container">
         <header className="header-section">
-          <h1><Link href="/">Twilight</Link></h1>
+          <h1>
+            <Link href="/">Twilight</Link>
+          </h1>
           <nav className="tabs">
             {(["tasks", "syncs"] as const).map((tab) => (
               <button

@@ -97,16 +97,18 @@ class TestNaturalEarthTile:
         assert "mbtiles file not found" in result["message"]
 
 
-class TestLatestCompositeState:
-    """Test latest composite state endpoint"""
-    
-    def test_latest_composite_state(self, client):
-        response = client.get('/api/composites/latest')
-        
+class TestComposites:
+    """Test composites endpoint"""
+
+    def test_composites(self, client):
+        response = client.get('/api/composites')
+
         assert response.status_code == 200
         result = json.loads(response.data)
         assert isinstance(result, dict)
         assert "ir_clouds" in result
+        assert "timestamp" in result["ir_clouds"]
+        assert "availability" in result["ir_clouds"]
 
 
 class TestServeSnapshot:
