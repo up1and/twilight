@@ -17,7 +17,11 @@ import SideBySide from "../components/side-by-side";
 import SnapshotButton from "../components/snapshot-button";
 import LayerButton from "../components/layer-button";
 import { useIsMobile } from "../hooks/use-mobile";
-import { fetchLatestComposites, fetchTileJSON, fetchLegend } from "../utils/api-client";
+import {
+  fetchLatestComposites,
+  fetchTileJSON,
+  fetchLegend
+} from "../utils/api-client";
 import { roundToNearestTenMinutes } from "../utils/time-utils";
 import type { CompositeType, MapConfig, MapLayers } from "../utils/types";
 
@@ -186,8 +190,8 @@ export default function MapView() {
   // Store map configurations for each selected composite
   const [mapConfigs, setMapConfigs] = useState<Record<string, MapConfig>>({});
 
-  // Store legend data for each composite
-  const [legendData, setLegendData] = useState<
+  // Store legend items for each composite
+  const [legends, setLegends] = useState<
     Record<string, { color: string; label: string }[]>
   >({});
 
@@ -228,7 +232,7 @@ export default function MapView() {
     console.log(`Layer changed: ${layerId} -> ${newValue}`);
     setLayers({
       ...layers,
-      [layerId]: newValue,
+      [layerId]: newValue
     });
     localStorage.setItem(layerId, JSON.stringify(newValue));
   };
@@ -322,7 +326,7 @@ export default function MapView() {
   };
 
   // Handle time change from TimeRangeSelector
-  const handleTimeChange = (time: any) => {
+  const handleTimeChange = (time: dayjs.Dayjs) => {
     setSelectedTime(time);
   };
 
@@ -392,9 +396,7 @@ export default function MapView() {
           .map((c) => dayjs(data[c]));
 
         if (timestamps.length > 0) {
-          const earliest = timestamps.reduce((a, b) =>
-            a.isBefore(b) ? a : b
-          );
+          const earliest = timestamps.reduce((a, b) => (a.isBefore(b) ? a : b));
           setSelectedTime(earliest);
           setTimelineTime(earliest);
         }
@@ -450,12 +452,12 @@ export default function MapView() {
 
   // Fetch legend data when selected composites change
   useEffect(() => {
-    const fetchLegendData = async () => {
+    const fetchLegends = async () => {
       for (const composite of selectedComposites) {
-        if (!legendData[composite]) {
+        if (!legends[composite]) {
           const data = await fetchLegend(composite);
           if (data) {
-            setLegendData((prev) => ({
+            setLegends((prev) => ({
               ...prev,
               [composite]: data
             }));
@@ -464,7 +466,7 @@ export default function MapView() {
       }
     };
 
-    fetchLegendData();
+    fetchLegends();
   }, [selectedComposites]);
 
   return (
@@ -541,7 +543,8 @@ export default function MapView() {
           )}
 
           {/* Side-by-side control */}
-          {isTimeSettled && selectedComposites.length > 1 &&
+          {isTimeSettled &&
+            selectedComposites.length > 1 &&
             leftLayerRef.current &&
             rightLayerRef.current && (
               <SideBySide
@@ -563,38 +566,18 @@ export default function MapView() {
           <CoordinatesDisplay lat={mousePosition.lat} lng={mousePosition.lng} />
         )}
 
-        {/* Legend for single composite - bottom right only */}
-        {selectedComposites.length === 1 &&
-          legendData[selectedComposites[0]] && (
-            <div className="legend-position-right">
-              <Legend
-                items={legendData[selectedComposites[0]]}
-                defaultExpanded={false}
-              />
+        {/* Legends — one per selected composite, positioned left/right.
+            Single composite lands on the right; dual composites split left/right. */}
+        {selectedComposites.map((composite, i) => {
+          if (!legends[composite]) return null;
+          const side =
+            i === 0 && selectedComposites.length === 2 ? "left" : "right";
+          return (
+            <div key={composite} className={`legend-position-${side}`}>
+              <Legend items={legends[composite]} defaultExpanded={false} />
             </div>
-          )}
-
-        {/* Legends for side-by-side mode - left and right */}
-        {selectedComposites.length > 1 && (
-          <>
-            {legendData[selectedComposites[0]] && (
-              <div className="legend-position-left">
-                <Legend
-                  items={legendData[selectedComposites[0]]}
-                  defaultExpanded={false}
-                />
-              </div>
-            )}
-            {legendData[selectedComposites[1]] && (
-              <div className="legend-position-right">
-                <Legend
-                  items={legendData[selectedComposites[1]]}
-                  defaultExpanded={false}
-                />
-              </div>
-            )}
-          </>
-        )}
+          );
+        })}
 
         {/* Controls Overlay */}
         <div className="map-controls">
@@ -615,7 +598,9 @@ export default function MapView() {
 
         {/* TimeRangeSelector at the bottom */}
         {isTimeSettled && (
-          <div className={`time-selector-container ${isMobile ? "mobile" : ""}`}>
+          <div
+            className={`time-selector-container ${isMobile ? "mobile" : ""}`}
+          >
             <TimeRangeSelector
               selectedTime={selectedTime}
               latestCompositeTime={latestCompositeTime}
