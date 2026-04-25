@@ -46,7 +46,7 @@ day_microphysics     Daytime cloud microphysics (particle size and phase)
 night_microphysics   Nighttime cloud microphysics using infrared bands
 fog                  Low-level fog and stratus detection
 convection           Deep convection and overshooting tops
-vapor                Differential  water vapor
+water_vapor          Differential  water vapor
 ===================  ===========================================================================
 
 What You Need to Run It

@@ -582,7 +582,7 @@ export default function MapView() {
         {/* Controls Overlay */}
         <div className="map-controls">
           <MultiSelectComposite
-            options={Object.keys(composites)}
+            options={Object.keys(composites) as CompositeType[]}
             selectedOptions={selectedComposites}
             onChange={handleCompositeChange}
             maxSelections={2}

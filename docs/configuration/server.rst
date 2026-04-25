@@ -62,7 +62,7 @@ Composites and Data Retention
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 - **Type:** string
-- **Default:** ``ir_clouds,true_color,ash,airmass,day_microphysics,night_microphysics,fog,convection,vapor``
+- **Default:** ``ir_clouds,true_color,ash,airmass,day_microphysics,night_microphysics,fog,convection,water_vapor``
 
 Comma-separated list of composite types the server accepts and advertises. Workers will only enqueue tasks for composites that appear in this list. Remove entries here to disable specific products system-wide.
 
@@ -101,7 +101,7 @@ Sample Configuration
    AUTH_KEY=change-me-before-deploying
 
    # Composites (default: all ten types)
-   # AVAILABLE_COMPOSITES=ir_clouds,true_color,ash,airmass,day_microphysics,night_microphysics,fog,convection,vapor
+   # AVAILABLE_COMPOSITES=ir_clouds,true_color,ash,airmass,day_microphysics,night_microphysics,fog,convection,water_vapor
 
    # Data retention
    # TASK_EXPIRE_DAYS=7

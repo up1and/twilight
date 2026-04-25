@@ -96,7 +96,7 @@ convection — Convection
 * Monitoring overshooting convective tops
 * Nowcasting for aviation turbulence and lightning risk
 
-vapor — Differential  water vapor
+water_vapor — Differential  water vapor
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 **What it shows:** A composite analysis of the vertical moisture gradient. It combines the upper-level (6.2 µm) and mid-level (7.3 µm) water vapor channels to distinguish 

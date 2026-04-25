@@ -1,9 +1,20 @@
 export type CompositeType =
-  | "true_color"
-  | "ir_clouds"
+  | "airmass"
   | "ash"
-  | "water_vapor"
-  | string;
+  | "cloud_phase"
+  | "cloudtop"
+  | "convection"
+  | "day_microphysics"
+  | "dust"
+  | "fire_temperature"
+  | "fog"
+  | "geo_color"
+  | "ir_clouds"
+  | "natural_color"
+  | "night_microphysics"
+  | "overview"
+  | "true_color"
+  | "water_vapor";
 
 export interface MapLayers {
   "fir-boundary": boolean;

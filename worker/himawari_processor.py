@@ -130,7 +130,7 @@ composite_mapping = {
     "ash": "ash",
     "airmass": "airmass",
     "fog": "fog",
-    "vapor": "water_vapors1",
+    "water_vapor": "water_vapors1",
     "mid_vapor": "mid_vapor",
     "geo_color": "geo_color",
     "natural_color": "natural_color",

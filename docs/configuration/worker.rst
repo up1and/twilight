@@ -71,7 +71,7 @@ Comma-separated list of priority levels this worker will accept. Accepted values
 - **Type:** string
 - **Default:** (empty - all composites)
 
-Comma-separated list of composite types this worker will process. Leave empty to process all composite types. Accepted values: ``ir_clouds``, ``true_color``, ``ash``, ``airmass``, ``day_microphysics``, ``night_microphysics``, ``fog``, ``convection``, ``vapor``.
+Comma-separated list of composite types this worker will process. Leave empty to process all composite types. Accepted values: ``ir_clouds``, ``true_color``, ``ash``, ``airmass``, ``day_microphysics``, ``night_microphysics``, ``fog``, ``convection``, ``water_vapor``.
 
 .. code-block:: bash
 
@@ -116,7 +116,7 @@ Task Generator
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 - **Type:** string
-- **Default:** ``ir_clouds,true_color,ash,airmass,day_microphysics,night_microphysics,fog,convection,vapor``
+- **Default:** ``ir_clouds,true_color,ash,airmass,day_microphysics,night_microphysics,fog,convection,water_vapor``
 
 Comma-separated list of composites for which the task generator (``--task`` mode) will create processing tasks. This should match or be a subset of ``AVAILABLE_COMPOSITES`` on the server.
 

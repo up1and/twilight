@@ -22,7 +22,7 @@ Returns a 256x256 PNG tile for the given composite and point in time. Single-ban
 
 **Path Parameters:**
 
-- ``composite`` - Composite identifier. Use dashes in the URL (e.g., ``ir-clouds``, ``true-color``, ``ash``, ``airmass``, ``day-microphysics``, ``night-microphysics``, ``fog``, ``convection``, ``lower-vapor``, ``upper-vapor``). Underscores are also accepted.
+- ``composite`` - Composite identifier. Use dashes in the URL (e.g., ``ir-clouds``, ``true-color``, ``ash``, ``airmass``, ``day-microphysics``, ``night-microphysics``, ``fog``, ``convection``, ``water-vapor``). Underscores are also accepted.
 - ``timestamp`` - Observation time in ISO 8601 format with colons replaced by dashes, e.g., ``2025-04-20T04-00-00Z``. The server normalises the value back to standard ISO 8601 before querying the data store.
 - ``z`` - Zoom level
 - ``x`` - Tile column
@@ -147,4 +147,4 @@ The response includes ``Access-Control-Allow-Origin: *`` and ``Content-Encoding:
 
 .. code-block:: bash
 
-   curl -o overlay.pbf "https://your-server/tiles/firs/4/12/7.pbf"
+   curl -o overlay.pbf "http://your-server/tiles/firs/4/12/7.pbf"
