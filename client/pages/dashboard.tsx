@@ -381,7 +381,7 @@ const ResourceChart = ({ data }: { data: ResourceData[] }) => {
       {
         label: "CPU",
         data: cpuData,
-        borderColor: "#000",
+        borderColor: "#0075de",
         borderWidth: 2,
         pointRadius: 0,
         tension: 0.3,
@@ -390,8 +390,8 @@ const ResourceChart = ({ data }: { data: ResourceData[] }) => {
       {
         label: "MEM",
         data: memData,
-        borderColor: "#777",
-        backgroundColor: "rgba(119, 119, 119, 0.2)",
+        borderColor: "#1aae39",
+        backgroundColor: "rgba(26, 174, 57, 0.12)",
         borderWidth: 1,
         pointRadius: 0,
         tension: 0.3,

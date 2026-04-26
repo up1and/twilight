@@ -6,7 +6,7 @@
   margin: 0;
   padding: 24px;
   font-size: 16px;
-  line-height: 1.50;
+  line-height: 1.5;
   min-height: 100vh;
   font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
 }
@@ -151,7 +151,11 @@ select:focus {
 }
 
 .data-card:hover {
-  box-shadow: rgba(0, 0, 0, 0.06) 0px 4px 20px, rgba(0, 0, 0, 0.04) 0px 2.025px 8.84688px, rgba(0, 0, 0, 0.03) 0px 0.8px 3.925px, rgba(0, 0, 0, 0.015) 0px 0.175px 1.54062px;
+  box-shadow:
+    rgba(0, 0, 0, 0.06) 0px 4px 20px,
+    rgba(0, 0, 0, 0.04) 0px 2.025px 8.84688px,
+    rgba(0, 0, 0, 0.03) 0px 0.8px 3.925px,
+    rgba(0, 0, 0, 0.015) 0px 0.175px 1.54062px;
 }
 
 /* Card Header */
@@ -296,7 +300,9 @@ select:focus {
   color: var(--dashboard-black);
   font-size: 14px;
   font-weight: 500;
-  transition: background 0.2s, border-color 0.2s;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
 }
 
 .page-button:hover:not(.active) {
@@ -463,17 +469,15 @@ select:focus {
 }
 
 .profile-section-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--dashboard-black);
-  padding-bottom: 8px;
-  margin-bottom: 8px;
-  border-bottom: var(--whisper-border);
+  color: var(--warm-dark);
+  margin-bottom: 10px;
 }
 
 /* --- Trace List --- */
 .trace-list {
-  background-color: var(--warm-white);
+  background-color: var(--pure-white);
   border-radius: 8px;
   border: var(--whisper-border);
   overflow: hidden;
@@ -497,7 +501,6 @@ select:focus {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 70%;
-  font-family: 'Inter', -apple-system, system-ui, monospace;
   font-size: 12px;
 }
 
