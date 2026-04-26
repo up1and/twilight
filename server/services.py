@@ -359,6 +359,15 @@ class CompositeStateManager:
             # During initialization, always update to ensure all states are properly set in Redis
             # This ensures consistency even when both current and new values are None
             self.update(composite, timestamp)
+
+        # Clean up stale composites that are no longer in available_composites
+        # Redis hgetall returns all fields, so stale keys would otherwise persist
+        with self.lock:
+            existing_keys = set(self.redis_client.hkeys(self.key))
+            current_keys = set(composite_states.keys())
+            stale_keys = existing_keys - current_keys
+            if stale_keys:
+                self.redis_client.hdel(self.key, *stale_keys)
     
     def get(self, composite=None):
         """

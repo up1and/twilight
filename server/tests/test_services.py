@@ -496,6 +496,7 @@ class TestCompositeStateManager:
     def setup_method(self):
         """Setup test fixtures"""
         self.mock_redis = Mock()
+        self.mock_redis.hkeys.return_value = []  # Default: no stale keys in Redis
         self.test_timestamp = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
         self.test_timestamp_str = self.test_timestamp.isoformat()
         
@@ -541,6 +542,29 @@ class TestCompositeStateManager:
                 # Should update true_color and ash because Redis has None
                 assert mock_update.call_count == 3
     
+    def test_init_cleans_stale_composites(self):
+        """Test that stale composites are removed from Redis when available_composites changes"""
+        # Simulate: Redis has 'ir_clouds', 'old_composite', 'true_color'
+        # But current composite_states only has 'ir_clouds', 'true_color', 'ash'
+        self.mock_redis.hkeys.return_value = [b"ir_clouds", b"old_composite", b"true_color"]
+
+        with patch.object(CompositeStateManager, "update"):
+            CompositeStateManager(self.mock_redis, self.composite_states)
+
+            # hdel should be called with the one stale key: 'old_composite'
+            self.mock_redis.hdel.assert_called_once_with("composite_state", b"old_composite")
+
+    def test_init_no_stale_composites(self):
+        """Test that no hdel is called when there are no stale composites"""
+        # Redis keys match current composite_states exactly
+        self.mock_redis.hkeys.return_value = [b"ir_clouds", b"true_color", b"ash"]
+
+        with patch.object(CompositeStateManager, "update"):
+            CompositeStateManager(self.mock_redis, self.composite_states)
+
+            # hdel should NOT be called — no stale keys
+            self.mock_redis.hdel.assert_not_called()
+
     def test_get_specific_composite_exists(self):
         """Test getting a specific composite that exists"""
         mock_states = {
