@@ -225,9 +225,8 @@ class TaskManager:
         return {"tasks": json.loads(tasks_data), "resources": json.loads(resources_data)}
 
 class SyncManager:
-    def __init__(self, redis_client, task_manager=None, expire_days=30):
+    def __init__(self, redis_client, expire_days=30):
         self.redis = redis_client
-        self.task_manager = task_manager
         # Redis keys
         self.syncs_key = "syncs"  # Hash: timestamp_key -> sync_json
         self.timestamps_key = "syncs_timestamps"  # Sorted Set: timestamp_key with unix timestamp score
@@ -262,7 +261,8 @@ class SyncManager:
             if self.expire_time:
                 self.redis.expire(self.syncs_key, self.expire_time)
                 self.redis.expire(self.timestamps_key, self.expire_time)
-    def update_progress(self, source, timestamp, status=None, files=None, size=None):
+
+    def update_progress(self, source, timestamp, status=None, files=None, size=None, initiator=None):
         """Update sync progress for a timestamp with partial updates
         
         Args:
@@ -271,6 +271,7 @@ class SyncManager:
             status: Status to update (optional)
             files: Number of files to update (optional)
             size: Total size to update (optional)
+            initiator: Who initiated the update, e.g. 'worker' (optional)
         """
         timestamp_key = self._get_timestamp_key(source, timestamp)
         now = datetime.datetime.now(datetime.timezone.utc)
@@ -282,14 +283,10 @@ class SyncManager:
                 sync = SyncModel.from_json(sync_json)
             else:
                 # Create new sync if doesn't exist
-                sync = SyncModel(source, timestamp)
+                sync = SyncModel(source, timestamp, initiator=initiator)
             
             # Update only provided fields
             if status is not None:
-                # If status changed to "completed", promote related tasks to high priority
-                if self.task_manager and status == "completed" and sync.status != "completed":
-                    self.task_manager.promote_tasks(timestamp)
-
                 sync.status = status
                 # Set started time when status becomes running
                 if status == "running" and sync.started is None:

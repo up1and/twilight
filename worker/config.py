@@ -25,11 +25,6 @@ composites = [c.strip() for c in os.getenv("COMPOSITES", "").split(",") if c.str
 max_resolution = int(os.getenv("MAX_RESOLUTION", 1000))
 # Region bounding box: [lon_min, lat_min, lon_max, lat_max]
 bbox = [float(b.strip()) for b in os.getenv("BBOX", "75,0,160,55").split(",") if b.strip()]
-# Available composite list, comma-separated, task generator
-available_composites = os.getenv(
-    "AVAILABLE_COMPOSITES", 
-    "ir_clouds,true_color,ash,airmass,day_microphysics,night_microphysics,fog,convection,vapor"
-).split(",")
 
 # Maximum cache size in GB (default 200GB)
 cache_size_limit = int(os.getenv("CACHE_SIZE_LIMIT", 200))

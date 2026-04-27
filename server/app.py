@@ -6,7 +6,7 @@ import datetime
 
 from flask import Flask, request, jsonify
 
-from config import auth_key, available_composites, task_expire_days, sync_expire_days
+from config import auth_key, available_composites, task_expire_days, sync_expire_days, auto_create_tasks_on_sync
 from extensions import init_extensions, redis_client, client
 from services import TaskManager, SyncManager, CompositeStateManager
 from utils import default_json_handler, initialize_composite_state
@@ -47,6 +47,7 @@ def create_app(debug=False):
     app.debug = debug
     app.config["AVAILABLE_COMPOSITES"] = available_composites
     app.config["AUTH_KEY"] = auth_key
+    app.config["AUTO_CREATE_TASKS"] = auto_create_tasks_on_sync
 
     # Initialize extensions
     init_extensions(app)
@@ -60,7 +61,7 @@ def create_app(debug=False):
 
     # Initialize managers and composite state
     app.task_manager = TaskManager(redis_client, task_expire_days)
-    app.sync_manager = SyncManager(redis_client, app.task_manager, sync_expire_days)
+    app.sync_manager = SyncManager(redis_client, sync_expire_days)
 
     composite_states = initialize_composite_state(client, available_composites)
     app.composite_state = CompositeStateManager(redis_client, composite_states)

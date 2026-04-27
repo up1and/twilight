@@ -4,28 +4,14 @@ import argparse
 import threading
 import requests
 
-import s3fs
-
 from himawari_processor import cache_dir
 from task import TaskClient, TaskProcessor
 from sync import SyncClient, SyncProcessor
 from utils import logger, _available_latest_time, generate_worker_id, CacheManager
-from config import server_url, auth_key, cache_size_limit, priorities, available_composites, composites, \
+from config import server_url, auth_key, cache_size_limit, priorities, composites, \
     max_resolution, bbox, resampler, mem_per_worker, system_margin
 
 
-def check_files(target_time):
-    """Check files are available for the given time"""
-    try:
-        fs = s3fs.S3FileSystem(anon=True)
-        s3_path = "noaa-himawari9/AHI-L1b-FLDK/{}".format(target_time.strftime("%Y/%m/%d/%H%M"))
-        files = fs.ls(s3_path)
-        return files
-
-    except Exception as e:
-        logger.error(f"Error checking files for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC: {e}")
-        return []
-    
 def resolve_data_source(server_url, timestamp, auth_key=None):
     """
     Check sync status to determine data source and processing decision
@@ -69,78 +55,6 @@ def resolve_data_source(server_url, timestamp, auth_key=None):
         logger.error(f"Error checking sync data status: {e}")
         # Default to remote on error
         return "remote"
-
-def run_task_generator(server_url, auth_key=None, shutdown_event=None):
-    """
-    Task generator thread that monitors data availability and creates tasks
-    
-    Args:
-        server_url: Server endpoint URL
-        auth_key: Authentication key
-        shutdown_event: threading.Event to control shutdown (new Event created if None)
-    """
-    logger.info("Starting Himawari task generator thread...")
-
-    headers = {"Authorization": f"Bearer {auth_key}"} if auth_key else {}
-
-    current_target_time = None
-
-    while not shutdown_event.is_set():
-        try:
-            # Get the latest available time
-            latest_time = _available_latest_time()
-
-            # If we don't have a current target time, set it to the latest time
-            if current_target_time is None:
-                current_target_time = latest_time
-
-            # If the current target time is too far behind, manually move to next interval
-            if latest_time - current_target_time > datetime.timedelta(minutes=20):
-                current_target_time = current_target_time + datetime.timedelta(minutes=10)
-
-            # If the current target time is still in the future compared to latest available, wait
-            if current_target_time > latest_time:
-                shutdown_event.wait(60)
-                continue
-
-            # Check if files are available
-            files = check_files(current_target_time)
-            if len(files) >= 160:
-                for composite_name in available_composites:
-                    try:
-                        # Create task on server (server will handle deduplication)
-                        response = requests.post(
-                            f"{server_url}/api/tasks",
-                            json={
-                                "composite": composite_name,
-                                "timestamp": current_target_time.isoformat(),
-                                "priority": "normal"
-                            },
-                            headers=headers,
-                            timeout=10
-                        )
-                        if response.status_code == 201:
-                            task_data = response.json()
-                            task_id = task_data["task_id"]
-                            logger.info(f"Created task {task_id} for {composite_name} at {current_target_time.strftime('%Y-%m-%d %H:%M')} UTC")
-                        else:
-                            logger.error(f"Failed to create task for {composite_name}: {response.status_code} {response.text}")
-                    except Exception as e:
-                        logger.error(f"Error creating task for {composite_name}: {e}")
-
-                # Move to next 10-minute interval
-                current_target_time = current_target_time + datetime.timedelta(minutes=10)
-            else:
-                logger.info(f"Data not complete for time {current_target_time.strftime('%Y-%m-%d %H:%M')} UTC, waiting...")
-
-            shutdown_event.wait(60)
-
-        except KeyboardInterrupt:
-            logger.info(f"Task generator received interrupt signal, shutting down...")
-            break
-        except Exception as e:
-            logger.error(f"Unexpected error in task generator: {e}")
-            shutdown_event.wait(60)
 
 def run_himawari_sync(auth_key=None, shutdown_event=None):
     """
@@ -281,8 +195,6 @@ def run_task_manager(server_url, auth_key=None, worker_id=None, poll_interval=10
 def main():
     """Main entry point"""
     parser = argparse.ArgumentParser(description="Himawari satellite data processing")
-    parser.add_argument("--task", action="store_true",
-                        help="Enable task generator that monitors data availability and creates tasks")
     parser.add_argument("--sync", action="store_true",
                         help="Enable Himawari data synchronization from NOAA S3")
     parser.add_argument("--worker", action="store_true",
@@ -299,11 +211,7 @@ def main():
     threads = []
     shared_event = threading.Event()
     # Automatic worker activation if no other mode specified
-    should_run_worker = args.worker or (not args.task and not args.sync)
-
-    if args.task:
-        t = threading.Thread(target=run_task_generator, args=(server_url, auth_key,), kwargs={"shutdown_event": shared_event})
-        threads.append(t)
+    should_run_worker = args.worker or not args.sync
 
     if args.sync:
         t = threading.Thread(target=run_himawari_sync, args=(auth_key,), kwargs={"shutdown_event": shared_event})

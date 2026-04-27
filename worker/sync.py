@@ -68,7 +68,8 @@ class SyncClient:
             # Build data payload with only non-None values
             data = {
                 "timestamp": target_time.isoformat(),
-                "source": "himawari"
+                "source": "himawari",
+                "initiator": "sync"
             }
             
             if status is not None:
@@ -96,7 +97,8 @@ class SyncClient:
         try:
             data = {
                 "timestamp": target_time.isoformat(),
-                "source": "himawari"
+                "source": "himawari",
+                "initiator": "worker"
             }
             
             response = self.session.post(

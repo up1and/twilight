@@ -3,7 +3,7 @@ API views for the application
 """
 import datetime
 
-from flask import Blueprint, request, jsonify, url_for, current_app
+from flask import Blueprint, request, jsonify, current_app
 
 from auth import auth_required
 from utils import parse_iso_timestamp
@@ -305,6 +305,7 @@ def manage_sync():
         status = data.get("status")
         files = data.get("files")
         size = data.get("size")
+        initiator = data.get("initiator")
         
         # Validate that at least one field is provided
         if status is None and files is None and size is None:
@@ -322,9 +323,24 @@ def manage_sync():
                     "message": f"Invalid status. Valid values: {valid_statuses}"
                 }), 400
             
+        # Get sync record before update to check status change
+        sync_data = current_app.sync_manager.get_sync(source, timestamp)
+        old_status = sync_data.get("status") if sync_data else None
+
         # Update progress with partial data
         current_app.sync_manager.update_progress(source, timestamp, status, files, size)
         
+        # If status changed to "completed" and initiator is sync, trigger task creation
+        if status == "completed" and old_status != "completed" and initiator == "sync":
+            current_app.logger.info(f"Sync completed for {timestamp.isoformat()}, triggering task creation.")
+            # Promote any existing tasks for this timestamp
+            current_app.task_manager.promote_tasks(timestamp)
+
+            # Create all available composites when sync completes
+            if current_app.config["AUTO_CREATE_TASKS"]:
+                for composite in current_app.config["AVAILABLE_COMPOSITES"]:
+                    current_app.task_manager.create_task(composite, timestamp, priority="normal")
+
         # Build response message
         updated_fields = []
         if status is not None:

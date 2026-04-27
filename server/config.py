@@ -38,3 +38,6 @@ task_expire_days = int(os.getenv("TASK_EXPIRE_DAYS", 7))
 
 # Sync expiration days, 0 means no expiration
 sync_expire_days = int(os.getenv("SYNC_EXPIRE_DAYS", 30))
+
+# Auto-create tasks when sync reaches completed status
+auto_create_tasks_on_sync = os.getenv("AUTO_CREATE_TASKS_ON_SYNC", "false").lower() == "true"

@@ -85,9 +85,10 @@ class TaskModel:
 
 
 class SyncModel:
-    def __init__(self, source, timestamp):
+    def __init__(self, source, timestamp, initiator=None):
         self.source = source
         self.timestamp = timestamp
+        self.initiator = initiator
         self.status = "pending"  # pending, running, completed, failed
         self.files = 0
         self.size = 0
@@ -114,6 +115,7 @@ class SyncModel:
         return {
             "timestamp": self.timestamp,
             "source": self.source,
+            "initiator": self.initiator,
             "status": self.status,
             "files": self.files,
             "size": self.size,
@@ -129,6 +131,7 @@ class SyncModel:
         data = {
             "timestamp": self.timestamp.isoformat() if self.timestamp else None,
             "source": self.source,
+            "initiator": self.initiator,
             "status": self.status,
             "files": self.files,
             "size": self.size,
@@ -146,6 +149,7 @@ class SyncModel:
         # Create raw instance
         sync = cls.__new__(cls)
         sync.source = data["source"]
+        sync.initiator = data.get("initiator")
         sync.status = data["status"]
         sync.files = data["files"]
         sync.size = data["size"]

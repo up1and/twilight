@@ -162,3 +162,30 @@ class TestSyncModel:
         assert restored_sync.files == sync.files
         assert restored_sync.size == sync.size
         assert restored_sync.created == sync.created
+
+    def test_initiator_field_serialization(self):
+        timestamp = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        sync = SyncModel("himawari", timestamp, initiator="worker")
+
+        # to_dict includes initiator
+        result = sync.to_dict()
+        assert result["initiator"] == "worker"
+
+        # to_json includes initiator
+        json_str = sync.to_json()
+        restored = SyncModel.from_json(json_str)
+        assert restored.initiator == "worker"
+
+    def test_initiator_defaults_to_none(self):
+        timestamp = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        sync = SyncModel("himawari", timestamp)
+
+        assert sync.initiator is None
+
+        result = sync.to_dict()
+        assert result["initiator"] is None
+
+        # from_json handles missing initiator gracefully
+        json_str = sync.to_json()
+        restored = SyncModel.from_json(json_str)
+        assert restored.initiator is None

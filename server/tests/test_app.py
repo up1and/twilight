@@ -45,8 +45,13 @@ class TestCreateApp:
         assert hasattr(app, "composite_state")
         
         # Verify managers were initialized correctly
-        mock_task_manager_class.assert_called_once_with(mock_redis)
-        mock_sync_manager_class.assert_called_once_with(mock_redis, mock_task_manager)
+        mock_task_manager_class.assert_called_once_with(
+            mock_redis, available_composites=["ir_clouds", "true_color", "ash", "night_microphysics"]
+        )
+        mock_sync_manager_class.assert_called_once_with(
+            mock_redis, mock_task_manager, 30,
+            auto_create_tasks=False
+        )
         mock_initialize_state.assert_called_once_with(mock_client, [
             "ir_clouds", "true_color", "ash", "night_microphysics"
         ])
