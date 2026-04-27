@@ -53,8 +53,8 @@ def find_tile(composite, z, x, y, timestamp=None):
             img = cog.tile(x, y, z, tilesize=256)
             band_count = img.data.shape[0]
             if band_count == 1:
-                cm = cmap.get("rdgy")
-                content = img.render(colormap=cm)
+                colormap = cmap.get("rdgy")
+                content = img.render(colormap=colormap)
             else:
                 content = img.render()
             return Response(content, mimetype="image/png")

@@ -40,7 +40,7 @@ def create_snapshot_image(presigned_url, bbox):
         # Determine if we need a colormap (single channel data)
         colormap = None
         if img.data.shape[0] == 1:
-            colormap = cmap.get("RdGy")
+            colormap = cmap.get("rdgy")
             
         # Render image to bytes using rio-tiler
         buffer = img.render(colormap=colormap)
