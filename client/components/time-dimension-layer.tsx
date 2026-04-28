@@ -23,10 +23,20 @@ class TimeLayerCache {
   private cache: Map<number, CachedLayer> = new Map();
   private map: L.Map;
   private cacheRangeMinutes: number;
+  private readonly compositeKey: string;
 
-  constructor(map: L.Map, cacheRangeMinutes: number = 60) {
+  constructor(
+    map: L.Map,
+    compositeKey: string = "",
+    cacheRangeMinutes: number = 60
+  ) {
     this.map = map;
+    this.compositeKey = compositeKey;
     this.cacheRangeMinutes = cacheRangeMinutes;
+  }
+
+  getCompositeKey(): string {
+    return this.compositeKey;
   }
 
   has(timestamp: number): boolean {
@@ -130,13 +140,9 @@ const TimeDimensionLayer = forwardRef<
     const isBufferingRef = useRef<boolean>(false);
 
     // Cache system using Map<timestamp, TileLayer>
+    // Scoped to a single composite via compositeKey.
     const layerCache = useRef<TimeLayerCache>(null!);
-    if (!layerCache.current) {
-      layerCache.current = new TimeLayerCache(map, 60);
-    }
     const currentLayerRef = useRef<L.TileLayer | null>(null);
-    const prevUrlTemplateRef = useRef<string>(urlTemplate);
-
     // Expose handle
     useImperativeHandle(
       ref,
@@ -273,11 +279,12 @@ const TimeDimensionLayer = forwardRef<
     useEffect(() => {
       if (!map) return;
 
-      // Composite changed or became unavailable: old cache is invalid
-      if (prevUrlTemplateRef.current !== urlTemplate) {
-        layerCache.current.clear();
+      // Rebuild cache by urlTemplate on composite change
+      const currentKey = layerCache.current?.getCompositeKey();
+      if (currentKey !== urlTemplate) {
+        layerCache.current?.clear();
+        layerCache.current = new TimeLayerCache(map, urlTemplate, 60);
         currentLayerRef.current = null;
-        prevUrlTemplateRef.current = urlTemplate;
       }
 
       if (!urlTemplate) return;
@@ -318,7 +325,7 @@ const TimeDimensionLayer = forwardRef<
         map.off("zoomend", handleViewChange);
         map.off("moveend", handleViewChange);
       };
-    }, [map, currentTime]);
+    }, [map, currentTime, urlTemplate]);
 
     // Cleanup on unmount
     useEffect(() => {
