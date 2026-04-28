@@ -6,7 +6,7 @@ import datetime
 from flask import Blueprint, request, jsonify, current_app
 
 from auth import auth_required
-from utils import parse_iso_timestamp
+from utils import parse_iso_timestamp, delete_minio_objects
 from snapshot import create_single_snapshot, create_series_snapshot
 
 # Create blueprint
@@ -80,6 +80,23 @@ def get_task(task_id):
         }), 404
 
     return jsonify(task.to_dict())
+
+
+@api.route("/tasks/<task_id>", methods=["DELETE"])
+@auth_required
+def delete_task(task_id):
+    """Delete a task by ID"""
+    task = current_app.task_manager.get_task(task_id)
+    if not task:
+        return jsonify({
+            "error": "Not Found",
+            "message": f"Task {task_id} not found"
+        }), 404
+
+    current_app.task_manager.delete_task(task_id)
+    return jsonify({
+        "message": f"Task {task_id} deleted successfully"
+    })
 
 
 @api.route("/tasks", methods=["GET"])
@@ -379,6 +396,46 @@ def get_sync(timestamp):
         }), 404
         
     return jsonify(sync_data)
+
+
+@api.route("/syncs/<timestamp>", methods=["DELETE"])
+@auth_required
+def delete_sync(timestamp):
+    """Delete sync record and associated MinIO raw data"""
+    # Parse timestamp
+    try:
+        parsed_time = parse_iso_timestamp(timestamp)
+    except ValueError:
+        return jsonify({
+            "error": "Bad Request",
+            "message": "Invalid timestamp format. Use ISO 8601 format"
+        }), 400
+
+    source = request.args.get("source", "himawari")
+
+    # Verify sync exists before deleting
+    sync_data = current_app.sync_manager.get_sync(source, parsed_time)
+    if not sync_data:
+        return jsonify({
+            "error": "Not Found",
+            "message": f"No {source} sync found for {timestamp}"
+        }), 404
+
+    current_app.sync_manager.delete_sync(source, parsed_time)
+
+    # Delete associated s3 data
+    time_prefix = f"AHI-L1b-FLDK/{parsed_time.strftime('%Y/%m/%d/%H%M')}"
+    errors = delete_minio_objects(
+        current_app.client, "raw", time_prefix
+    )
+
+    response_data = {
+        "message": f"{source.capitalize()} sync for {timestamp} deleted successfully"
+    }
+    if errors:
+        response_data["warnings"] = errors
+
+    return jsonify(response_data)
 
 
 @api.route("/syncs", methods=["GET"])

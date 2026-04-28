@@ -68,6 +68,25 @@ def default_json_handler(obj):
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 
+def delete_minio_objects(client, bucket, prefix):
+    """Delete objects in a MinIO bucket matching a prefix.
+    """
+    errors = []
+    try:
+        objects = client.list_objects(bucket, prefix=prefix, recursive=True)
+        obj_names = [obj.object_name for obj in objects]
+        if obj_names:
+            deletes = client.remove_objects(bucket, obj_names)
+            for error in deletes:
+                errors.append(str(error))
+
+    except Exception as e:
+        msg = str(e)
+        errors.append(msg)
+
+    return errors
+
+
 def initialize_composite_state(client, available_composites):
     """
     Initialize composite state by finding the latest available timestamp for each composite.

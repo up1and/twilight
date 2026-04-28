@@ -224,6 +224,16 @@ class TaskManager:
             return None
         return {"tasks": json.loads(tasks_data), "resources": json.loads(resources_data)}
 
+    def delete_task(self, task_id):
+        """Delete a task and its profile data"""
+        with self.lock:
+            self.redis.zrem(self.queue_key, task_id)
+            self.redis.hdel(self.tasks_key, task_id)
+            # Remove profile data if present
+            profile_key = f"profiles:{task_id}"
+            self.redis.delete(f"{profile_key}:tasks", f"{profile_key}:resources")
+
+
 class SyncManager:
     def __init__(self, redis_client, expire_days=30):
         self.redis = redis_client
@@ -338,6 +348,13 @@ class SyncManager:
         paginated_results = results[offset : offset + limit]
                 
         return paginated_results, total
+
+    def delete_sync(self, source, timestamp):
+        """Delete sync record"""
+        timestamp_key = self._get_timestamp_key(source, timestamp)
+        with self.lock:
+            self.redis.hdel(self.syncs_key, timestamp_key)
+            self.redis.zrem(self.timestamps_key, timestamp_key)
 
 
 class CompositeStateManager:
