@@ -12,7 +12,7 @@ from rio_tiler.colormap import cmap
 from rio_tiler.errors import TileOutsideBounds
 from rasterio.errors import RasterioIOError
 
-from extensions import cache, client
+from extensions import cache
 from utils import format_to_standard_iso, parse_iso_timestamp, upper_case
 from snapshot import generate_composite_object_name
 

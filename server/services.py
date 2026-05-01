@@ -52,8 +52,6 @@ class TaskManager:
             score = self._calculate_score(task)
             self.redis.zadd(self.queue_key, {task.task_id: score})
 
-            if self.expire_time:
-                self.redis.expire(self.tasks_key, self.expire_time)
             return task
 
     def _get_all_tasks(self):
@@ -180,8 +178,6 @@ class TaskManager:
 
             # Update task in Redis
             self.redis.hset(self.tasks_key, task.task_id, task.to_json())
-            if self.expire_time:
-                self.redis.expire(self.tasks_key, self.expire_time)
             return True
 
     def get_tasks(self, status=None, composite=None, priority=None, limit=20, offset=0):
@@ -210,10 +206,6 @@ class TaskManager:
             self.redis.set(f"{profile_key}:tasks", json.dumps(tasks))
         if resources:
             self.redis.set(f"{profile_key}:resources", json.dumps(resources))
-        
-        if self.expire_time:
-            self.redis.expire(f"{profile_key}:tasks", self.expire_time)
-            self.redis.expire(f"{profile_key}:resources", self.expire_time)
 
     def get_profile(self, task_id):
         """Get profiler data for a task"""
@@ -232,6 +224,22 @@ class TaskManager:
             # Remove profile data if present
             profile_key = f"profiles:{task_id}"
             self.redis.delete(f"{profile_key}:tasks", f"{profile_key}:resources")
+
+    def get_expired(self):
+        """Get list of task objects that have exceeded the expiration time
+        
+        Returns:
+            list: List of expired TaskModel instances
+        """
+        if self.expire_time is None:
+            return []
+
+        cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+            seconds=self.expire_time
+        )
+
+        all_tasks = self._get_all_tasks()
+        return [t for t in all_tasks if t.created < cutoff]
 
 
 class SyncManager:
@@ -266,11 +274,6 @@ class SyncManager:
             # Add to sorted set with unix timestamp as score
             score = int(timestamp.timestamp())
             self.redis.zadd(self.timestamps_key, {timestamp_key: score})
-
-            # Set expiration
-            if self.expire_time:
-                self.redis.expire(self.syncs_key, self.expire_time)
-                self.redis.expire(self.timestamps_key, self.expire_time)
 
     def update_progress(self, source, timestamp, status=None, files=None, size=None, initiator=None):
         """Update sync progress for a timestamp with partial updates
@@ -317,11 +320,6 @@ class SyncManager:
             # Ensure it's in sorted set
             score = int(timestamp.timestamp())
             self.redis.zadd(self.timestamps_key, {timestamp_key: score})
-            
-            # Set expiration
-            if self.expire_time:
-                self.redis.expire(self.syncs_key, self.expire_time)
-                self.redis.expire(self.timestamps_key, self.expire_time)
         
     def get_sync(self, source, timestamp):
         """Get sync status for a timestamp"""
@@ -355,6 +353,37 @@ class SyncManager:
         with self.lock:
             self.redis.hdel(self.syncs_key, timestamp_key)
             self.redis.zrem(self.timestamps_key, timestamp_key)
+
+    def get_expired(self):
+        """Get list of sync objects that have exceeded the expiration time
+        
+        Returns:
+            list: List of expired SyncModel instances
+        """
+        if self.expire_time is None:
+            return []
+
+        cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+            seconds=self.expire_time
+        )
+        cutoff_score = int(cutoff.timestamp())
+
+        # Query ZSet for expired entries (score < cutoff)
+        expired_keys = self.redis.zrangebyscore(
+            self.timestamps_key, "-inf", cutoff_score
+        )
+        
+        expired = []
+        for timestamp_key in expired_keys:
+            sync_json = self.redis.hget(self.syncs_key, timestamp_key)
+            if not sync_json:
+                # Orphaned ZSet member — clean it up
+                self.redis.zrem(self.timestamps_key, timestamp_key)
+                continue
+            
+            expired.append(SyncModel.from_json(sync_json))
+            
+        return expired
 
 
 class CompositeStateManager:

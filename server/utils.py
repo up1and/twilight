@@ -68,21 +68,32 @@ def default_json_handler(obj):
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 
-def delete_minio_objects(client, bucket, prefix):
-    """Delete objects in a MinIO bucket matching a prefix.
+def delete_minio_objects(client, bucket, path):
+    """Delete objects in a MinIO bucket.
+    
+    If path contains a '.', it is treated as a specific object key.
+    Otherwise, it is treated as a prefix for recursive deletion.
     """
     errors = []
     try:
-        objects = client.list_objects(bucket, prefix=prefix, recursive=True)
-        obj_names = [obj.object_name for obj in objects]
-        if obj_names:
-            deletes = client.remove_objects(bucket, obj_names)
-            for error in deletes:
-                errors.append(str(error))
+        # Check if it's a specific file (contains a dot)
+        if "." in path.split("/")[-1]:
+            # Single file deletion
+            try:
+                client.remove_object(bucket, path)
+            except Exception as e:
+                errors.append(str(e))
+        else:
+            # Prefix-based recursive deletion
+            objects = client.list_objects(bucket, prefix=path, recursive=True)
+            obj_names = [obj.object_name for obj in objects]
+            if obj_names:
+                deletes = client.remove_objects(bucket, obj_names)
+                for error in deletes:
+                    errors.append(str(error))
 
     except Exception as e:
-        msg = str(e)
-        errors.append(msg)
+        errors.append(str(e))
 
     return errors
 

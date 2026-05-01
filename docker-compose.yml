@@ -35,6 +35,36 @@ services:
       - minio
     restart: always
 
+  # RQ worker for background tasks
+  rq-worker:
+    build:
+      context: ./server
+    image: twilight-server:latest
+    command: flask rq worker --with-scheduler
+    environment:
+      - FLASK_APP=app.py
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+    depends_on:
+      - redis
+      - minio
+    restart: always
+
+  # RQ cron daemon for scheduled tasks
+  rq-cron:
+    build:
+      context: ./server
+    image: twilight-server:latest
+    command: flask rq cron
+    environment:
+      - FLASK_APP=app.py
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+    depends_on:
+      - redis
+    restart: always
+
   # Frontend web server and reverse proxy
   nginx:
     build:

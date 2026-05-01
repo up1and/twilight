@@ -37,6 +37,12 @@ class TaskModel:
             return (self.ended - self.started).total_seconds()
         return None
 
+    @property
+    def filepath(self):
+        """Generate the path for this task's composite TIFF"""
+        file_name = f"himawari_{self.composite}_{self.timestamp.strftime('%Y%m%d_%H%M')}.tif"
+        return f"{self.composite}/{self.timestamp.strftime('%Y/%m/%d')}/{file_name}"
+
     def to_dict(self):
         return {
             "task_id": self.task_id,
@@ -110,6 +116,11 @@ class SyncModel:
             # Convert bytes to kilobytes and divide by duration
             return int(self.size / 1024 / self.duration)
         return None
+
+    @property
+    def filepath(self):
+        """Generate the path prefix for this sync period's raw HSD files"""
+        return f"AHI-L1b-FLDK/{self.timestamp.strftime('%Y/%m/%d/%H%M')}/"
 
     def to_dict(self):
         return {

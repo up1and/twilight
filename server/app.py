@@ -1,15 +1,20 @@
 """
 Main Flask application entry point
 """
+import os
+import sys
 import logging
 import datetime
 
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from flask import Flask, request, jsonify
 
-from config import auth_key, available_composites, task_expire_days, sync_expire_days, auto_create_tasks_on_sync
+from config import auth_key, available_composites, task_expire_days, sync_expire_days, auto_create_tasks_on_sync, redis_url
 from extensions import init_extensions, redis_client, client
 from services import TaskManager, SyncManager, CompositeStateManager
 from utils import default_json_handler, initialize_composite_state
+
 
 def add_cors_headers(response):
     """Add CORS headers and cache control"""
@@ -48,6 +53,7 @@ def create_app(debug=False):
     app.config["AVAILABLE_COMPOSITES"] = available_composites
     app.config["AUTH_KEY"] = auth_key
     app.config["AUTO_CREATE_TASKS"] = auto_create_tasks_on_sync
+    app.config["REDIS_URL"] = redis_url
 
     # Initialize extensions
     init_extensions(app)
@@ -68,6 +74,10 @@ def create_app(debug=False):
 
     app.after_request(add_cors_headers)
     app.after_request(add_cache_headers)
+
+    # CLI Command Registration
+    from cli import rq_group
+    app.cli.add_command(rq_group, name="rq")
 
     @app.errorhandler(500)
     def internal_server_error(error):
