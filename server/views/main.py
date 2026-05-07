@@ -137,18 +137,67 @@ def legend(composite):
 
     legends = {
         "airmass": [
-            {"color": "#42108e", "label": "Cold"},
-            {"color": "#2b761d", "label": "Warm"},
-            {"color": "#42440b", "label": "Warm airmass with low upper tropospheric humidity"},
-            {"color": "#89070d", "label": "Dry airmass"},
-            {"color": "#ffffff", "label": "High-level thin clouds"},
-            {"color": "#766e13", "label": "Mid-level ice and water clouds"}
+            {"colors": ["#b52007"], "label": "Jet stream / PV / deformation zones/ dry upper level"},
+            {"colors": ["#0a0a8c"], "label": "Cold air mass"},
+            {"colors": ["#548235"], "label": "Warm air mass"},
+            {"colors": ["#6a6e36", "#6f4c01"], "label": "Warm air mass, less moisture"},
+            {"colors": ["#ffffff"], "label": "High think clouds"},
+            {"colors": ["#b5744f"], "label": "Mid-level clouds"},
+            {"colors": ["#335a25"], "label": "Low-level clouds"},
+            {"colors": ["#6e008c"], "label": "Limb effects"}
         ],
         "ash": [
-            {"color": "#FF6B6B", "label": "Thick Ash"},
-            {"color": "#FFE66D", "label": "Moderate Ash"},
-            {"color": "#4ECDC4", "label": "Thin Ash"}
-        ]
+            {"colors": ["#f63232"], "label": "Ash (pure)"},
+            {"colors": ["#43ff89"], "label": "Sulfur dioxide gas (SO2)"},
+            {"colors": ["#eae98f"], "label": "Ash (mixed SO2)"},
+            {"colors": ["#a0bea0"], "label": "Low, thick water clouds"},
+            {"colors": ["#afb464"], "label": "Mid, thick clouds"},
+            {"colors": ["#236e64"], "label": "Mid, thin clouds"},
+            {"colors": ["#947501"], "label": "High, thick ice clouds"},
+            {"colors": ["#01144f"], "label": "High, thin clouds"}
+        ],
+        "convection": [
+            {"colors": ["#ebfe23"], "label": "Strong convection, small ice particles"},
+            {"colors": ["#e07a20"], "label": "Moderate convection, large ice particles"},
+            {"colors": ["#d73610"], "label": "Weak convection, large ice particles"},
+            {"colors": ["#a3cfca"], "label": "Low to mid water clouds"},
+            {"colors": ["#a7ea8f"], "label": "Mid clouds, thick, small water or ice particles"},
+            {"colors": ["#b42650"], "label": "Thin cirrus, large ice particles"},
+            {"colors": ["#a2299c"], "label": "Thin cirrus, small ice particles"},
+            {"colors": ["#cf1a07"], "label": "High, thick clouds, large ice particles"}
+        ],
+        "day_microphysics": [
+            {"colors": ["#e61400"], "label": "Deep precipitating cloud"},
+            {"colors": ["#cd9623"], "label": "Deep precipitating cloud (strong updrafts and severe weather)"},
+            {"colors": ["#501428"], "label": "Thin cirrus clouds, large ice particles"},
+            {"colors": ["#509628"], "label": "Thin cirrus clouds, small ice particles"},
+            {"colors": ["#e69664"], "label": "Thick water clouds, supercooled, small droplets"},
+            {"colors": ["#e6fa64"], "label": "Thick water clouds, supercooled, large droplets"},
+            {"colors": ["#a2299c"], "label": "Thick water clouds, large droplets"},
+            {"colors": ["#dcfab4"], "label": "Thick water clouds, small droplets"}
+        ],
+        "night_microphysics": [
+            {"colors": ["#7dafd7"], "label": "Fog"},
+            {"colors": ["#bbd48a"], "label": "Fog, cold regime"},
+            {"colors": ["#7de6dc"], "label": "Very low, warm cloud"},
+            {"colors": ["#91e691"], "label": "Low, cool cloud"},
+            {"colors": ["#a0b96e"], "label": "Mid water cloud"},
+            {"colors": ["#a5874b"], "label": "Mid, thick, water / ice cloud"},
+            {"colors": ["#0a0a8c"], "label": "High, thin, ice cloud"},
+            {"colors": ["#6e008c"], "label": "High, very thin, ice cloud"},
+            {"colors": ["#820101"], "label": "High, thick cloud"},
+            {"colors": ["#01011e"], "label": "High, opaque cirrus cloud"},
+            {"colors": ["#aa0000"], "label": "High, thick, very cold cloud, noisy"}
+        ],
+        "water_vapor": [
+            {"colors": ["#0133c4"], "label": "Low, mid level moisture"},
+            {"colors": ["#019201"], "label": "Upper level moisture, dry below"},
+            {"colors": ["#10dafb"], "label": "Moisture at all levels, no clouds"},
+            {"colors": ["#010101"], "label": "Dry at all Levels"},
+            {"colors": ["#f789ff"], "label": "Mid level cloud, moist all levels"},
+            {"colors": ["#e401fa"], "label": "Mid level cloud, low mid moisture, dry above"},
+            {"colors": ["#ffffff"], "label": "Convective initiation / High, thick clouds"}
+        ],
     }
     
     if composite in legends:

@@ -1,21 +1,37 @@
 import { useState } from "react";
 import { X } from "lucide-react";
-import "./legend.css";
+import "./map-legend.css";
 
-export interface LegendItem {
-  color: string; // Hex color string, e.g., "#FF6B6B"
-  label: string; // Display text, e.g., "Ash"
+export interface MapLegendItem {
+  colors: string[]; // Array of hex colors, vertically split in the block
+  label: string;
 }
 
-interface LegendProps {
-  items: LegendItem[];
+function getColorStyle(colors: string[]): React.CSSProperties {
+  const n = colors.length;
+  if (n === 0) return {};
+  if (n === 1) return { backgroundColor: colors[0] };
+
+  // Multiple colors: vertical gradient with hard stops (left-to-right bands)
+  const parts = colors.map((c, i) => {
+    const start = (i / n) * 100;
+    const end = ((i + 1) / n) * 100;
+    return `${c} ${start}%, ${c} ${end}%`;
+  });
+  return {
+    background: `linear-gradient(to right, ${parts.join(", ")})`
+  };
+}
+
+interface MapLegendProps {
+  items: MapLegendItem[];
   defaultExpanded?: boolean;
 }
 
-export default function Legend({
+export default function MapLegend({
   items,
   defaultExpanded = false
-}: LegendProps) {
+}: MapLegendProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
   if (!items || items.length === 0) {
@@ -23,7 +39,7 @@ export default function Legend({
   }
 
   return (
-    <div className="legend-container">
+    <div className="map-legend-container">
       {isExpanded ? (
         <div className="legend-wrapper">
           <span
@@ -42,7 +58,7 @@ export default function Legend({
                 <div key={index} className="legend-item">
                   <span
                     className="legend-color-block"
-                    style={{ backgroundColor: item.color }}
+                    style={getColorStyle(item.colors)}
                   />
                   <span className="legend-label">{item.label}</span>
                 </div>

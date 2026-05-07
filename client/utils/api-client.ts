@@ -35,7 +35,7 @@ export async function verifyToken(token: string): Promise<boolean> {
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin"
     });
-    const data = await response.json() as { valid: boolean };
+    const data = (await response.json()) as { valid: boolean };
     return data.valid;
   } catch (error) {
     console.error("Error verifying token:", error);
@@ -76,7 +76,9 @@ export const apiClient = ky.create({
  *   "ash": { "timestamp": "2025-04-20T03:30:00", "availability": "all" }
  * }
  */
-export async function fetchComposites(): Promise<Record<string, CompositeInfo>> {
+export async function fetchComposites(): Promise<
+  Record<string, CompositeInfo>
+> {
   try {
     const data = await apiClient
       .get("/api/composites")
@@ -96,18 +98,18 @@ export async function fetchComposites(): Promise<Record<string, CompositeInfo>> 
  *
  * Example response:
  * [
- *   { "color": "#FF6B6B", "label": "Ash" },
- *   { "color": "#4ECDC4", "label": "Clear" }
+ *   { "colors": ["#FF6B6B"], "label": "Ash" },
+ *   { "colors": ["#43ff89", "#eae98f"], "label": "Ash (mixed SO2)" }
  * ]
  */
 export async function fetchLegend(
   composite: string
-): Promise<{ color: string; label: string }[] | null> {
+): Promise<{ colors: string[]; label: string }[] | null> {
   try {
     const compositeId = composite.replace(/_/g, "-");
     const data = await apiClient
       .get(`/tiles/${compositeId}/legend.json`)
-      .json<{ color: string; label: string }[]>();
+      .json<{ colors: string[]; label: string }[]>();
     return data;
   } catch (error) {
     // Silently return null for composites without legend data
@@ -174,7 +176,6 @@ export async function fetchTasks(
     if (composite) params.append("composite", composite);
     if (priority) params.append("priority", priority);
 
-
     const data = await apiClient
       .get(`/api/tasks?${params.toString()}`)
       .json<TasksResponse>();
@@ -206,7 +207,6 @@ export async function fetchSyncs(
     params.append("per_page", String(perPage));
     if (source) params.append("source", source);
     if (status) params.append("status", status);
-
 
     const data = await apiClient
       .get(`/api/syncs?${params.toString()}`)
@@ -257,7 +257,6 @@ export async function createSnapshot(params: {
   };
 } | null> {
   try {
-
     const data = await apiClient.post("/api/snapshots", { json: params }).json<{
       status: string;
       download_url?: string;
@@ -287,7 +286,6 @@ export async function createTask(params: {
   created: string;
 } | null> {
   try {
-
     const data = await apiClient.post("/api/tasks", { json: params }).json<{
       task_id: string;
       status: string;
@@ -308,7 +306,6 @@ export async function createTask(params: {
  */
 export async function fetchProfile(taskId: string): Promise<Profile | null> {
   try {
-
     const data = await apiClient
       .get(`/api/tasks/${taskId}/profile`)
       .json<Profile>();

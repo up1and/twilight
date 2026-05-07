@@ -12,7 +12,7 @@ import TimeDimensionLayer, {
 import TimeRangeSelector from "../components/time-range-selector";
 import MultiSelectComposite from "../components/multi-select-composite";
 import CoordinatesDisplay from "../components/coordinates-display";
-import Legend from "../components/legend";
+import MapLegend from "../components/map-legend";
 import SideBySide from "../components/side-by-side";
 import SnapshotButton from "../components/snapshot-button";
 import LayerButton from "../components/layer-button";
@@ -200,7 +200,7 @@ export default function MapView() {
 
   // Store legend items for each composite
   const [legends, setLegends] = useState<
-    Record<string, { color: string; label: string }[]>
+    Record<string, { colors: string[]; label: string }[]>
   >({});
 
   // Block time-dependent layers until the real latest composite time is resolved.
@@ -593,8 +593,8 @@ export default function MapView() {
           const side =
             i === 0 && selectedComposites.length === 2 ? "left" : "right";
           return (
-            <div key={composite} className={`legend-position-${side}`}>
-              <Legend items={legends[composite]} defaultExpanded={false} />
+            <div key={composite} className={`map-legend-${side}`}>
+              <MapLegend items={legends[composite]} defaultExpanded={false} />
             </div>
           );
         })}
