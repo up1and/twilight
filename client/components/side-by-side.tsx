@@ -42,10 +42,12 @@ export default function SideBySide({
     const leftContainer = currentLeftLayer?.getContainer();
     const rightContainer = currentRightLayer?.getContainer();
 
-    if (leftContainer && rightContainer) {
+    if (leftContainer) {
       // Left layer - show only left side of divider
       leftContainer.style.clipPath = `polygon(${nw.x}px ${nw.y}px, ${clipX}px ${nw.y}px, ${clipX}px ${se.y}px, ${nw.x}px ${se.y}px)`;
+    }
 
+    if (rightContainer) {
       // Right layer - show only right side of divider
       rightContainer.style.clipPath = `polygon(${clipX}px ${nw.y}px, ${se.x}px ${nw.y}px, ${se.x}px ${se.y}px, ${clipX}px ${se.y}px)`;
     }
