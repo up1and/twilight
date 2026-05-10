@@ -5,7 +5,7 @@ description = "A Himawari Satellite Data Visualization System"
 authors = [{ name = "up1and", email = "piratecb@gmail.com" }]
 requires-python = ">=3.11"
 readme = "README.md"
-license = { text = "MIT" }
+license = { text = "GPL-3.0-or-later" }
 
 [tool.uv.workspace]
 members = ["server", "worker"]

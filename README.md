@@ -25,7 +25,7 @@ Twilight supports ten satellite composites out of the box:
 - `night_microphysics` - Nighttime cloud microphysics using infrared bands.
 - `fog` - Low-level fog and stratus detection.
 - `convection` - Deep convection and overshooting tops.
-- `vapor` - Differential water vapor analysis distinguishing between upper and mid-level humidity layers.
+- `water_vapor` - Differential water vapor analysis distinguishing between upper and mid-level humidity layers.
 
 ## Quick Start
 
@@ -105,4 +105,4 @@ just docs
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the GNU General Public License v3.0 - see the LICENSE file for details.
