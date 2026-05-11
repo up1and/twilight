@@ -1,0 +1,10 @@
+enhancements:
+  fog_ahi:
+    standard_name: fog_ahi
+    operations:
+      - name: stretch
+        method: !!python/name:satpy.enhancements.contrast.stretch
+        kwargs:
+          stretch: crude
+          min_stretch: [-25, -5, 203]
+          max_stretch: [0, 7, 313]

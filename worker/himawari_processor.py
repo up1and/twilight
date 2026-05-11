@@ -5,7 +5,7 @@ import dask
 import psutil
 import numpy as np
 
-from satpy import Scene
+from satpy import Scene, config
 from pyresample import create_area_def
 from contextlib import contextmanager
 
@@ -15,6 +15,9 @@ from dask.distributed import Client, LocalCluster
 from client import upload, check_object_exists
 from utils import logger, timing
 
+# Define recipes config path
+recipes_dir = os.path.join(os.path.dirname(__file__), 'recipes')
+config.set(config_path=[recipes_dir])
 
 # Set cache directory based on OS
 cache_dir = (
@@ -129,7 +132,7 @@ composite_mapping = {
     "ir_clouds": "B13",
     "ash": "ash",
     "airmass": "airmass",
-    "fog": "fog",
+    "fog": "fog_ahi",
     "water_vapor": "water_vapors1",
     "mid_vapor": "mid_vapor",
     "geo_color": "geo_color",

@@ -1,0 +1,16 @@
+sensor_name: ahi
+
+composites:
+  fog_ahi:
+    compositor: !!python/name:satpy.composites.core.GenericCompositor
+    prerequisites:
+      - compositor: !!python/name:satpy.composites.arithmetic.DifferenceCompositor
+        prerequisites:
+          - name: B16
+          - name: B13
+      - compositor: !!python/name:satpy.composites.arithmetic.DifferenceCompositor
+        prerequisites:
+          - name: B13
+          - name: B07
+      - name: B13
+    standard_name: fog_ahi
