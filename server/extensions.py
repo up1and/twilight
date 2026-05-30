@@ -5,7 +5,7 @@ import redis
 from minio import Minio
 from flask_caching import Cache
 
-from config import endpoint, access_key, secret_key, redis_url
+from config import endpoint, access_key, secret_key, redis_url, cache_redis_url
 
 
 class RQ:
@@ -80,7 +80,7 @@ def init_extensions(app):
     # Configure Flask-Caching with RedisCache
     cache_config = {
         "CACHE_TYPE": "RedisCache",
-        "CACHE_REDIS_URL": redis_url,
+        "CACHE_REDIS_URL": cache_redis_url,
         "CACHE_DEFAULT_TIMEOUT": 3600,  # 1 hour default cache timeout
         "CACHE_KEY_PREFIX": "twilight_cache_"
     }

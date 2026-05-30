@@ -24,6 +24,9 @@ secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
 # Default Redis connection URL
 redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
 
+# Redis URL for cache
+cache_redis_url = os.getenv("CACHE_REDIS_URL", redis_url.replace("/0", "/1"))
+
 # Auth key for API authentication
 auth_key = os.getenv("AUTH_KEY", "twilight-secret")
 
