@@ -12,11 +12,11 @@ function getColorStyle(colors: string[]): React.CSSProperties {
   if (n === 0) return {};
   if (n === 1) return { backgroundColor: colors[0] };
 
-  // Multiple colors: vertical gradient with hard stops (left-to-right bands)
+  // Multiple colors: horizontal gradient with hard stops (left-to-right bands)
   const parts = colors.map((c, i) => {
     const start = (i / n) * 100;
     const end = ((i + 1) / n) * 100;
-    return `${c} ${start}%, ${c} ${end}%`;
+    return `${c} ${start}% ${end}%`;
   });
   return {
     background: `linear-gradient(to right, ${parts.join(", ")})`
