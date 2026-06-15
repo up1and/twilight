@@ -141,9 +141,7 @@ def peek_next_task():
     
     task = current_app.task_manager.peek_next_task(priorities=priorities, composites=composites)
     if not task:
-        return jsonify({
-            "message": "No pending tasks"
-        }), 204  # No Content
+        return "", 204  # No Content
 
     return jsonify({
         "task_id": task.task_id,

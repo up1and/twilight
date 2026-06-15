@@ -12,15 +12,15 @@ def auth_required(f):
 
         if len(parts) != 2 or parts[0].lower() != "bearer":
             return jsonify({
-                "title": "Authentication Required",
-                "description": "Please provide a Bearer token in the Authorization header."
+                "error": "Authentication Required",
+                "message": "Please provide a Bearer token in the Authorization header."
             }), 401, challenges
 
         token = parts[1]
         if token != current_app.config.get("AUTH_KEY"):
             return jsonify({
-                "title": "Invalid Token", 
-                "description": "The provided auth token is invalid. Please verify your credentials and try again."
+                "error": "Invalid Token",
+                "message": "The provided auth token is invalid. Please verify your credentials and try again."
             }), 401, challenges
 
         return f(*args, **kwargs)
