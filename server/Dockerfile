@@ -1,5 +1,5 @@
 # Server-specific Dockerfile for Flask API and Tile service
-FROM python:3.12-slim
+FROM python:3.12-slim AS builder
 
 # Configuration for GIS and Python environment
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -8,10 +8,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     UV_SYSTEM_PYTHON=1
 
-# Install essential GIS libraries and FFmpeg for video snapshots
+# Install essential GIS libraries and build tools for compilation
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdal-dev libgeos-dev libproj-dev \
-    ffmpeg g++ make curl wget unzip \
+    g++ make curl wget unzip \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -30,8 +30,25 @@ RUN mkdir -p $PYCOAST_DATA_ROOT && \
     unzip -q /tmp/gshhs.zip -d $PYCOAST_DATA_ROOT && \
     rm /tmp/gshhs.zip
 
-# Create mounted data directory
-RUN mkdir -p /app/data
+
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYCOAST_DATA_ROOT=/usr/local/share/pycoast
+
+# Install runtime libraries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgdal36 libgeos-c1t64 libproj25 \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy compiled Python packages and binaries from builder
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder $PYCOAST_DATA_ROOT $PYCOAST_DATA_ROOT
+
+WORKDIR /app
 
 # Copy source code
 COPY . .

@@ -27,9 +27,6 @@ services:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
-      - MBTILES_DIR=/app/data
-    volumes:
-      - mbtiles_data:/app/data
     depends_on:
       - redis
       - minio
@@ -79,4 +76,3 @@ services:
 
 volumes:
   minio_data:
-  mbtiles_data:

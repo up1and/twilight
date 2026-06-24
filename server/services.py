@@ -401,7 +401,8 @@ class CompositeStateManager:
         for composite, timestamp in composite_states.items():
             # During initialization, always update to ensure all states are properly set in Redis
             # This ensures consistency even when both current and new values are None
-            self.update(composite, timestamp)
+            if timestamp is not None:
+                self.update(composite, timestamp)
 
         # Clean up stale composites that are no longer in available_composites
         # Redis hgetall returns all fields, so stale keys would otherwise persist
