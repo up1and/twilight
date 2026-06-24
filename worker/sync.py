@@ -12,7 +12,7 @@ import requests
 from io import BytesIO
 
 from utils import logger
-from config import endpoint, access_key, secret_key
+from config import endpoint, access_key, secret_key, secure
 
 # Configuration
 noaa_bucket = "noaa-himawari9"
@@ -178,9 +178,10 @@ class SyncProcessor:
         )
 
         # Initialize local MinIO client using boto3
+        protocol = "https" if secure else "http"
         self.minio_s3 = boto3.client(
             "s3",
-            endpoint_url=f"http://{endpoint}",
+            endpoint_url=f"{protocol}://{endpoint}",
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
             region_name="us-east-1"  # MinIO requires a region

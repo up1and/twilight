@@ -5,7 +5,7 @@ from minio.error import S3Error
 from minio.commonconfig import Tags
 
 from utils import logger
-from config import endpoint, access_key, secret_key
+from config import endpoint, access_key, secret_key, secure
 
 
 def get_minio_client():
@@ -14,7 +14,7 @@ def get_minio_client():
         endpoint,
         access_key=access_key,
         secret_key=secret_key,
-        secure=False
+        secure=secure
     )
 
 

@@ -10,17 +10,7 @@ services:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-localhost:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
-    restart: always
-
-  # Monitors NOAA data availability and generates processing tasks
-  worker-task:
-    image: twilight-worker:latest
-    command: python main.py --task
-    environment:
-      - SERVER_URL=${SERVER_URL:-http://localhost:5000}
-      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-localhost:9000}
-      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
-      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_SECURE=${MINIO_SECURE:-false}
     restart: always
 
   # Main satellite image processing worker
@@ -34,6 +24,7 @@ services:
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-localhost:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_SECURE=${MINIO_SECURE:-false}
       - CACHE_SIZE_LIMIT=${CACHE_SIZE_LIMIT:-200}
     restart: always
 

@@ -7,6 +7,7 @@ load_dotenv()
 endpoint = os.getenv("MINIO_ENDPOINT", "127.0.0.1:9000")
 access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
 secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
+secure = os.getenv("MINIO_SECURE", "false").lower() == "true"
 
 # URL of the main server API
 server_url = os.getenv("SERVER_URL", "http://127.0.0.1:5000")

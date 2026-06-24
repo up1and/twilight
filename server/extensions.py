@@ -5,7 +5,7 @@ import redis
 from minio import Minio
 from flask_caching import Cache
 
-from config import endpoint, access_key, secret_key, redis_url, cache_redis_url
+from config import endpoint, access_key, secret_key, redis_url, cache_redis_url, secure
 
 
 class RQ:
@@ -69,7 +69,7 @@ client = Minio(
     endpoint,
     access_key=access_key,
     secret_key=secret_key,
-    secure=False
+    secure=secure
 )
 
 def init_extensions(app):
