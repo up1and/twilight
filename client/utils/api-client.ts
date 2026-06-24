@@ -30,10 +30,8 @@ function getAuthToken(): string {
 // Verify token with backend
 export async function verifyToken(token: string): Promise<boolean> {
   try {
-    const response = await ky.post("/api/auth/verify", {
-      json: { token },
-      headers: { "Content-Type": "application/json" },
-      credentials: "same-origin"
+    const response = await apiClient.post("/api/auth/verify", {
+      json: { token }
     });
     const data = (await response.json()) as { valid: boolean };
     return data.valid;
@@ -43,8 +41,12 @@ export async function verifyToken(token: string): Promise<boolean> {
   }
 }
 
+// API base URL
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+
 // Create a ky instance with default options and dynamic auth token
 export const apiClient = ky.create({
+  prefixUrl: API_BASE,
   headers: {
     "Content-Type": "application/json"
   },
