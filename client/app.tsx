@@ -1,12 +1,12 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Route, Switch, useLocation } from "wouter";
 import { LoaderCircle } from "lucide-react";
-import Map from "./pages/map";
-import Login from "./pages/login";
+import Map from "./views/map";
+import Login from "./views/login";
 import { verifyToken } from "./utils/api-client";
 import { storage } from "./utils/storage";
 
-const Dashboard = lazy(() => import("./pages/dashboard"));
+const Dashboard = lazy(() => import("./views/dashboard"));
 
 function Loading() {
   return (
