@@ -3,6 +3,9 @@ services:
   redis:
     image: redis:alpine
     ports: ["6379:6379"]
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
     restart: always
 
   # Object storage for raw and processed data
@@ -78,4 +81,5 @@ services:
     restart: always
 
 volumes:
+  redis_data:
   minio_data:
