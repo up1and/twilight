@@ -20,7 +20,8 @@ import { useIsMobile } from "../hooks/use-mobile";
 import {
   fetchComposites,
   fetchTileJSON,
-  fetchLegend
+  fetchLegend,
+  resolveApiUrl
 } from "../utils/api-client";
 import { roundToNearestTenMinutes } from "../utils/time-utils";
 import type {
@@ -538,7 +539,7 @@ export default function MapView() {
 
           {/* VectorGrid Layer */}
           <VectorGridLayer
-            url="/tiles/lands/{z}/{x}/{y}.pbf"
+            url={resolveApiUrl("/tiles/lands/{z}/{x}/{y}.pbf")}
             styles={{
               land: {
                 color: "#828282",
@@ -550,7 +551,7 @@ export default function MapView() {
 
           {layers["fir-boundary"] && (
             <VectorGridLayer
-              url="/tiles/firs/{z}/{x}/{y}.pbf"
+              url={resolveApiUrl("/tiles/firs/{z}/{x}/{y}.pbf")}
               styles={{
                 fir: {
                   color: "#a1a1a1",

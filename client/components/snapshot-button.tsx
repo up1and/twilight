@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Camera, Video, Loader2 } from "lucide-react";
-import { createSnapshot, apiClient } from "../utils/api-client";
+import { createSnapshot, apiClient, resolveApiUrl } from "../utils/api-client";
 import type { CompositeType } from "../utils/types";
 import dayjs from "dayjs";
 import "./snapshot-button.css";
@@ -80,7 +80,9 @@ export default function SnapshotButton({
         ) {
           // Trigger download by fetching the image and creating a blob
           try {
-            const imageResponse = await apiClient.get(response.download_url);
+            const imageResponse = await apiClient.get(
+              resolveApiUrl(response.download_url)
+            );
             const blob = await imageResponse.blob();
 
             // Create object URL and trigger download

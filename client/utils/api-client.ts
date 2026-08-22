@@ -30,7 +30,7 @@ function getAuthToken(): string {
 // Verify token with backend
 export async function verifyToken(token: string): Promise<boolean> {
   try {
-    const response = await apiClient.post("/api/auth/verify", {
+    const response = await apiClient.post(apiUrl("/api/auth/verify"), {
       json: { token }
     });
     const data = (await response.json()) as { valid: boolean };
@@ -44,9 +44,19 @@ export async function verifyToken(token: string): Promise<boolean> {
 // API base URL
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
+function apiUrl(path: string): string {
+  return `${API_BASE}${path}`;
+}
+
+export function resolveApiUrl(path: string): string {
+  if (!API_BASE || /^https?:\/\//i.test(path)) {
+    return path;
+  }
+  return `${API_BASE.replace(/\/+$/, "")}${path}`;
+}
+
 // Create a ky instance with default options and dynamic auth token
 export const apiClient = ky.create({
-  prefixUrl: API_BASE,
   headers: {
     "Content-Type": "application/json"
   },
@@ -83,7 +93,7 @@ export async function fetchComposites(): Promise<
 > {
   try {
     const data = await apiClient
-      .get("/api/composites")
+      .get(apiUrl("/api/composites"))
       .json<Record<string, CompositeInfo>>();
     return data;
   } catch (error) {
@@ -110,11 +120,11 @@ export async function fetchLegend(
   try {
     const compositeId = composite.replace(/_/g, "-");
     const data = await apiClient
-      .get(`/tiles/${compositeId}/legend.json`)
+      .get(apiUrl(`/tiles/${compositeId}/legend.json`))
       .json<{ colors: string[]; label: string }[]>();
     return data;
   } catch (error) {
-    // Silently return null for composites without legend data
+    console.error(`Error fetching legend for ${composite}:`, error);
     return null;
   }
 }
@@ -144,9 +154,12 @@ export async function fetchTileJSON(
     const compositeId = composite.replace(/_/g, "-");
 
     const data = await apiClient
-      .get(`/tiles/${compositeId}/tile.json`)
+      .get(apiUrl(`/tiles/${compositeId}/tile.json`))
       .json<TileJSON>();
-    return data;
+    return {
+      ...data,
+      tiles: data.tiles?.map(resolveApiUrl) ?? []
+    };
   } catch (error) {
     console.error(`Error fetching TileJSON for ${composite}:`, error);
     return null;
@@ -179,7 +192,7 @@ export async function fetchTasks(
     if (priority) params.append("priority", priority);
 
     const data = await apiClient
-      .get(`/api/tasks?${params.toString()}`)
+      .get(apiUrl(`/api/tasks?${params.toString()}`))
       .json<TasksResponse>();
     return data;
   } catch (error) {
@@ -211,7 +224,7 @@ export async function fetchSyncs(
     if (status) params.append("status", status);
 
     const data = await apiClient
-      .get(`/api/syncs?${params.toString()}`)
+      .get(apiUrl(`/api/syncs?${params.toString()}`))
       .json<SyncsResponse>();
     return data;
   } catch (error) {
@@ -259,7 +272,9 @@ export async function createSnapshot(params: {
   };
 } | null> {
   try {
-    const data = await apiClient.post("/api/snapshots", { json: params }).json<{
+    const data = await apiClient
+      .post(apiUrl("/api/snapshots"), { json: params })
+      .json<{
       status: string;
       download_url?: string;
       filename?: string;
@@ -288,11 +303,13 @@ export async function createTask(params: {
   created: string;
 } | null> {
   try {
-    const data = await apiClient.post("/api/tasks", { json: params }).json<{
-      task_id: string;
-      status: string;
-      created: string;
-    }>();
+    const data = await apiClient
+      .post(apiUrl("/api/tasks"), { json: params })
+      .json<{
+        task_id: string;
+        status: string;
+        created: string;
+      }>();
     return data;
   } catch (error) {
     console.error("Failed to create task:", error);
@@ -309,7 +326,7 @@ export async function createTask(params: {
 export async function fetchProfile(taskId: string): Promise<Profile | null> {
   try {
     const data = await apiClient
-      .get(`/api/tasks/${taskId}/profile`)
+      .get(apiUrl(`/api/tasks/${taskId}/profile`))
       .json<Profile>();
     return data;
   } catch (error) {
