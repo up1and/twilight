@@ -491,7 +491,7 @@ export default function MapView() {
   }, [selectedComposites]);
 
   return (
-    <main style={{ height: "100vh", width: "100vw", overflow: "hidden" }}>
+    <main className="map-page">
       <div className="map-container">
         {/* Map Container */}
         <MapContainer

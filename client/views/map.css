@@ -4,6 +4,15 @@ body {
   font-family: "Arial, Helvetica, sans-serif";
 }
 
+/* 100dvh tracks the dynamic viewport so bottom-anchored UI stays visible
+   when the iOS URL bar is shown; plain vh kept as fallback */
+.map-page {
+  height: 100vh;
+  height: 100dvh;
+  width: 100vw;
+  overflow: hidden;
+}
+
 .map-container {
   position: relative;
   height: 100%;
@@ -32,6 +41,7 @@ body {
   z-index: 1000;
   width: 100%;
   pointer-events: none;
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* Zoom control styling - treated as a group */

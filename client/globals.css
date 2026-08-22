@@ -121,6 +121,12 @@
   box-sizing: border-box;
 }
 
+/* iOS WebKit UA stylesheet colors button text -apple-system-blue when
+   no explicit color is set; inherit restores the desktop appearance */
+button {
+  color: inherit;
+}
+
 body {
   margin: 0;
   padding: 0;

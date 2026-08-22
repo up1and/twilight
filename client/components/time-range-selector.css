@@ -308,7 +308,7 @@
 
 /* Mobile styles */
 @media (max-width: 768px) {
-  .time-range-selector.mobile {
+  .time-selector-container.mobile .time-range-selector {
     width: 90%; /* Wider on mobile to match timeline width */
     padding: 5px 0 10px;
     /* No background color */
