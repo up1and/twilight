@@ -1,4 +1,4 @@
-sensor_name: ahi
+sensor_name: visir/ahi
 
 composites:
   fog_ahi:
