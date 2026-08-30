@@ -152,8 +152,8 @@ def get_reader_kwargs(data_source, cache=True):
     Returns:
         dict: reader_kwargs for satpy Scene
     """
-    from config import endpoint, access_key, secret_key
-    
+    from config import endpoint, access_key, secret_key, secure
+
     if data_source == "remote":
         # Use remote S3 configuration (anonymous access)
         reader_kwargs = {
@@ -164,13 +164,14 @@ def get_reader_kwargs(data_source, cache=True):
 
     else:  # local
         # Use local minio configuration
+        protocol = "https" if secure else "http"
         reader_kwargs = {
             "storage_options": {
                 "s3": {
                     "key": access_key,
                     "secret": secret_key,
                     "client_kwargs": {
-                        "endpoint_url": f"http://{endpoint}"
+                        "endpoint_url": f"{protocol}://{endpoint}"
                     }
                 }
             }
