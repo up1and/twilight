@@ -138,7 +138,7 @@ class TaskManager:
         return not filters or value in filters
 
     def claim_task(self, task_id, worker_id):
-        """Claim a specific task and mark it as processing"""
+        """Claim a specific task and mark it as running"""
         with self.lock:
             # Check if task still exists in queue
             if not self.redis.zscore(self.queue_key, task_id):
@@ -175,6 +175,8 @@ class TaskManager:
                 task.message = message
             if status in ["completed", "failed"]:
                 task.ended = datetime.datetime.now(datetime.timezone.utc)
+                # Terminal states must not remain claimable via the queue
+                self.redis.zrem(self.queue_key, task_id)
 
             # Update task in Redis
             self.redis.hset(self.tasks_key, task.task_id, task.to_json())

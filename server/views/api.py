@@ -193,10 +193,10 @@ def update_task_status(task_id):
         }), 400
 
     status = data["status"]
-    if status not in ["pending", "processing", "completed", "failed"]:
+    if status not in ["pending", "running", "completed", "failed"]:
         return jsonify({
             "error": "Bad Request",
-            "message": "Invalid status. Must be: pending, processing, completed, failed"
+            "message": "Invalid status. Must be: pending, running, completed, failed"
         }), 400
     
     # Get task details before updating status
@@ -559,5 +559,7 @@ def create_snapshot():
         result["download_url"] = f"/snapshots/{object_name}"
     if result["status"] == "pending":
         return jsonify(result), 202
+    elif result["status"] == "error":
+        return jsonify(result), 500
     else:
         return jsonify(result), 201

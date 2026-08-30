@@ -43,7 +43,7 @@ Returns a paginated list of tasks with optional filtering.
 
 **Query Parameters:**
 
-- ``status`` - Filter by status. One of ``pending``, ``processing``, ``completed``, ``failed``.
+- ``status`` - Filter by status. One of ``pending``, ``running``, ``completed``, ``failed``.
 - ``composite`` - Filter by composite name (underscore format).
 - ``priority`` - Filter by priority. One of ``low``, ``normal``, ``high``.
 - ``page`` - Page number (1-indexed). Default: 1.
@@ -143,7 +143,7 @@ Updates the status of a task. When a task transitions to ``completed``, the serv
 
 **Request Body:**
 
-- ``status`` (required) - New status. One of ``pending``, ``processing``, ``completed``, ``failed``.
+- ``status`` (required) - New status. One of ``pending``, ``running``, ``completed``, ``failed``.
 - ``message`` (optional) - Optional human-readable message, e.g., an error description when setting ``failed``.
 
 **Response (200):**
