@@ -219,25 +219,28 @@ class SyncProcessor:
             return []
 
     def sync_file(self, object_name):
-        """Copy file from NOAA S3 to local MinIO with progress tracking"""
+        """Copy file from NOAA S3 to local MinIO with progress tracking.
+
+        Returns the synced file size, raises if the transfer fails.
+        """
+        # Get file info from NOAA S3
+        response = self.noaa_s3.head_object(Bucket=noaa_bucket, Key=object_name)
+        file_size = response["ContentLength"]
+
+        filename = object_name.split("/")[-1]
+
+        # Create progress bar
+        progress_bar = ProgressBar(filename, file_size)
+
+        # Create BytesIO stream for streaming upload
+        stream = BytesIO()
+
         try:
-            # Get file info from NOAA S3
-            response = self.noaa_s3.head_object(Bucket=noaa_bucket, Key=object_name)
-            file_size = response["ContentLength"]
-
-            filename = object_name.split("/")[-1]
-
-            # Create progress bar
-            progress_bar = ProgressBar(filename, file_size)
-
-            # Create BytesIO stream for streaming upload
-            stream = BytesIO()
-
             # Download from NOAA S3 in chunks and write to stream
             chunk_size = 1024 * 1024  # 1MB chunks
-            
+
             response = self.noaa_s3.get_object(Bucket=noaa_bucket, Key=object_name)
-            
+
             with response["Body"] as body:
                 while True:
                     chunk = body.read(chunk_size)
@@ -260,13 +263,9 @@ class SyncProcessor:
                 ContentLength=file_size
             )
 
-            stream.close()
-
             return file_size
-
-        except Exception as e:
-            logger.error(f"Error syncing {object_name}: {e}")
-            return 0
+        finally:
+            stream.close()
     
     def sync(self, target_time):
         """Sync specific time folder"""
@@ -286,22 +285,36 @@ class SyncProcessor:
 
         existing_files = set(self.list_files(self.minio_s3, local_bucket, time_folder))
         file_count = len(existing_files)
+        failed_files = []
 
         # Find files that need to be synced
         files_to_sync = [f for f in noaa_files if f not in existing_files]
 
         if files_to_sync:
             logger.info(f"Need to sync {len(files_to_sync)} files for {time_folder}")
-            # Sync missing files
-            for i, object_name in enumerate(files_to_sync):
-                file_size = self.sync_file(object_name)
+            status = "running"
+
+            # Sync missing files; failed ones are left out of the counts and
+            # retried by the next sync run for this time slot
+            for object_name in files_to_sync:
+                try:
+                    file_size = self.sync_file(object_name)
+                except Exception as e:
+                    logger.error(f"Error syncing {object_name}: {e}")
+                    failed_files.append(object_name)
+                    continue
+
                 total_size += file_size
                 file_count += 1
-                status = "running"
                 self.sync_client.update_sync(target_time, status=status, files=file_count, size=total_size)
 
-        if file_count >= 160:
+            if failed_files:
+                logger.warning(
+                    f"{len(failed_files)}/{len(files_to_sync)} files failed to sync for {time_folder}"
+                )
+
+        if file_count >= 160 and not failed_files:
             status = "completed"
-            
+
         self.sync_client.update_sync(target_time, status=status)
         return status
