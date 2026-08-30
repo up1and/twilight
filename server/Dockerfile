@@ -56,4 +56,4 @@ COPY . .
 EXPOSE 5000
 
 # Gunicorn server entrypoint for production-grade performance
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "--threads", "2", "--worker-class", "gthread", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "--threads", "2", "--worker-class", "gthread", "app:create_app()"]
