@@ -100,7 +100,7 @@ Sample Configuration
    # Authentication
    AUTH_KEY=change-me-before-deploying
 
-   # Composites (default: all ten types)
+   # Composites (default: all nine types)
    # AVAILABLE_COMPOSITES=ir_clouds,true_color,ash,airmass,day_microphysics,night_microphysics,fog,convection,water_vapor
 
    # Data retention

@@ -15,7 +15,7 @@ For detailed installation guides, configuration, and API reference, please see o
 
 ## Available Composite Types
 
-Twilight supports ten satellite composites out of the box:
+Twilight supports nine satellite composites out of the box:
 
 - `true_color` - Natural-color view using visible red, green, and blue bands.
 - `ir_clouds` - Infrared cloud-top temperature.
@@ -54,7 +54,6 @@ Twilight supports ten satellite composites out of the box:
 
 The worker system supports multiple operational modes via command-line flags (configured in the Docker Compose environment):
 
-- **Task Generation** (`--task`): Monitors NOAA S3 for new data and enqueues processing tasks.
 - **Data Synchronization** (`--sync`): Downloads raw HSD files from NOAA S3 to local MinIO storage.
 - **Composite Worker** (`--worker`): Picks tasks from the queue, generates composites, and uploads tiles.
 
@@ -90,7 +89,7 @@ cd client && npm install && npm run dev
 ### Worker
 
 ```bash
-cd worker && uv run python main.py --task --sync --worker
+cd worker && uv run python main.py --sync --worker
 ```
 
 ## Testing

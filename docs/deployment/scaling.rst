@@ -3,7 +3,7 @@ Scale Worker
 
 Scale Twilight's processing pipeline by tuning worker replicas, RAM allocation per worker, composite type filters, and geographic scope.
 
-Twilight's processing pipeline is designed for horizontal scaling. The ``worker-processor`` role is the compute-intensive stage—it pulls tasks from the queue and uses SatPy to render composite tiles from raw Himawari data. You can run as many processor instances as your hardware supports, while ``worker-sync`` and ``worker-task`` are typically kept as single instances because they perform coordination roles.
+Twilight's processing pipeline is designed for horizontal scaling. The ``worker-processor`` role is the compute-intensive stage—it pulls tasks from the queue and uses SatPy to render composite tiles from raw Himawari data. You can run as many processor instances as your hardware supports, while ``worker-sync`` is typically kept as a single instance because it performs a coordination role.
 
 How Worker Count is Determined Automatically
 --------------------------------------------
@@ -34,13 +34,13 @@ Use the ``--scale`` flag to run multiple ``worker-processor`` containers from a 
 
 Each container independently polls the Redis task queue, so adding containers increases throughput without any configuration changes to the server or other workers.
 
-``worker-sync`` and ``worker-task`` do not benefit from scaling. Run them as a single instance each. Only ``worker-processor`` should be scaled.
+``worker-sync`` does not benefit from scaling. Run it as a single instance. Only ``worker-processor`` should be scaled.
 
 To adjust the replica count on a running stack without restarting other services:
 
 .. code-block:: bash
 
-   docker compose -f docker-compose.workers.yml up -d --scale worker-processor=8 --no-recreate worker-sync worker-task
+   docker compose -f docker-compose.workers.yml up -d --scale worker-processor=8 --no-recreate worker-sync
 
 Filtering by Composite Type
 ---------------------------
@@ -89,7 +89,7 @@ For larger deployments, run each worker role on a separate machine. On each remo
 
    docker compose -f docker-compose.workers.yml up -d worker-processor
 
-The master node continues to run ``worker-sync``, ``worker-task``, and the core stack (``docker-compose.yml``).
+The master node continues to run ``worker-sync`` and the core stack (``docker-compose.yml``).
 
 Tuning Resolution vs. Speed
 ---------------------------

@@ -52,9 +52,9 @@ The client is a single-page application built with Vite. It renders satellite ti
 * Navigate through available timestamps with the time-range selector
 * Select one or two composites from the multi-select dropdown
 * Enable side-by-side split-screen comparison of two composites
-* Configure the API endpoint and bearer token through the settings panel
+* Sign in with a shared Authorization Key on the login page
 
-The API endpoint and token are stored in ``localStorage`` and sent as a ``Bearer`` token on every request to the server.
+The Authorization Key is stored in ``localStorage`` (``auth-token``) and sent as a ``Bearer`` token on every request to the server. The API endpoint is fixed at build time via ``VITE_API_BASE_URL`` and defaults to same-origin (Nginx proxies ``/api/`` and ``/tiles/``).
 
 Server (Flask)
 ~~~~~~~~~~~~~~

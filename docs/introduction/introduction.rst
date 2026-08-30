@@ -33,7 +33,7 @@ Himawari-8/9 data is publicly available on NOAA S3, but consuming it directly re
 Available Composites
 --------------------
 
-Twilight supports ten satellite composites out of the box. The set is configurable through the ``AVAILABLE_COMPOSITES`` environment variable on both the server and the worker.
+Twilight supports nine satellite composites out of the box. The set is configurable through the ``AVAILABLE_COMPOSITES`` environment variable on both the server and the worker.
 
 ===================  ===========================================================================
 Composite            Description

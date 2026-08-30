@@ -34,8 +34,7 @@ Install the server dependencies using ``uv`` and start the Flask tile server.
 .. code-block:: bash
 
    uv sync
-   cd server
-   python app.py
+   uv run --package server server/app.py
 
 Or pass environment variables explicitly to override the defaults:
 
@@ -46,34 +45,32 @@ Or pass environment variables explicitly to override the defaults:
    MINIO_SECRET_KEY=minioadmin \
    REDIS_URL=redis://127.0.0.1:6379/0 \
    AUTH_KEY=twilight-secret \
-   python app.py
+   uv run --package server server/app.py
 
 The server listens on ``http://0.0.0.0:5000``. The ``AUTH_KEY`` value is the bearer token workers and the client use to authenticate against the API.
 
-All environment variables have defaults. If you are running Redis and MinIO with the Docker Compose defaults, you can start the server with just ``python app.py`` and it will connect automatically.
+All environment variables have defaults. If you are running Redis and MinIO with the Docker Compose defaults, you can start the server with just ``uv run --package server server/app.py`` and it will connect automatically.
 
 Step 4: Start the worker modes
 ------------------------------
 
-Install the worker dependencies using ``uv``, then start all three modes together with a single command.
+Install the worker dependencies using ``uv``, then start both modes together with a single command.
 
 .. code-block:: bash
 
    uv sync
-   cd worker
-   python main.py --task --sync --worker
+   uv run --package worker worker/main.py --sync --worker
 
-The three flags activate the three worker modes:
+The two flags activate the two worker modes:
 
 =============  ==========================================================================
 Flag           Role
 =============  ==========================================================================
-``--task``     Monitors NOAA S3 for new data and creates processing tasks in the queue
 ``--sync``     Downloads raw HSD files from NOAA S3 to local MinIO
 ``--worker``   Picks tasks from the queue, generates composites, and uploads tiles to MinIO
 =============  ==========================================================================
 
-Each mode runs as a separate thread inside the same process. You can also run them as separate processes on different machines.
+Each mode runs as a separate thread inside the same process. You can also run them as separate processes on different machines. Processing tasks are created automatically by the server when a sync completes (``AUTO_CREATE_TASKS_ON_SYNC``).
 
 Step 5: Start the client
 ------------------------
@@ -88,15 +85,15 @@ In a new terminal, install Node dependencies and start the Vite development serv
 
 The client starts at ``http://localhost:5173``.
 
-Step 6: Open the browser and configure the API endpoint
--------------------------------------------------------
+Step 6: Open the browser and sign in
+------------------------------------
 
-Open ``http://localhost:5173`` in your browser. Before satellite tiles appear you need to tell the client where the server is and provide the authentication token.
+Open ``http://localhost:5173`` in your browser. You are redirected to the login page, which asks for a single **Authorization Key**:
 
-1. Click the **Settings** button in the interface.
-2. Set the **API endpoint** to ``http://localhost:5000``.
-3. Set the **token** to the value you used for ``AUTH_KEY`` (default: ``twilight-secret``).
-4. Save the settings.
+1. Enter the value you used for ``AUTH_KEY`` (default: ``twilight-secret``).
+2. The key is verified against the server and stored in ``localStorage`` (``auth-token``); it is sent as a ``Bearer`` token on every API request.
+
+The API endpoint is not configured in the browser: the Vite dev server proxies ``/api`` and ``/tiles`` to ``http://localhost:5000``, and production builds bake the endpoint in at build time via ``VITE_API_BASE_URL`` (same-origin by default).
 
 Select a composite from the dropdown and use the time selector to navigate through available imagery.
 

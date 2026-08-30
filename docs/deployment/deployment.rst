@@ -3,32 +3,37 @@ Docker Compose
 
 Deploy Twilight's Flask server, satellite processing workers, MinIO object store, Redis, and Nginx on a single host using Docker Compose.
 
-Docker Compose is the recommended way to run a complete Twilight instance. The setup uses two Compose files: ``docker-compose.yml`` for the core infrastructure (Redis, MinIO, Flask server, and Nginx), and ``docker-compose.workers.yml`` for the three worker roles that download and process satellite data.
+Docker Compose is the recommended way to run a complete Twilight instance. The setup uses two Compose files: ``docker-compose.yml`` for the core infrastructure (Redis, MinIO, Flask server, RQ maintenance worker/cron, and Nginx), and ``docker-compose.workers.yml`` for the two worker roles that download and process satellite data.
 
 Services Overview
 -----------------
 
-The core stack defines four services:
+The core stack defines six services:
 
 =============  ====================  ==========================  ===========================================
 Service        Image                 Port(s)                     Role
 =============  ====================  ==========================  ===========================================
-redis          redis:alpine          6379                        Task queue and state management
+redis          redis:alpine          127.0.0.1:6379              Task queue and state management
 minio          minio/minio           9000, 9001                  Object storage for raw and processed tiles
 server         twilight-server       5000 (internal)             Flask API and tile server
+rq-worker      twilight-server       —                           Executes scheduled maintenance jobs (prune)
+rq-cron        twilight-server       —                           Enqueues daily maintenance jobs on a schedule
 nginx          twilight-client       80                          Static frontend and reverse proxy
 =============  ====================  ==========================  ===========================================
 
 Two named volumes are created automatically:
 
+* ``redis_data`` — persists the Redis dataset across restarts
 * ``minio_data`` — persists all MinIO objects across restarts
-* ``mbtiles_data`` — persists MBTiles files served by the Flask server
 
-The worker Compose file adds three additional services that all use the ``twilight-worker:latest`` image:
+MBTiles vector basemaps (``natural_earth.mbtiles``, ``firs.mbtiles``) are read from the ``data/`` directory next to the server package; they are not covered by a named volume.
+
+The worker Compose file adds two additional services that both use the ``twilight-worker:latest`` image:
 
 * ``worker-sync`` — syncs raw HSD files from NOAA S3 to local MinIO
-* ``worker-task`` — monitors data availability and generates processing tasks
 * ``worker-processor`` — pulls tasks from the queue and generates composite tiles
+
+Processing tasks are created automatically by the server when a sync completes (``AUTO_CREATE_TASKS_ON_SYNC``), so no separate task-generation role exists.
 
 Step-by-step Deployment
 -----------------------
@@ -80,7 +85,7 @@ Starting only the named services ensures the images are built before the workers
 Step 4: Start the workers
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Start all three worker roles using the separate Compose file:
+Start both worker roles using the separate Compose file:
 
 .. code-block:: bash
 
@@ -92,11 +97,10 @@ Each worker role runs a different command against the same image:
 Worker                   Command
 =======================  ===========================
 worker-sync              python main.py --sync
-worker-task              python main.py --task
 worker-processor         python main.py --worker
 =======================  ===========================
 
-``worker-sync`` and ``worker-task`` are typically run as single instances. ``worker-processor`` can be scaled horizontally.
+``worker-sync`` is typically run as a single instance. ``worker-processor`` can be scaled horizontally.
 
 Step 5: Access the application
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -113,7 +117,7 @@ Worker Environment Variables
 ==================  =========  ====================================================================================
 Variable            Default    Description
 ==================  =========  ====================================================================================
-CACHE_SIZE_LIMIT    200        Maximum size of the local satellite data cache in GB, mounted at /tmp/himawari_cache
+CACHE_SIZE_LIMIT    200        Maximum size of the local satellite data cache in GB, mounted at /tmp/satpy_cache
 ==================  =========  ====================================================================================
 
 Tune ``CACHE_SIZE_LIMIT`` based on the available disk space on your Docker host. Each 10-minute Himawari observation set is approximately 1–2 GB of raw HSD data before processing.

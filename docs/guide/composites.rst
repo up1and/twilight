@@ -1,9 +1,9 @@
 Satellite Composites
 ====================
 
-Overview of all ten Twilight satellite composites, what each one reveals scientifically, and how to select and compare them in the web UI.
+Overview of all nine Twilight satellite composites, what each one reveals scientifically, and how to select and compare them in the web UI.
 
-Twilight supports ten satellite composites derived from Himawari-8/9 AHI data. Each composite highlights a different physical property of the atmosphere or Earth's surface, making it suited to specific monitoring scenarios.
+Twilight supports nine satellite composites derived from Himawari-8/9 AHI data. Each composite highlights a different physical property of the atmosphere or Earth's surface, making it suited to specific monitoring scenarios.
 
 Composite Reference
 -------------------
@@ -140,7 +140,7 @@ Side-by-side mode uses the same timestamp for both composites. Use the time sele
 Limiting Which Composites Are Processed
 ---------------------------------------
 
-By default the server and worker process all ten composites. You can restrict this set with the ``AVAILABLE_COMPOSITES`` environment variable, which accepts a comma-separated list.
+By default the server and worker process all nine composites. You can restrict this set with the ``AVAILABLE_COMPOSITES`` environment variable, which accepts a comma-separated list.
 
 .. code-block:: bash
 
