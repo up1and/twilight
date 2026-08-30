@@ -22,7 +22,7 @@ def worker(ctx):
     with_scheduler = '--with-scheduler' in ctx.args
     
     # Get worker from extension with proper context handling
-    worker = rq.get_worker('default')
+    worker = rq.get_worker('default', 'maintenance')
     worker.work(with_scheduler=with_scheduler)
 
 @rq_group.command()
