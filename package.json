@@ -3,6 +3,7 @@
     "dev": "npm run dev --prefix client",
     "build": "npm run build --prefix client",
     "lint": "npm run lint --prefix client",
+    "test": "npm test --prefix client",
     "preview": "npm run preview --prefix client",
     "install:client": "cd client && npm install"
   }
