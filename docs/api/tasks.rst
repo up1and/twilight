@@ -9,7 +9,7 @@ The task API manages the queue of Cloud-Optimized GeoTIFF (COG) generation jobs.
 
    Authenticate every request by setting ``Authorization: Bearer <token>``, where ``<token>`` is the value of the ``AUTH_KEY`` environment variable on the server (default: ``twilight-secret``).
 
-Tasks expire after a configurable number of days (default 7, controlled by ``TASK_EXPIRE_DAYS``). Creating a task for a composite/timestamp pair that already has a pending or running task returns the existing task rather than creating a duplicate.
+Tasks expire a configurable number of days after creation (default 7, controlled by ``TASK_EXPIRE_DAYS``), regardless of status. The scheduled prune job removes expired task records from Redis and deletes their COG files from the MinIO ``himawari`` bucket. Creating a task for a composite/timestamp pair that already has a pending or running task returns the existing task rather than creating a duplicate.
 
 Create Task
 -----------
@@ -111,12 +111,27 @@ Returns the full task object for a given task ID.
      "message": null
    }
 
+Delete Task
+-----------
+
+``DELETE /api/tasks/{task_id}``
+
+Deletes a task record and any profiling data associated with it. If the task is still queued, it is removed from the queue. The COG file in MinIO is not deleted.
+
+**Response (200):**
+
+.. code-block:: json
+
+   {"message": "Task ir_clouds_20250420_040000_a1b2c3d4 deleted successfully"}
+
+Returns ``404`` when the task does not exist.
+
 Claim Task
 ----------
 
 ``PUT /api/tasks/{task_id}/claim``
 
-Atomically claims a pending task for a specific worker, marking its status as ``running``. Once claimed, the task is removed from the priority queue so other workers cannot claim it.
+Atomically claims a pending task for a specific worker, marking its status as ``running``. Once claimed, the task is removed from the priority queue so other workers cannot claim it. Returns ``404`` if the task does not exist or has already been claimed.
 
 **Request Body:**
 
@@ -139,7 +154,7 @@ Update Task Status
 
 ``PUT /api/tasks/{task_id}/status``
 
-Updates the status of a task. When a task transitions to ``completed``, the server also updates the composite state so that tile requests for that timestamp are immediately served.
+Updates the status of a task. When a task transitions to ``completed``, the server advances the composite state to that timestamp, but only if it is newer than the timestamp already recorded for the composite. Completing an older task therefore does not roll the composite's latest timestamp backwards. Tasks that reach ``completed`` or ``failed`` are removed from the queue so they cannot be claimed again.
 
 **Request Body:**
 

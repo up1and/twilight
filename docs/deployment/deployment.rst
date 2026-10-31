@@ -33,7 +33,7 @@ The worker Compose file adds two additional services that both use the ``twiligh
 * ``worker-sync`` — syncs raw HSD files from NOAA S3 to local MinIO
 * ``worker-processor`` — pulls tasks from the queue and generates composite tiles
 
-Processing tasks are created automatically by the server when a sync completes (``AUTO_CREATE_TASKS_ON_SYNC``), so no separate task-generation role exists.
+The server creates processing tasks when a sync completes, but only if ``AUTO_CREATE_TASKS_ON_SYNC=true``; it defaults to ``false``. The bundled ``docker-compose.yml`` does not forward this variable, so add it to the ``server`` service's ``environment`` list to enable automatic task creation in Compose.
 
 Step-by-step Deployment
 -----------------------
@@ -74,13 +74,13 @@ CACHE_SIZE_LIMIT    200                     Maximum on-disk cache per worker-pro
 Step 3: Build and start the core services
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Build the server and client images, then start Redis, MinIO, the Flask server, and Nginx:
+Build the server and client images, then start Redis, MinIO, the Flask server, the RQ maintenance services, and Nginx:
 
 .. code-block:: bash
 
-   docker compose up -d redis minio server nginx
+   docker compose up -d redis minio server rq-worker rq-cron nginx
 
-Starting only the named services ensures the images are built before the workers try to use them. MinIO's web console is available at ``http://localhost:9001`` once the container is healthy.
+Starting only the named services ensures the images are built before the workers try to use them. ``rq-worker`` executes the scheduled prune jobs and ``rq-cron`` enqueues them; without them, expired tasks and syncs are never cleaned up. MinIO's web console is available at ``http://localhost:9001`` once the container is healthy.
 
 Step 4: Start the workers
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -105,9 +105,11 @@ worker-processor         python main.py --worker
 Step 5: Access the application
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Open your browser and navigate to ``http://localhost``. Nginx serves the React frontend on port ``80`` and proxies API and tile requests to the Flask server at ``http://server:5000``.
+Open your browser and navigate to ``http://localhost``. The map and tile endpoints are public, so imagery loads without signing in. To use the dashboard and task management, open ``http://localhost/login`` and enter the ``AUTH_KEY`` from your ``.env``; a successful sign-in redirects to ``/dashboard``.
 
-The Nginx configuration mounts ``./docker/nginx/nginx.conf`` into the container. It routes ``/api/`` and ``/tiles/`` to the server and serves the compiled React SPA from ``/usr/share/nginx/html`` for all other paths.
+Nginx serves the React frontend on port ``80`` and proxies API and tile requests to the Flask server at ``http://server:5000``.
+
+The Nginx configuration mounts ``./docker/nginx/nginx.conf`` into the container. It routes ``/api/``, ``/tiles/``, and ``/snapshots/`` to the server and serves the compiled React SPA from ``/usr/share/nginx/html`` for all other paths.
 
 Worker Environment Variables
 ----------------------------
@@ -121,6 +123,8 @@ CACHE_SIZE_LIMIT    200        Maximum size of the local satellite data cache in
 ==================  =========  ====================================================================================
 
 Tune ``CACHE_SIZE_LIMIT`` based on the available disk space on your Docker host. Each 10-minute Himawari observation set is approximately 1–2 GB of raw HSD data before processing.
+
+``docker-compose.workers.yml`` only forwards ``SERVER_URL``, ``MINIO_ENDPOINT``, ``MINIO_ACCESS_KEY``, ``MINIO_SECRET_KEY``, ``MINIO_SECURE``, and ``CACHE_SIZE_LIMIT``. The worker also reads ``PRIORITIES``, ``COMPOSITES``, ``MAX_RESOLUTION``, ``BBOX``, ``RESAMPLER``, ``MEM_PER_WORKER``, and ``SYSTEM_MARGIN``, but Compose will not pass them through from ``.env`` unless you add them to the service's ``environment`` list. Likewise, ``AUTH_KEY`` is not forwarded and falls back to the worker default, so change both defaults or add the variable explicitly when using a custom key.
 
 Viewing Logs
 ------------

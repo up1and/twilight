@@ -3,7 +3,7 @@ Worker
 
 Configure Twilight workers: MinIO and server connections, task filtering, resolution, bounding box, cache, resampling, and memory scaling.
 
-Workers are stateless processes that connect to the shared MinIO store and the Flask server. Each worker role — sync, task generator, and processor — reads the same environment variables but uses only the subset relevant to its function. You can run workers on the same host as the server or on separate machines by pointing ``SERVER_URL`` and ``MINIO_ENDPOINT`` at the master node.
+Workers are stateless processes that connect to the shared MinIO store and the Flask server. Each worker mode — sync (``--sync``) and processor (``--worker``) — reads the same environment variables but uses only the subset relevant to its function. You can run workers on the same host as the server or on separate machines by pointing ``SERVER_URL`` and ``MINIO_ENDPOINT`` at the master node.
 
 Connection Settings
 -------------------
@@ -31,6 +31,14 @@ Access key for MinIO. Must match the value configured on the MinIO server.
 - **Default:** ``minioadmin``
 
 Secret key for MinIO. Must match the value configured on the MinIO server.
+
+``MINIO_SECURE``
+~~~~~~~~~~~~~~~~
+
+- **Type:** boolean (``true`` / ``false``)
+- **Default:** ``false``
+
+Whether to use HTTPS when connecting to MinIO. Must match the server's setting.
 
 ``SERVER_URL``
 ~~~~~~~~~~~~~~
@@ -77,6 +85,10 @@ Comma-separated list of composite types this worker will process. Leave empty to
 
    COMPOSITES=ir_clouds,true_color
 
+.. note::
+
+   The bundled ``docker-compose.workers.yml`` only forwards ``SERVER_URL``, the ``MINIO_*`` settings, and ``CACHE_SIZE_LIMIT``. Variables such as ``PRIORITIES``, ``COMPOSITES``, ``MAX_RESOLUTION``, ``BBOX``, ``RESAMPLER``, ``MEM_PER_WORKER``, and ``SYSTEM_MARGIN`` must be added to the relevant service's ``environment`` list before they take effect in Compose.
+
 Image Processing
 ----------------
 
@@ -107,18 +119,7 @@ Geographic bounding box for processed output, as four comma-separated decimal va
 - **Type:** string
 - **Default:** ``nearest``
 
-Resampling algorithm used when reprojecting satellite data. Accepted values: ``nearest``, ``bilinear``, ``native``. ``nearest`` is fastest; ``bilinear`` produces smoother output at the cost of extra CPU time; ``native`` delegates resampling to the underlying reader.
-
-Task Generator
---------------
-
-``AVAILABLE_COMPOSITES``
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-- **Type:** string
-- **Default:** ``ir_clouds,true_color,ash,airmass,day_microphysics,night_microphysics,fog,convection,water_vapor``
-
-Comma-separated list of composites for which the task generator (``--task`` mode) will create processing tasks. This should match or be a subset of ``AVAILABLE_COMPOSITES`` on the server.
+Resampler passed to SatPy when reprojecting the scene onto the target bounding box. ``nearest`` is fastest; ``bilinear`` produces smoother output at the cost of extra CPU time. Any SatPy resampler name works if its optional dependencies are installed. The worker always performs a native resample first, then applies this resampler for the final target area.
 
 Cache
 -----
@@ -134,7 +135,7 @@ Maximum size of the local satellite data cache in gigabytes. When the cache exce
 Memory Management
 -----------------
 
-The processor worker auto-scales the number of parallel Dask threads based on available system RAM. Two variables control this behaviour.
+The processor worker auto-scales its Dask parallelism based on available system RAM. Two variables control this behaviour.
 
 ``MEM_PER_WORKER``
 ~~~~~~~~~~~~~~~~~~
@@ -142,7 +143,7 @@ The processor worker auto-scales the number of parallel Dask threads based on av
 - **Type:** number
 - **Default:** ``7.0``
 
-Estimated RAM consumption per parallel Dask thread in gigabytes. The worker uses this value together with ``SYSTEM_MARGIN`` to calculate how many threads to run concurrently.
+Estimated peak RAM consumption per parallel processing task in gigabytes. The worker uses this value together with ``SYSTEM_MARGIN`` to calculate how many Dask workers to run concurrently.
 
 ``SYSTEM_MARGIN``
 ~~~~~~~~~~~~~~~~~
@@ -150,9 +151,9 @@ Estimated RAM consumption per parallel Dask thread in gigabytes. The worker uses
 - **Type:** number
 - **Default:** ``4.0``
 
-Amount of RAM in gigabytes to keep free for the operating system and other processes. The number of threads is ``floor((available_ram - SYSTEM_MARGIN) / MEM_PER_WORKER)``, capped at the number of logical CPU cores.
+Amount of RAM in gigabytes to keep free for the operating system and other processes. At startup the worker measures currently available RAM, computes ``floor((available_ram - SYSTEM_MARGIN) / MEM_PER_WORKER)``, and clamps the result to at least 1 and at most the number of logical CPU cores available to the process.
 
-For example, on a host with 32 GB of RAM and the default settings, the worker allocates ``floor((32 - 4) / 7) = 4`` parallel Dask threads. Reduce ``MEM_PER_WORKER`` only if your workload consistently uses less memory; setting it too low will cause out-of-memory errors.
+For example, on a 32 GB host with 12 GB already in use and the default settings, ``available_ram`` is 20 GB and the worker allocates ``floor((20 - 4) / 7) = 2`` Dask workers. Because the calculation uses live available memory rather than total memory, the count can differ between restarts on a busy host. Reduce ``MEM_PER_WORKER`` only if your workload consistently uses less memory; setting it too low will cause out-of-memory errors.
 
 Sample Configuration
 --------------------
@@ -166,6 +167,7 @@ Sample Configuration
    MINIO_ENDPOINT=minio:9000
    MINIO_ACCESS_KEY=minioadmin
    MINIO_SECRET_KEY=minioadmin
+   MINIO_SECURE=false
    AUTH_KEY=change-me-before-deploying
 
    # Process all composites and priorities (defaults)

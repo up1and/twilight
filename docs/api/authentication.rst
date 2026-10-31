@@ -109,8 +109,8 @@ When a protected endpoint receives a missing or invalid token, it responds with 
 .. code-block:: json
 
    {
-     "title": "Authentication Required",
-     "description": "Please provide a Bearer token in the Authorization header."
+     "error": "Authentication Required",
+     "message": "Please provide a Bearer token in the Authorization header."
    }
 
 **Wrong token value:**
@@ -118,8 +118,8 @@ When a protected endpoint receives a missing or invalid token, it responds with 
 .. code-block:: json
 
    {
-     "title": "Invalid Token",
-     "description": "The provided auth token is invalid. Please verify your credentials and try again."
+     "error": "Invalid Token",
+     "message": "The provided auth token is invalid. Please verify your credentials and try again."
    }
 
 The server also sends a ``WWW-Authenticate: Bearer realm="api"`` response header with every 401.

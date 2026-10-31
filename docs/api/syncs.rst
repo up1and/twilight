@@ -3,7 +3,7 @@ Syncs
 
 Create and update sync records for raw Himawari HSD file ingestion from NOAA S3, and query download progress by timestamp and source.
 
-The sync API tracks raw satellite data download operations. Each sync record represents one 10-minute observation slot being ingested from a source (by default ``himawari``). Sync records are retained for up to 30 days (configurable via ``SYNC_EXPIRE_DAYS``). All endpoints require authentication.
+The sync API tracks raw satellite data download operations. Each sync record represents one 10-minute observation slot being ingested from a source (by default ``himawari``). Sync records expire 30 days after their observation timestamp by default (configurable via ``SYNC_EXPIRE_DAYS``); the scheduled prune job removes the record and deletes the corresponding raw files from the MinIO ``raw`` bucket. All endpoints require authentication.
 
 .. note::
 
@@ -26,7 +26,7 @@ completed      All files were downloaded successfully
 failed         Download encountered an error
 =============  ========================================
 
-When a sync transitions to ``completed``, the task manager automatically promotes any matching pending tasks to ``high`` priority so workers process the new data as quickly as possible.
+The server does not decide when a download is complete; the sync worker reports ``completed`` once at least 160 files are present and no file failed. When a sync transitions to ``completed`` through an update marked ``initiator: "sync"``, the server promotes matching pending ``normal`` tasks to ``high``. If ``AUTO_CREATE_TASKS_ON_SYNC`` is enabled, it also creates a task for every composite in ``AVAILABLE_COMPOSITES``. Promotions and creations are skipped when the status was already ``completed`` or when the update does not claim ``initiator: "sync"``.
 
 Create Sync
 -----------
@@ -69,6 +69,7 @@ Updates an existing sync record with progress information. You can update any co
 - ``status`` (optional) - New status. One of ``pending``, ``running``, ``completed``, ``failed``. Setting ``running`` records the start time if not already set.
 - ``files`` (optional) - Total number of files downloaded so far.
 - ``size`` (optional) - Total bytes downloaded so far.
+- ``initiator`` (optional) - Who is reporting the update. Set to ``sync`` (as the bundled worker does) so that a transition to ``completed`` can promote tasks and, when enabled, create new ones.
 
 **Response (200):**
 
@@ -102,6 +103,7 @@ Returns the sync record for a specific observation time and source.
    {
      "timestamp": "2025-04-20T04:00:00+00:00",
      "source": "himawari",
+     "initiator": null,
      "status": "completed",
      "files": 160,
      "size": 524288000,
@@ -112,6 +114,8 @@ Returns the sync record for a specific observation time and source.
      "created": "2025-04-20T04:00:00+00:00"
    }
 
+``initiator`` records who created the sync record. The bundled worker currently leaves it ``null``: it creates the record with a plain ``POST`` and then sends ``initiator: "sync"`` on progress updates, which is what triggers promotion and task creation.
+
 **Status codes:**
 
 ======  ==========================================
@@ -121,6 +125,25 @@ Status  Description
 400     Invalid timestamp format
 404     No sync found for the given timestamp and source
 ======  ==========================================
+
+Delete Sync
+-----------
+
+``DELETE /api/syncs/{timestamp}``
+
+Deletes a sync record and the raw HSD files for that observation slot from the MinIO ``raw`` bucket.
+
+**Query Parameters:**
+
+- ``source`` - Data source of the record to delete. Default: ``himawari``.
+
+**Response (200):**
+
+.. code-block:: json
+
+   {"message": "Himawari sync for 2025-04-20T04:00:00Z deleted successfully"}
+
+If some raw objects could not be removed, the response also contains a ``warnings`` array describing the failures. Returns ``404`` when no matching record exists and ``400`` for an invalid timestamp.
 
 List Syncs
 ----------

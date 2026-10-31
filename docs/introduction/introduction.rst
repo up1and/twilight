@@ -18,7 +18,7 @@ A React and TypeScript web application built with Vite. Renders satellite tiles 
 Server
 ~~~~~~
 
-A Flask REST API that serves map tiles from MinIO, provides TileJSON metadata for the client, manages the distributed task queue in Redis, and tracks raw data sync status.
+A Flask REST API that serves map tiles from MinIO, provides TileJSON metadata for the client, manages the distributed task queue in Redis, tracks raw data sync status, and generates PNG/MP4 snapshots.
 
 Worker
 ~~~~~~
@@ -33,7 +33,7 @@ Himawari-8/9 data is publicly available on NOAA S3, but consuming it directly re
 Available Composites
 --------------------
 
-Twilight supports nine satellite composites out of the box. The set is configurable through the ``AVAILABLE_COMPOSITES`` environment variable on both the server and the worker.
+Twilight supports nine satellite composites out of the box. The server controls which composites it advertises and creates tasks for through ``AVAILABLE_COMPOSITES``; each worker can further restrict the tasks it accepts with ``COMPOSITES`` (see :doc:`../guide/composites`).
 
 ===================  ===========================================================================
 Composite            Description
@@ -46,7 +46,7 @@ day_microphysics     Daytime cloud microphysics (particle size and phase)
 night_microphysics   Nighttime cloud microphysics using infrared bands
 fog                  Low-level fog and stratus detection
 convection           Deep convection and overshooting tops
-water_vapor          Differential  water vapor
+water_vapor          Differential water vapor
 ===================  ===========================================================================
 
 What You Need to Run It
@@ -55,6 +55,6 @@ What You Need to Run It
 * **Python 3.11+** — for the server and worker processes
 * **Node.js 18+** — for the client development server and build tooling
 * **Docker and Docker Compose** — to run Redis (task queue) and MinIO (tile and raw data storage)
-* **Outbound internet access** — the worker fetches raw HSD files from ``noaa-himawari8/9`` on AWS S3 anonymously
+* **Outbound internet access** — the worker fetches raw HSD files anonymously from the ``noaa-himawari9`` bucket on AWS S3
 
 The worker reads approximately 160 files per ten-minute observation interval from NOAA S3. Make sure your network and disk have enough headroom for continuous ingestion.

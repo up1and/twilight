@@ -96,8 +96,8 @@ convection — Convection
 * Monitoring overshooting convective tops
 * Nowcasting for aviation turbulence and lightning risk
 
-water_vapor — Differential  water vapor
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+water_vapor — Differential water vapor
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 **What it shows:** A composite analysis of the vertical moisture gradient. It combines the upper-level (6.2 µm) and mid-level (7.3 µm) water vapor channels to distinguish 
 the depth and altitude of moisture. **Green** tones typically represent high-level moisture/clouds, while **blue** tones indicate mid-to-lower level moisture.
@@ -140,18 +140,20 @@ Side-by-side mode uses the same timestamp for both composites. Use the time sele
 Limiting Which Composites Are Processed
 ---------------------------------------
 
-By default the server and worker process all nine composites. You can restrict this set with the ``AVAILABLE_COMPOSITES`` environment variable, which accepts a comma-separated list.
+By default the server advertises all nine composites, auto-creation (when enabled) queues tasks for all nine, and the worker processes every task it is offered. Restricting the set takes two different variables:
+
+``AVAILABLE_COMPOSITES`` (server)
+   Comma-separated list of composites the API accepts. It controls which composites appear in ``/api/composites``, which ``/tiles/{composite}`` requests succeed, and which tasks the server creates automatically when a sync completes. A composite missing from this list is rejected with ``404`` and no task is created for it.
+
+``COMPOSITES`` (worker)
+   Comma-separated list of composites the worker will pick up. When empty (the default), the worker processes every task it receives.
 
 .. code-block:: bash
 
-   # Server — controls which composites the API accepts
+   # Server — advertised composites, tile requests, and auto-created tasks
    AVAILABLE_COMPOSITES=ir_clouds,true_color,ash
 
-   # Worker — controls which composites the task generator enqueues
-   AVAILABLE_COMPOSITES=ir_clouds,true_color,ash
+   # Worker — only claim tasks for these composites
+   COMPOSITES=ir_clouds,true_color,ash
 
-Set the variable to the same value in both the server and worker environments. The server rejects requests for composites that are not in its list, and the task generator only creates tasks for composites in its list.
-
-.. warning::
-
-   If the server's ``AVAILABLE_COMPOSITES`` is narrower than the worker's, the worker may create tasks that the server will refuse. Keep both lists in sync.
+Restricting ``AVAILABLE_COMPOSITES`` alone is usually enough: the server will not create tasks for unlisted composites, and the worker only sees tasks the server offers. Use worker ``COMPOSITES`` when several workers share one queue and you want to split work between them.

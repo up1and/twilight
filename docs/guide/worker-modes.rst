@@ -1,27 +1,20 @@
 Worker Modes
 ============
 
-Guide to the task generator, sync, and composite worker modes: what each does, how data source resolution works, and when to combine or separate them.
+Guide to the sync and composite worker modes: what each does, how data source resolution works, and when to combine or separate them.
 
-The Twilight worker is a single Python process (``worker/main.py``) that can run in up to three concurrent modes, each responsible for a distinct stage of the processing pipeline. You activate modes with command-line flags and can combine any subset of them in a single invocation.
+The Twilight worker is a single Python process (``worker/main.py``) that can run in two concurrent modes: data synchronization (``--sync``) and composite processing (``--worker``). You activate modes with command-line flags and can combine both in a single invocation.
 
-Modes
------
+Task Creation
+-------------
 
---task — Task Generator
-~~~~~~~~~~~~~~~~~~~~~~~
+There is no separate task-generator mode. Tasks are created by the server:
 
-The task generator monitors the NOAA Himawari-9 S3 bucket for new data and creates processing tasks on the server.
+* When a sync record transitions to ``completed`` with ``initiator="sync"``, the server promotes matching ``normal`` pending tasks to ``high`` priority.
+* If ``AUTO_CREATE_TASKS_ON_SYNC`` is enabled on the server, it also creates one task for every composite in the server's ``AVAILABLE_COMPOSITES`` list.
+* ``AUTO_CREATE_TASKS_ON_SYNC`` defaults to ``false``. Set it to ``true`` on the server, or create individual tasks with ``POST /api/tasks``.
 
-**How it works:**
-
-1. Computes the latest available 10-minute interval from the current UTC time.
-2. Lists files under ``noaa-himawari9/AHI-L1b-FLDK/<YYYY/MM/DD/HHMM>/`` using anonymous S3 access.
-3. When at least **160 files** are present for a given interval, it posts one task to ``/api/tasks`` for every composite in ``AVAILABLE_COMPOSITES``.
-4. Advances to the next 10-minute interval and waits **60 seconds** before checking again.
-5. If the current interval falls more than 20 minutes behind the latest available time, it fast-forwards by one 10-minute step to catch up.
-
-Himawari-8/9 delivers one full-disk scan every 10 minutes, producing approximately 160 HSD files per interval. The task generator uses this file count as the availability signal.
+See :doc:`../configuration/server` for server-side settings.
 
 --sync — Data Synchronization
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -30,12 +23,12 @@ The sync mode downloads raw HSD (Himawari Standard Data) files from the NOAA S3 
 
 **How it works:**
 
-1. Starts from the latest available 10-minute interval.
-2. Registers a ``pending`` sync record on the server via ``/api/syncs``.
-3. Downloads files from ``noaa-himawari9/AHI-L1b-FLDK/`` to ``s3://raw/AHI-L1b-FLDK/`` on local MinIO.
-4. Updates the sync record to ``completed`` when all files are downloaded.
-5. Advances to the next 10-minute interval.
-6. If a sync takes longer than **10 minutes**, marks it ``failed`` and moves on.
+1. Starts from a recent 10-minute interval: the current UTC time rounded down to the nearest 10 minutes, minus 20 minutes.
+2. Registers a ``pending`` sync record on the server via ``POST /api/syncs``.
+3. Downloads ``.DAT.bz2`` files from ``noaa-himawari9/AHI-L1b-FLDK/`` to ``s3://raw/AHI-L1b-FLDK/`` on local MinIO.
+4. Reports ``running`` progress (file count and byte count) while downloading.
+5. Marks the sync ``completed`` once at least **160 files** are present and no download failed.
+6. Advances to the next 10-minute interval. If the current interval takes longer than **10 minutes**, marks it ``failed`` and moves on; otherwise it retries after 60 seconds.
 
 Sync records are queryable at ``GET /api/syncs/<timestamp>?source=himawari``. Workers consult this endpoint to decide where to read source data from.
 
@@ -47,13 +40,13 @@ The composite worker polls the task queue, claims tasks, processes satellite com
 **How it works:**
 
 1. Calls ``GET /api/tasks/next`` to peek at the next pending task (optionally filtering by ``PRIORITIES`` and ``COMPOSITES``).
-2. Calls ``GET /api/syncs/<timestamp>`` to determine the data source.
-3. If the source is not ``pending``, claims the task with ``PUT /api/tasks/<task_id>/claim`` and processes it.
-4. Passes the composite name and data source to SatPy, which reads AHI HSD files, generates the composite, resamples to the configured bounding box and resolution, and saves a COG file.
-5. Uploads the COG to the ``himawari`` MinIO bucket.
-6. Updates the task status to ``completed`` via ``PUT /api/tasks/<task_id>/status``.
+2. Calls ``GET /api/syncs/<timestamp>?source=himawari`` to determine the data source.
+3. If the source is not ``pending``, claims the task with ``PUT /api/tasks/<task_id>/claim`` and processes it; otherwise it waits and polls again.
+4. Loads the HSD files with SatPy, resamples them to the configured bounding box and resolution, and generates the composite.
+5. Saves a COG and uploads it to the ``himawari`` MinIO bucket.
+6. Updates the task status to ``completed`` (or ``failed`` with an error message) and posts profiler data.
 
-Worker concurrency is determined dynamically: the process measures available RAM and CPU cores, then launches as many Dask threads as the system can safely support given ``MEM_PER_WORKER`` (default 7 GB per worker) and ``SYSTEM_MARGIN`` (default 4 GB reserved).
+Worker concurrency is determined dynamically: the process measures available RAM and CPU cores, then runs as many parallel Dask workers as the system can safely support given ``MEM_PER_WORKER`` (default 7 GB per worker) and ``SYSTEM_MARGIN`` (default 4 GB reserved). The count is never lower than 1 and never higher than the number of logical CPU cores.
 
 If you run ``python main.py`` without any flags, the worker mode activates automatically. The ``--worker`` flag is only required when combining modes explicitly.
 
@@ -68,6 +61,7 @@ Sync status              Data source                                     Worker 
 completed                Local MinIO (``s3://raw/…``)                    Claims and processes immediately
 running                  Pending — wait                                  Skips the task for now and polls again
 pending / not found      Remote NOAA S3 (``s3://noaa-himawari9/…``)      Claims and processes using anonymous remote S3 access
+failed                   Remote NOAA S3 (``s3://noaa-himawari9/…``)      Claims and processes using anonymous remote S3 access
 =======================  ==============================================  ====================================================================
 
 Reading from local MinIO is faster because it avoids wide-area network latency and NOAA S3 egress. Running ``--sync`` alongside ``--worker`` means most tasks will use local data after the initial sync completes.
@@ -75,19 +69,12 @@ Reading from local MinIO is faster because it avoids wide-area network latency a
 Running the Modes
 -----------------
 
-**All modes in one process:**
+**Both modes in one process:**
 
 .. code-block:: bash
 
    cd worker
-   python main.py --task --sync --worker
-
-**Task generator only:**
-
-.. code-block:: bash
-
-   cd worker
-   python main.py --task
+   python main.py --sync --worker
 
 **Sync only:**
 
@@ -115,17 +102,17 @@ Running Modes as Separate Processes
 
 You can distribute modes across different machines. A common pattern is:
 
-* One lightweight machine runs ``--task`` and ``--sync`` to handle scheduling and data mirroring.
+* One lightweight machine runs ``--sync`` to mirror new data into local MinIO.
 * One or more GPU or high-memory machines run ``--worker`` to handle SatPy processing.
 
 All processes communicate through the shared server API and MinIO instance, so they do not need to be co-located.
 
-**Scheduler machine:**
+**Sync machine:**
 
 .. code-block:: bash
 
    cd worker
-   python main.py --task --sync
+   python main.py --sync
 
 **Processing machine (one or more):**
 
@@ -134,7 +121,7 @@ All processes communicate through the shared server API and MinIO instance, so t
    cd worker
    python main.py --worker
 
-Pass ``--worker-id`` when running multiple worker processes to distinguish them in server logs and task records. If omitted, a random ID is generated at startup.
+Pass ``--worker-id`` when running multiple worker processes to distinguish them in server logs and task records. If omitted, the worker ID is generated from the hostname and local IP address.
 
 Worker Filtering
 ----------------
@@ -152,6 +139,8 @@ By default a worker processes every composite and every priority level. You can 
    # Combine both filters
    PRIORITIES=high,normal COMPOSITES=ash python main.py --worker
 
+When running workers through the bundled Docker Compose file, only ``SERVER_URL``, the ``MINIO_*`` settings, and ``CACHE_SIZE_LIMIT`` are forwarded to the processor; ``PRIORITIES`` and ``COMPOSITES`` are not. See :doc:`../deployment/scaling` for how to pass these variables to containers.
+
 Resolution and Bounding Box
 ---------------------------
 
@@ -162,10 +151,10 @@ The worker resamples each composite to a geographic bounding box and maximum res
    # Default bounding box: lon 75–160, lat 0–55
    BBOX=75,0,160,55
 
-   # Maximum resolution in meters (500, 1000, or 2000)
+   # Maximum resolution in meters (typical values: 500, 1000, 2000)
    MAX_RESOLUTION=1000
 
-   # Resampler algorithm
+   # Resampler algorithm used for the final reprojection
    RESAMPLER=nearest
 
 The actual output resolution is the coarser of ``MAX_RESOLUTION`` and the native resolution of the SatPy composite. Pixel dimensions are aligned to 256-pixel tile boundaries for optimal COG performance.

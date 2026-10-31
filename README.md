@@ -48,7 +48,9 @@ Twilight supports nine satellite composites out of the box:
    ```
 
 4. **Access the interface**:
-   Open `http://localhost` in your browser.
+   Open `http://localhost/` for the public map. To use the dashboard and task management, sign in at `http://localhost/login` with the `AUTH_KEY` value from `.env` (default `twilight-secret`).
+
+> **Note:** The server only enqueues composite tasks automatically when `AUTO_CREATE_TASKS_ON_SYNC=true`. The bundled `docker-compose.yml` does not forward this variable, so add it to the `server` service's `environment` list (or create tasks through `POST /api/tasks`).
 
 ## Processing Modes
 
@@ -62,8 +64,8 @@ The worker system supports multiple operational modes via command-line flags (co
 Twilight is composed of three primary services:
 
 - **[`/client`](client/)**: React-based frontend application built with TypeScript and Vite.
-- **[`/server`](server/)**: Flask-based REST API serving satellite tiles and managing tasks.
-- **[`/worker`](worker/)**: Python processing nodes that monitor S3, sync data, and generate composites.
+- **[`/server`](server/)**: Flask-based REST API serving satellite tiles, managing tasks, and generating snapshots.
+- **[`/worker`](worker/)**: Python processes that sync raw data from S3 and generate composites.
 - **[`/docs`](docs/)**: Sphinx-based documentation source files.
 
 ## Development
@@ -76,8 +78,8 @@ If you wish to run components individually for development:
 # Start Redis and MinIO only
 docker compose up -d redis minio
 
-# Run Flask server
-cd server && uv run python app.py
+# Run Flask server (from the repository root)
+uv run --package server server/app.py
 ```
 
 ### Frontend
@@ -89,14 +91,15 @@ cd client && npm install && npm run dev
 ### Worker
 
 ```bash
-cd worker && uv run python main.py --sync --worker
+# From the repository root
+uv run --package worker worker/main.py --sync --worker
 ```
 
 ## Testing
 
 ```bash
 # Run all tests
-uv run pytest
+uv run --with pytest pytest
 
 # Build documentation
 just docs

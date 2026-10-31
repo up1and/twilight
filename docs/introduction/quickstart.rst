@@ -70,7 +70,15 @@ Flag           Role
 ``--worker``   Picks tasks from the queue, generates composites, and uploads tiles to MinIO
 =============  ==========================================================================
 
-Each mode runs as a separate thread inside the same process. You can also run them as separate processes on different machines. Processing tasks are created automatically by the server when a sync completes (``AUTO_CREATE_TASKS_ON_SYNC``).
+Each mode runs as a separate thread inside the same process. You can also run them as separate processes on different machines.
+
+Composite tasks are created by the server when a sync completes, but this is disabled by default. To have the server enqueue tasks automatically, start it with ``AUTO_CREATE_TASKS_ON_SYNC=true``:
+
+.. code-block:: bash
+
+   AUTO_CREATE_TASKS_ON_SYNC=true uv run --package server server/app.py
+
+Without it, the sync mode still downloads new data, but nothing generates composites until you create tasks yourself with ``POST /api/tasks``. Note that the bundled Docker Compose files do not forward ``AUTO_CREATE_TASKS_ON_SYNC`` to the server container; add it to the ``server`` service's ``environment`` list to enable it there.
 
 Step 5: Start the client
 ------------------------
@@ -88,12 +96,13 @@ The client starts at ``http://localhost:5173``.
 Step 6: Open the browser and sign in
 ------------------------------------
 
-Open ``http://localhost:5173`` in your browser. You are redirected to the login page, which asks for a single **Authorization Key**:
+Open ``http://localhost:5173`` in your browser. The map and tile endpoints are public, so imagery loads without signing in. To use the dashboard and protected APIs, open ``http://localhost:5173/login`` and enter a single **Authorization Key**:
 
 1. Enter the value you used for ``AUTH_KEY`` (default: ``twilight-secret``).
 2. The key is verified against the server and stored in ``localStorage`` (``auth-token``); it is sent as a ``Bearer`` token on every API request.
+3. After a successful sign-in you land on ``/dashboard``. The dashboard is the only protected route; ``/`` always renders the map.
 
-The API endpoint is not configured in the browser: the Vite dev server proxies ``/api`` and ``/tiles`` to ``http://localhost:5000``, and production builds bake the endpoint in at build time via ``VITE_API_BASE_URL`` (same-origin by default).
+The API endpoint is not configured in the browser: the Vite dev server proxies ``/api``, ``/tiles``, and ``/snapshots`` to ``http://localhost:5000``, and production builds bake the endpoint in at build time via ``VITE_API_BASE_URL`` (same-origin by default).
 
 Select a composite from the dropdown and use the time selector to navigate through available imagery.
 

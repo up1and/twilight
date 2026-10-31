@@ -17,7 +17,7 @@ The **Snapshot** button is in the map toolbar. Its icon changes depending on the
 
 1. **Frame the area you want to capture** — Pan and zoom the map to the region of interest. The snapshot bounding box is derived from the current map viewport.
 
-2. **Select a composite and time** — Use the composite selector and time slider to choose what you want to capture. The snapshot uses the currently selected composite and timestamp.
+2. **Select a composite and time** — Use the composite selector and time slider to choose what you want to capture. If one composite is selected, you get one file. If two composites are selected for side-by-side mode, the client sends one request per composite and you receive one file for each.
 
 3. **Click the Snapshot button** — Click the **Camera** button to export a PNG. The button shows a spinner while the server is generating the image.
 
@@ -25,7 +25,7 @@ The **Snapshot** button is in the map toolbar. Its icon changes depending on the
 
 Hold **Ctrl** before clicking the Snapshot button to switch to video mode. The icon changes to a video camera to confirm the mode is active.
 
-If the COG for the requested time does not yet exist, the server creates a processing task automatically and returns a ``202 Accepted`` response. Retry the request once the task completes.
+If the COG for the requested time does not yet exist, the server creates a **low-priority** processing task and returns a ``202 Accepted`` response. Retry the request once the task completes.
 
 Snapshot API
 ------------
@@ -118,7 +118,7 @@ Add ``timedelta`` to create an MP4 from a sequence of 10-minute frames:
      "status": "completed",
      "download_url": "/snapshots/video/snapshot_true_color_20250524_0000_to_20250524_0300_a1b2c3d4.mp4",
      "filename": "snapshot_true_color_20250524_0000_to_20250524_0300_a1b2c3d4.mp4",
-     "frame_count": 18,
+     "frame_count": 19,
      "time_range": {
        "start": "2025-05-24T00:00:00",
        "end": "2025-05-24T03:00:00"
@@ -133,11 +133,13 @@ Add ``timedelta`` to create an MP4 from a sequence of 10-minute frames:
      "status": "pending",
      "message": "Missing 3 files. Tasks created for processing.",
      "missing_count": 3,
-     "total_count": 18,
+     "total_count": 19,
      "task_ids": ["true_color_20250524_000000_a1b2c3d4", "true_color_20250524_001000_a1b2c3d4"]
    }
 
-The maximum ``timedelta`` is **1440 minutes (24 hours)**. Requests with a larger value are rejected with a ``400 Bad Request`` error. Timelapse generation requires all COGs in the time range to exist; if any are missing the server queues tasks instead of producing a partial video.
+``task_ids`` contains one entry per missing frame; the example is truncated for brevity. The maximum ``timedelta`` is **1440 minutes (24 hours)**. Requests with a larger value are rejected with a ``400 Bad Request`` error. Timelapse generation requires all COGs in the time range to exist; if any are missing the server queues low-priority tasks instead of producing a partial video.
+
+If the server hits an unexpected error while rendering, it returns ``500`` with ``{"status": "error", "message": "..."}``.
 
 Downloading a Snapshot
 ----------------------
@@ -156,5 +158,7 @@ How Frames Are Timed
 For series snapshots, the server rounds the ``timestamp`` down to the nearest 10-minute boundary and then steps forward in 10-minute increments until it reaches ``timestamp + timedelta``. This aligns with Himawari's 10-minute scan cadence.
 
 For example, a ``timestamp`` of ``2025-05-24T00:07:00Z`` with ``timedelta: 30`` produces frames at ``00:00``, ``00:10``, ``00:20``, and ``00:30``.
+
+Both ends of the range are inclusive, so a 180-minute request from ``00:00`` yields frames at ``00:00`` through ``03:00`` in 10-minute steps — ``frame_count: 19``, not 18. The ``time_range`` object and the MP4 filename use the requested timestamps, not the rounded-down start, so they may not match the first frame when the request is not aligned to a 10-minute boundary.
 
 The resulting MP4 is encoded at **4 frames per second** using libx264.

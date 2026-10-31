@@ -25,7 +25,7 @@ Endpoint Groups
 Tile Serving
 ~~~~~~~~~~~~
 
-Fetch raster PNG tiles for any composite and timestamp, or retrieve TileJSON metadata for map clients.
+Fetch raster PNG tiles for any composite and timestamp, or retrieve TileJSON and color-legend metadata for map clients.
 
 See: :doc:`tiles`
 
@@ -39,14 +39,14 @@ See: :doc:`tiles`
 Task Management
 ~~~~~~~~~~~~~~~
 
-Create, list, claim, and update processing tasks. All task endpoints require authentication.
+Create, list, inspect, delete, claim, and update processing tasks. All task endpoints require authentication.
 
 See: :doc:`tasks`
 
 Sync Management
 ~~~~~~~~~~~~~~~
 
-Create and update raw data sync records, and query sync status by timestamp. Requires authentication.
+Create, update, list, and delete raw data sync records, and query sync status by timestamp. Deleting a sync also removes its raw files. Requires authentication.
 
 See: :doc:`syncs`
 
@@ -85,16 +85,16 @@ Response Formats
 HTTP Caching
 ------------
 
-Successful tile responses are cached server-side:
+Successful tile responses are cached server-side in Redis, and tile responses also carry HTTP cache headers:
 
-====================================================  ==============
-Endpoint                                              Cache duration
-====================================================  ==============
-``/tiles/{composite}/{timestamp}/{z}/{x}/{y}.png``    12 hours
-``/tiles/{composite}/tile.json``                      12 hours
-``/tiles/{map_type}/{z}/{x}/{y}.pbf``                 12 hours
-====================================================  ==============
+====================================================  ====================  =====================
+Endpoint                                              Server-side cache     HTTP ``Cache-Control``
+====================================================  ====================  =====================
+``/tiles/{composite}/{timestamp}/{z}/{x}/{y}.png``    12 hours              ``max-age=43200``
+``/tiles/{composite}/tile.json``                      12 hours              ``max-age=3600``
+``/tiles/{map_type}/{z}/{x}/{y}.pbf``                 12 hours              ``max-age=43200``
+====================================================  ====================  =====================
 
 .. note::
 
-   Only HTTP 200 responses are cached. Error responses (404, 400, 500) are never cached and will be re-evaluated on the next request.
+   Only HTTP 200 responses are cached. Error responses (404, 400, 500) are never cached and will be re-evaluated on the next request. Legend responses are not cached server-side and get no HTTP cache header.

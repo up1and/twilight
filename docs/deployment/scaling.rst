@@ -8,18 +8,19 @@ Twilight's processing pipeline is designed for horizontal scaling. The ``worker-
 How Worker Count is Determined Automatically
 --------------------------------------------
 
-Each ``worker-processor`` instance internally calculates how many parallel processing threads to spawn based on available system memory:
+Each ``worker-processor`` instance internally calculates how many parallel Dask workers to use based on the memory available at startup:
 
 .. code-block:: python
 
-   mem_per_worker = float(os.getenv("MEM_PER_WORKER", 7.0))  # GB per thread
+   mem_per_worker = float(os.getenv("MEM_PER_WORKER", 7.0))  # GB per task
    system_margin  = float(os.getenv("SYSTEM_MARGIN", 4.0))   # GB reserved for OS
 
-The number of threads is derived from::
+The number of workers is derived from::
 
-   threads = floor((total_RAM - SYSTEM_MARGIN) / MEM_PER_WORKER)
+   available_ram = RAM currently available to the process
+   workers = max(1, min(floor((available_RAM - SYSTEM_MARGIN) / MEM_PER_WORKER), logical_cores))
 
-For example, on a host with 32 GB of RAM, the defaults yield ``floor((32 - 4) / 7) = 4`` parallel threads per container instance.
+For example, on a 32 GB host with 12 GB already in use, the defaults yield ``floor((20 - 4) / 7) = 2`` parallel workers per container instance. The calculation uses live available memory, so a busy host may allocate fewer workers than a freshly booted one.
 
 On memory-constrained hosts, reduce ``MEM_PER_WORKER`` only if you are confident each composite stays within that budget. Underestimating causes OOM kills during peak processing.
 
@@ -32,30 +33,55 @@ Use the ``--scale`` flag to run multiple ``worker-processor`` containers from a 
 
    docker compose -f docker-compose.workers.yml up -d --scale worker-processor=4
 
-Each container independently polls the Redis task queue, so adding containers increases throughput without any configuration changes to the server or other workers.
+Each container independently requests the next task from the server API, and the server hands out work atomically, so adding containers increases throughput without any configuration changes to the server or other workers.
 
 ``worker-sync`` does not benefit from scaling. Run it as a single instance. Only ``worker-processor`` should be scaled.
 
-To adjust the replica count on a running stack without restarting other services:
+To adjust the replica count on a running stack without recreating existing containers:
 
 .. code-block:: bash
 
-   docker compose -f docker-compose.workers.yml up -d --scale worker-processor=8 --no-recreate worker-sync
+   docker compose -f docker-compose.workers.yml up -d --scale worker-processor=8 --no-recreate
+
+Passing Variables Through Compose
+---------------------------------
+
+The worker services list their environment explicitly in ``docker-compose.workers.yml``, so variables set only in your shell or ``.env`` are not forwarded to the containers. Put worker tuning variables in an override file and load it together with the worker Compose file:
+
+.. code-block:: yaml
+
+   # docker-compose.override.yml
+   services:
+     worker-processor:
+       environment:
+         - COMPOSITES=true_color,ir_clouds
+         - PRIORITIES=high,normal
+         - MAX_RESOLUTION=500
+         - BBOX=75,0,160,55
+
+.. code-block:: bash
+
+   docker compose -f docker-compose.workers.yml -f docker-compose.override.yml up -d
+
+The examples below assume this override file, and every variable listed there must be added to the service's ``environment`` list to take effect.
 
 Filtering by Composite Type
 ---------------------------
 
-By default a ``worker-processor`` handles all composite types. Set the ``COMPOSITES`` environment variable to restrict a container to a specific subset:
+By default a ``worker-processor`` handles all composite types. Set ``COMPOSITES`` to restrict a container to a specific subset:
 
-.. code-block:: bash
+.. code-block:: yaml
 
-   COMPOSITES=true_color,ir_clouds docker compose -f docker-compose.workers.yml up -d
+   services:
+     worker-processor:
+       environment:
+         - COMPOSITES=true_color,ir_clouds
 
 Valid composite identifiers::
 
    ir_clouds, true_color, ash, airmass,
    night_microphysics, day_microphysics,
-   fog, convection, vapor
+   fog, convection, water_vapor
 
 This lets you dedicate faster machines to high-demand composites (e.g., ``true_color``) and route less critical composites to smaller instances.
 
@@ -64,9 +90,12 @@ Filtering by Task Priority
 
 Workers can be restricted to specific priority tiers using the ``PRIORITIES`` variable:
 
-.. code-block:: bash
+.. code-block:: yaml
 
-   PRIORITIES=high,normal docker compose -f docker-compose.workers.yml up -d
+   services:
+     worker-processor:
+       environment:
+         - PRIORITIES=high,normal
 
 An empty or unset ``PRIORITIES`` value means the worker accepts tasks at any priority level.
 
@@ -104,9 +133,12 @@ MAX_RESOLUTION  Quality      Speed       Typical use
 2000            Lowest       Fastest     Resource-constrained or preview use
 ==============  ===========  ==========  ==========================================
 
-.. code-block:: bash
+.. code-block:: yaml
 
-   MAX_RESOLUTION=500 docker compose -f docker-compose.workers.yml up -d worker-processor
+   services:
+     worker-processor:
+       environment:
+         - MAX_RESOLUTION=500
 
 Setting ``MAX_RESOLUTION=500`` significantly increases memory usage per task. Increase ``MEM_PER_WORKER`` accordingly to prevent OOM errors.
 
@@ -115,9 +147,11 @@ Limiting Geographic Scope with BBOX
 
 Use the ``BBOX`` variable to restrict processing to a specific region, which reduces both CPU and storage load. The value is a bounding box in decimal degrees: ``lon_min,lat_min,lon_max,lat_max``.
 
-.. code-block:: bash
+.. code-block:: yaml
 
-   # East Asia and Australia
-   BBOX=75,0,160,55 docker compose -f docker-compose.workers.yml up -d worker-processor
+   services:
+     worker-processor:
+       environment:
+         - BBOX=75,0,160,55
 
 The default bounding box covers the primary Himawari-8/9 full-disk footprint (``75,0,160,55``). Narrow it further if you only need a sub-region.
