@@ -30,7 +30,6 @@ dist-ssr
 *.tif
 *.tiff
 __pycache__
-diff.txt
 .coverage
 .pdm-python
 .python-version

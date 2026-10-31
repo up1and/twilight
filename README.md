@@ -102,7 +102,7 @@ uv run --package worker worker/main.py --sync --worker
 uv run --with pytest pytest
 
 # Build documentation
-just docs
+make docs
 ```
 
 ## License
