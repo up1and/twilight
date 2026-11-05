@@ -8,11 +8,13 @@ dayjs.extend(utc);
 
 const mocks = vi.hoisted(() => ({
   createSnapshot: vi.fn(),
+  getSnapshotJob: vi.fn(),
   get: vi.fn()
 }));
 
 vi.mock("../../utils/api-client", () => ({
   createSnapshot: mocks.createSnapshot,
+  getSnapshotJob: mocks.getSnapshotJob,
   apiClient: { get: mocks.get },
   resolveApiUrl: (path: string) => `http://api.test${path}`
 }));
@@ -26,6 +28,9 @@ let createObjectURL: ReturnType<typeof vi.fn>;
 let revokeObjectURL: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
+  mocks.createSnapshot.mockReset();
+  mocks.getSnapshotJob.mockReset();
+  mocks.get.mockReset();
   consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
   clickSpy = vi
     .spyOn(HTMLAnchorElement.prototype, "click")
@@ -56,6 +61,7 @@ describe("SnapshotButton", () => {
         composites={["true_color"]}
         selectedTime={selectedTime}
         bbox={null}
+        zoom={6}
       />
     );
 
@@ -65,14 +71,32 @@ describe("SnapshotButton", () => {
     expect(consoleError).toHaveBeenCalledWith("Map bounds not available");
   });
 
+  it("does nothing when the map zoom is unavailable", () => {
+    render(
+      <SnapshotButton
+        composites={["true_color"]}
+        selectedTime={selectedTime}
+        bbox={bbox}
+        zoom={null}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+
+    expect(mocks.createSnapshot).not.toHaveBeenCalled();
+    expect(consoleError).toHaveBeenCalledWith("Map zoom not available");
+  });
+
   it("snapshots the selected composite with a UTC timestamp", async () => {
-    mocks.createSnapshot.mockResolvedValue({ status: "pending" });
+    mocks.createSnapshot.mockResolvedValue({ status: "pending", job_id: "job-1" });
+    mocks.getSnapshotJob.mockResolvedValue({ status: "pending", job_id: "job-1" });
 
     render(
       <SnapshotButton
         composites={["true_color"]}
         selectedTime={selectedTime}
         bbox={bbox}
+        zoom={6}
       />
     );
 
@@ -82,18 +106,29 @@ describe("SnapshotButton", () => {
     expect(mocks.createSnapshot).toHaveBeenCalledWith({
       bbox,
       timestamp: "2025-04-20T04:00:00+0000",
-      composite: "true_color"
+      composite: "true_color",
+      zoom: 6
     });
   });
 
   it("requests one snapshot per composite", async () => {
-    mocks.createSnapshot.mockResolvedValue({ status: "pending" });
+    // Each render completes immediately so the loop moves on to the next one.
+    mocks.createSnapshot.mockResolvedValue({
+      status: "completed",
+      job_id: "job-1",
+      download_url: "/files/a.png"
+    });
+    mocks.getSnapshotJob.mockResolvedValue({ status: "completed", job_id: "job-1" });
+    mocks.get.mockResolvedValue({
+      blob: async () => new Blob(["image"], { type: "image/png" })
+    });
 
     render(
       <SnapshotButton
         composites={["true_color", "ir_clouds"]}
         selectedTime={selectedTime}
         bbox={bbox}
+        zoom={6}
       />
     );
 
@@ -125,6 +160,7 @@ describe("SnapshotButton", () => {
         composites={["true_color"]}
         selectedTime={selectedTime}
         bbox={bbox}
+        zoom={6}
       />
     );
 
@@ -150,6 +186,7 @@ describe("SnapshotButton", () => {
         composites={["true_color"]}
         selectedTime={selectedTime}
         bbox={bbox}
+        zoom={6}
       />
     );
 
@@ -161,13 +198,15 @@ describe("SnapshotButton", () => {
   });
 
   it("shows the video icon while Ctrl is held and forwards the timedelta", async () => {
-    mocks.createSnapshot.mockResolvedValue({ status: "pending" });
+    mocks.createSnapshot.mockResolvedValue({ status: "pending", job_id: "job-1" });
+    mocks.getSnapshotJob.mockResolvedValue({ status: "pending", job_id: "job-1" });
 
     const { container } = render(
       <SnapshotButton
         composites={["true_color"]}
         selectedTime={selectedTime}
         bbox={bbox}
+        zoom={6}
         timedelta={60}
       />
     );
@@ -186,13 +225,15 @@ describe("SnapshotButton", () => {
   });
 
   it("omits the timedelta when Ctrl is not held", async () => {
-    mocks.createSnapshot.mockResolvedValue({ status: "pending" });
+    mocks.createSnapshot.mockResolvedValue({ status: "pending", job_id: "job-1" });
+    mocks.getSnapshotJob.mockResolvedValue({ status: "pending", job_id: "job-1" });
 
     render(
       <SnapshotButton
         composites={["true_color"]}
         selectedTime={selectedTime}
         bbox={bbox}
+        zoom={6}
         timedelta={60}
       />
     );
@@ -204,6 +245,103 @@ describe("SnapshotButton", () => {
     expect(params).not.toHaveProperty("timedelta");
   });
 
+  it("polls a queued job until the render completes", async () => {
+    mocks.createSnapshot.mockResolvedValue({
+      status: "pending",
+      job_id: "job-1"
+    });
+    // queued -> running -> completed; the first poll fires as soon as the
+    // button mounts, so keep the sequence strictly ordered.
+    mocks.getSnapshotJob
+      .mockResolvedValueOnce({ status: "pending", job_id: "job-1" })
+      .mockResolvedValueOnce({ status: "running", job_id: "job-1" })
+      .mockResolvedValue({
+        status: "completed",
+        job_id: "job-1",
+        download_url: "/files/done.png"
+      });
+    mocks.get.mockResolvedValue({
+      blob: async () => new Blob(["image"], { type: "image/png" })
+    });
+
+    render(
+      <SnapshotButton
+        composites={["true_color"]}
+        selectedTime={selectedTime}
+        bbox={bbox}
+        zoom={6}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+
+    await waitFor(() => expect(clickSpy).toHaveBeenCalledTimes(1), {
+      timeout: 10000
+    });
+    expect(mocks.getSnapshotJob.mock.calls.length).toBeGreaterThanOrEqual(3);
+    expect(mocks.getSnapshotJob).toHaveBeenCalledWith("job-1");
+    expect(mocks.get).toHaveBeenCalledWith("http://api.test/files/done.png");
+  }, 15000);
+
+  it("stops polling when the queued job fails", async () => {
+    mocks.createSnapshot.mockResolvedValue({
+      status: "pending",
+      job_id: "job-2"
+    });
+    mocks.getSnapshotJob.mockResolvedValue({
+      status: "failed",
+      job_id: "job-2",
+      message: "render failed"
+    });
+
+    render(
+      <SnapshotButton
+        composites={["true_color"]}
+        selectedTime={selectedTime}
+        bbox={bbox}
+        zoom={6}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+
+    await waitFor(() => expect(mocks.getSnapshotJob).toHaveBeenCalledTimes(1), {
+      timeout: 10000
+    });
+    expect(mocks.get).not.toHaveBeenCalled();
+    expect(clickSpy).not.toHaveBeenCalled();
+    expect(consoleError).toHaveBeenCalledWith(
+      "Failed to create snapshot for",
+      "true_color",
+      "render failed"
+    );
+  }, 15000);
+
+  it("does not poll when the render finished synchronously", async () => {
+    mocks.createSnapshot.mockResolvedValue({
+      status: "completed",
+      download_url: "/files/sync.png",
+      filename: "sync.png"
+    });
+    mocks.get.mockResolvedValue({
+      blob: async () => new Blob(["image"], { type: "image/png" })
+    });
+
+    render(
+      <SnapshotButton
+        composites={["true_color"]}
+        selectedTime={selectedTime}
+        bbox={bbox}
+        zoom={6}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+
+    await waitFor(() => expect(clickSpy).toHaveBeenCalledTimes(1));
+    expect(mocks.getSnapshotJob).not.toHaveBeenCalled();
+  });
+
   it("resets the loading state when the request fails", async () => {
     mocks.createSnapshot.mockRejectedValue(new Error("network down"));
 
@@ -212,6 +350,7 @@ describe("SnapshotButton", () => {
         composites={["true_color"]}
         selectedTime={selectedTime}
         bbox={bbox}
+        zoom={6}
       />
     );
 

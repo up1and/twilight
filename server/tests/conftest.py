@@ -28,6 +28,25 @@ def client(app):
         yield app.test_client()
 
 
+@pytest.fixture(autouse=True)
+def mock_snapshot_jobs():
+    """Stub the RQ snapshot queue so API tests never need a live Redis/worker"""
+    with patch("views.api.enqueue_snapshot_job") as enqueue, \
+            patch("views.api.get_snapshot_job") as fetch:
+        job = Mock()
+        job.id = "test-job-id"
+        enqueue.return_value = job
+        fetch.return_value = None
+        yield {"enqueue": enqueue, "fetch": fetch, "job": job}
+
+
+@pytest.fixture(autouse=True)
+def mock_missing_composites():
+    """Assume every requested composite exists unless a test says otherwise"""
+    with patch("views.api.find_missing_composites", return_value=[]) as missing:
+        yield missing
+
+
 @pytest.fixture
 def mock_redis():
     """Mock Redis client"""

@@ -166,18 +166,19 @@ describe("api-client", () => {
     );
   });
 
-  it("posts snapshot parameters and returns the response", async () => {
+  it("posts snapshot parameters and returns the queued job", async () => {
     const response = {
-      status: "completed",
-      download_url: "/snapshots/a.png",
-      filename: "a.png"
+      status: "pending",
+      job_id: "job-1",
+      poll_url: "/api/snapshots/job-1"
     };
-    responder = () => jsonResponse(response);
+    responder = () => jsonResponse(response, 202);
 
     const params = {
       bbox: [100, 20, 140, 50] as [number, number, number, number],
       timestamp: "2025-04-20T04:00:00",
       composite: "true_color",
+      zoom: 6,
       timedelta: 30
     };
 
@@ -186,6 +187,32 @@ describe("api-client", () => {
     expect(requests[0].request.method).toBe("POST");
     expect(requests[0].request.url).toMatch(/\/api\/snapshots$/);
     expect(requests[0].body).toEqual(params);
+  });
+
+  it("fetches a snapshot job status by id", async () => {
+    const response = {
+      status: "completed",
+      job_id: "job-1",
+      job_status: "finished",
+      download_url: "/snapshots/image/a.png",
+      filename: "a.png"
+    };
+    responder = () => jsonResponse(response);
+
+    await expect(api.getSnapshotJob("job-1")).resolves.toEqual(response);
+
+    expect(requests[0].request.method).toBe("GET");
+    expect(requests[0].request.url).toMatch(/\/api\/snapshots\/job-1$/);
+  });
+
+  it("returns null when the snapshot job is unknown", async () => {
+    responder = () => jsonResponse({ message: "not found" }, 404);
+
+    await expect(api.getSnapshotJob("missing")).resolves.toBeNull();
+    expect(consoleError).toHaveBeenCalledWith(
+      "Failed to fetch snapshot job:",
+      expect.anything()
+    );
   });
 
   it("posts task parameters", async () => {

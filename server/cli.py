@@ -20,9 +20,11 @@ def worker(ctx):
 
     # Check for --with-scheduler in extra args
     with_scheduler = '--with-scheduler' in ctx.args
-    
+
     # Get worker from extension with proper context handling
-    worker = rq.get_worker('default', 'maintenance')
+    # 'snapshots' is ordered first so interactive snapshot renders are not
+    # stuck behind a backlog of maintenance jobs.
+    worker = rq.get_worker('snapshots', 'default', 'maintenance')
     worker.work(with_scheduler=with_scheduler)
 
 @rq_group.command()

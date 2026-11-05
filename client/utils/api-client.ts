@@ -234,61 +234,86 @@ export async function fetchSyncs(
 }
 
 /**
- * Create a snapshot image with geographic bounds and coastlines
+ * Lifecycle of a snapshot job.
+ *
+ * - `pending` / `running` — still working, poll again
+ * - `completed` — `download_url` is ready
+ * - `failed` — `message` explains why
+ */
+export type SnapshotStatus = "pending" | "running" | "completed" | "failed";
+
+export interface SnapshotResponse {
+  job_id: string;
+  status: SnapshotStatus;
+  download_url?: string;
+  message?: string;
+}
+
+/**
+ * Queue a snapshot render with geographic bounds and coastlines
+ *
+ * The server responds with `202 Accepted` and a `job_id`; poll
+ * {@link getSnapshotJob} until `status` is no longer `pending`/`running`.
+ * Only already-processed timestamps can be exported — a missing composite is
+ * rejected with `404` before anything is queued.
  *
  * @param params - Snapshot parameters
- * @returns A Promise resolving to snapshot response or null if the request fails
+ * @returns A Promise resolving to the queued job, or null if the request fails
  *
  * Example request:
  * {
  *   "bbox": [100.0, 20.0, 140.0, 50.0],  // [min_lng, min_lat, max_lng, max_lat]
  *   "timestamp": "2025-04-20T04:00:00",
  *   "composite": "true_color",
+ *   "zoom": 6,
  *   "timedelta": 100
  * }
  *
  * Example response:
  * {
- *   "status": "completed",
- *   "download_url": "https://minio.example.com/snapshots/snapshot_true_color_20250420_0400_z5_a1b2c3d4.png?...",
- *   "filename": "snapshot_true_color_20250420_0400_z5_a1b2c3d4.png"
+ *   "job_id": "0f4a2c9e8b1d4c6fa3e5d7b9c1a2f3e4",
+ *   "status": "pending"
  * }
  */
 export async function createSnapshot(params: {
   bbox: [number, number, number, number];
   timestamp: string;
   composite: string;
+  zoom: number; // Map zoom level; the render matches this resolution
   timedelta?: number; // Optional timedelta in minutes for video generation
-}): Promise<{
-  status: string;
-  download_url?: string;
-  filename?: string;
-  task_id?: string;
-  message?: string;
-  frame_count?: number;
-  time_range?: {
-    start: string;
-    end: string;
-  };
-} | null> {
+}): Promise<SnapshotResponse | null> {
   try {
-    const data = await apiClient
+    return await apiClient
       .post(apiUrl("/api/snapshots"), { json: params })
-      .json<{
-      status: string;
-      download_url?: string;
-      filename?: string;
-      task_id?: string;
-      message?: string;
-      frame_count?: number;
-      time_range?: {
-        start: string;
-        end: string;
-      };
-    }>();
-    return data;
+      .json<SnapshotResponse>();
   } catch (error) {
     console.error("Failed to create snapshot:", error);
+    return null;
+  }
+}
+
+/**
+ * Fetch the status of a pending snapshot job
+ *
+ * @param jobId - The `job_id` returned by {@link createSnapshot}
+ * @returns A Promise resolving to the job status or null if the request fails
+ *
+ * Example finished response:
+ * {
+ *   "job_id": "0f4a2c9e8b1d4c6fa3e5d7b9c1a2f3e4",
+ *   "status": "completed",
+ *   "download_url": "/snapshots/image/snapshot_true_color_20250420_0400_a1b2c3d4.png"
+ * }
+ */
+export async function getSnapshotJob(
+  jobId: string
+): Promise<SnapshotResponse | null> {
+  try {
+    return await apiClient
+      .get(apiUrl(`/api/snapshots/${jobId}`))
+      .json<SnapshotResponse>();
+  } catch (error) {
+    console.error("Failed to fetch snapshot job:", error);
     return null;
   }
 }

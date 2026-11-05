@@ -110,7 +110,10 @@ function MousePositionTracker({
 function MapViewportBoundsTracker({
   onBoundsChange
 }: {
-  onBoundsChange: (bounds: [number, number, number, number]) => void;
+  onBoundsChange: (
+    bounds: [number, number, number, number],
+    zoom: number
+  ) => void;
 }) {
   const map = useMap();
 
@@ -125,7 +128,7 @@ function MapViewportBoundsTracker({
         bounds.getEast(),
         bounds.getNorth()
       ];
-      onBoundsChange(bbox);
+      onBoundsChange(bbox, Math.round(map.getZoom()));
     };
 
     // Update bounds initially
@@ -195,6 +198,8 @@ export default function MapView() {
   const [viewportBounds, setViewportBounds] = useState<
     [number, number, number, number] | null
   >(null);
+  // Zoom the bbox was captured at; snapshots render at this resolution.
+  const [viewportZoom, setViewportZoom] = useState<number | null>(null);
 
   // Store map configurations for each selected composite
   const [mapConfigs, setMapConfigs] = useState<Record<string, MapConfig>>({});
@@ -361,9 +366,11 @@ export default function MapView() {
 
   // Handle current viewport bounds change
   const handleViewportBoundsChange = (
-    bbox: [number, number, number, number]
+    bbox: [number, number, number, number],
+    zoom: number
   ) => {
     setViewportBounds(bbox);
+    setViewportZoom(zoom);
   };
 
   // Handle mouse position change
@@ -613,6 +620,7 @@ export default function MapView() {
             composites={selectedComposites}
             selectedTime={selectedTime}
             bbox={viewportBounds}
+            zoom={viewportZoom}
             timedelta={videoTimedelta}
           />
           <LayerButton layers={layers} onToggle={toggleLayer} />

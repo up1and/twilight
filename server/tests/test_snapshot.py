@@ -1,6 +1,7 @@
 """
 Tests for snapshot module
 """
+import math
 import pytest
 import datetime
 from unittest.mock import Mock, patch
@@ -8,8 +9,162 @@ from io import BytesIO
 from server.snapshot import (
     generate_bbox_hash, generate_filename, create_snapshot_image,
     upload_to_minio, generate_time_range, generate_composite_object_name,
-    create_video_from_images, create_single_snapshot, create_series_snapshot
+    create_video_from_images, create_single_snapshot, create_series_snapshot,
+    validate_bbox, validate_snapshot_limits, estimate_snapshot_size,
+    cog_exists, missing_cogs
 )
+
+
+class TestValidateBbox:
+    """Test bounding box validation"""
+
+    def test_valid_bboxes(self):
+        valid = [
+            [100, 20, 140, 50],
+            [-180, -90, 180, 90],
+            [0, 0, 1, 1],
+            [-122.5, 37.5, -122.0, 38.0],
+            (100, 20, 140, 50),  # tuple is accepted too
+        ]
+
+        for bbox in valid:
+            assert validate_bbox(bbox) is None
+
+    def test_rejects_non_four_value_arrays(self):
+        for bbox in [[100], [100, 20], [100, 20, 140], [100, 20, 140, 50, 60],
+                     "100,20,140,50", None, {}, 123]:
+            message = validate_bbox(bbox)
+            assert message is not None
+            assert "bbox" in message
+
+    def test_rejects_non_numeric_values(self):
+        for bbox in [[100, 20, 140, "50"], [None, 20, 140, 50],
+                     [True, 20, 140, 50], [100, 20, 140, [50]]]:
+            message = validate_bbox(bbox)
+            assert message is not None
+            assert "bbox" in message
+
+    def test_rejects_non_finite_values(self):
+        for bbox in [[float("nan"), 20, 140, 50],
+                     [100, 20, float("inf"), 50]]:
+            message = validate_bbox(bbox)
+            assert message is not None
+            assert "finite" in message
+
+    def test_rejects_longitude_out_of_range(self):
+        for bbox in [[-180.1, 20, 140, 50], [100, 20, 180.1, 50],
+                     [-200, 20, 140, 50]]:
+            message = validate_bbox(bbox)
+            assert message is not None
+            assert "longitude" in message
+
+    def test_rejects_latitude_out_of_range(self):
+        for bbox in [[100, -90.1, 140, 50], [100, 20, 140, 90.1],
+                     [100, -95, 140, 50]]:
+            message = validate_bbox(bbox)
+            assert message is not None
+            assert "latitude" in message
+
+    def test_rejects_inverted_or_empty_bbox(self):
+        for bbox in [[140, 20, 100, 50], [100, 50, 140, 20],
+                     [100, 20, 100, 50], [100, 20, 140, 20]]:
+            message = validate_bbox(bbox)
+            assert message is not None
+            assert "bbox" in message
+
+
+class TestZoomSizing:
+    """Output size is derived from the map zoom the user captured"""
+
+    def test_size_follows_web_mercator(self):
+        # 256 * 2^z world pixels; a 40-degree span at z6 is 40/360 of it
+        width, height = estimate_snapshot_size([100, 20, 140, 50], 6)
+        assert width == math.ceil(40 / 360 * 256 * 2**6)
+        assert height > 0
+
+    def test_output_size_is_stable_across_zooms(self):
+        # A viewport-sized bbox stays near the screen size at every zoom,
+        # because a wider view is rendered at a coarser resolution.
+        sizes = []
+        for zoom in (5, 6, 7, 8, 9, 10):
+            span = 360 / 2**zoom * 7.5      # 1920px wide viewport
+            lat_span = span * 1080 / 1920
+            bbox = [117.5 - span / 2, 27.5 - lat_span / 2,
+                    117.5 + span / 2, 27.5 + lat_span / 2]
+            width, height = estimate_snapshot_size(bbox, zoom)
+            sizes.append(width * height)
+
+        assert max(sizes) / min(sizes) < 1.1
+        assert all(2_000_000 < p < 3_000_000 for p in sizes)
+
+    def test_accepts_viewport_sized_bbox(self):
+        assert validate_snapshot_limits([100, 20, 110, 25], 6) is None
+
+    def test_rejects_world_bbox_at_high_zoom(self):
+        message = validate_snapshot_limits([-180, -90, 180, 90], 10)
+        assert message is not None
+        assert "too large" in message
+
+    def test_limit_is_a_parameter_default(self):
+        # Not a deployment knob: viewport exports never approach it.
+        assert validate_snapshot_limits([100, 20, 102, 21], 6,
+                                        max_pixels=10_000_000) is None
+        assert validate_snapshot_limits([100, 20, 102, 21], 6,
+                                        max_pixels=100) is not None
+
+
+class TestCreateSnapshotImageSizing:
+    """create_snapshot_image reads bbox, and takes size only when asked"""
+
+    @staticmethod
+    def _render(width=None, height=None):
+        import numpy as np
+
+        with patch("server.snapshot.Reader") as mock_reader, \
+                patch("server.snapshot.ContourWriterAGG") as mock_cw, \
+                patch("server.snapshot.get_pycoast_dir", return_value="/tmp"), \
+                patch("server.snapshot.Image.open"):
+            mock_cog = Mock()
+            mock_cog.crs = None
+            mock_reader.return_value.__enter__.return_value = mock_cog
+
+            mock_img = Mock()
+            mock_img.data = np.zeros((3, 10, 10), dtype=np.uint8)
+            mock_img.bounds = (100, 20, 101, 21)
+            mock_img.render.return_value = b"mock_png"
+            mock_cog.part.return_value = mock_img
+
+            if width is None:
+                create_snapshot_image("http://mock-url", [100, 20, 101, 21])
+            else:
+                create_snapshot_image("http://mock-url", [100, 20, 101, 21],
+                                      width, height)
+
+            return mock_cog.part.call_args.kwargs, mock_cw
+
+    def test_bbox_alone_uses_the_native_grid(self):
+        kwargs, _ = self._render()
+        assert kwargs == {}
+
+    def test_size_is_forwarded_unchanged(self):
+        kwargs, _ = self._render(40, 30)
+        assert kwargs == {"width": 40, "height": 30}
+
+    def test_deep_zoom_upsamples_rather_than_clamping(self):
+        # Interpolating past the source resolution is intentional: the map
+        # itself does the same past its native zoom.
+        kwargs, _ = self._render(4000, 4000)
+        assert kwargs == {"width": 4000, "height": 4000}
+
+    def test_coastlines_are_drawn_once(self):
+        _, mock_cw = self._render(40, 30)
+        assert mock_cw.call_count == 1
+        assert mock_cw.return_value.add_coastlines.call_count == 1
+
+    def test_coastlines_are_drawn_once_without_size_too(self):
+        _, mock_cw = self._render()
+        assert mock_cw.call_count == 1
+        assert mock_cw.return_value.add_coastlines.call_count == 1
 
 
 class TestGenerateBboxHash:
@@ -65,10 +220,10 @@ class TestCreateSnapshotImage:
 
     @patch('server.snapshot.Reader')
     @patch('server.snapshot.ContourWriterAGG')
-    @patch('server.snapshot.get_gshhs_dir')
+    @patch('server.snapshot.get_pycoast_dir')
     @patch('PIL.Image.open')
-    def test_create_snapshot_image_success(self, mock_image_open, mock_get_gshhs, mock_cw, mock_reader):
-        mock_get_gshhs.return_value = "/tmp/gshhs"
+    def test_create_snapshot_image_success(self, mock_image_open, mock_get_pycoast, mock_cw, mock_reader):
+        mock_get_pycoast.return_value = "/tmp/pycoast"
         
         # Mock rio-tiler Reader
         mock_cog = Mock()
@@ -81,7 +236,8 @@ class TestCreateSnapshotImage:
         mock_img.bounds = (100, 20, 110, 30)
         mock_img.render.return_value = b"mock_png"
         mock_cog.part.return_value = mock_img
-        mock_cog.crs.to_string.return_value = "EPSG:4326"
+        # No CRS on the mock COG, so the code falls back to latlong
+        mock_cog.crs = None
         
         # Mock PIL Image
         mock_pil = Mock()
@@ -91,7 +247,7 @@ class TestCreateSnapshotImage:
         result = create_snapshot_image("http://mock-url", [100, 20, 110, 30])
         
         assert isinstance(result, BytesIO)
-        mock_cw.assert_called_once_with("/tmp/gshhs")
+        mock_cw.assert_called_once_with("/tmp/pycoast")
         mock_cw.return_value.add_coastlines.assert_called_once()
         # Verify area_def passed to add_coastlines is a tuple
         args = mock_cw.return_value.add_coastlines.call_args[0]
@@ -230,26 +386,24 @@ class TestCreateVideoFromImages:
         assert callable(create_video_from_images)
     
     @patch('imageio.get_writer')
-    @patch('PIL.Image.open')
-    @patch('numpy.array')
-    def test_create_video_from_images_success(self, mock_np_array, mock_image_open, mock_get_writer):
-        # Mock image buffers
+    @patch('server.snapshot.Image.open')
+    def test_create_video_from_images_success(self, mock_image_open, mock_get_writer):
+        import numpy as np
+
+        # Real numpy arrays, since the encoder consumes frames one at a time
         image_buffers = [BytesIO(b'image1'), BytesIO(b'image2')]
-        
-        # Mock PIL Image
+
         mock_pil_image = Mock()
+        mock_pil_image.__enter__ = Mock(return_value=mock_pil_image)
+        mock_pil_image.__exit__ = Mock(return_value=False)
         mock_image_open.return_value = mock_pil_image
-        
-        # Mock numpy array
-        mock_array = Mock()
-        mock_np_array.return_value = mock_array
-        
-        # Mock imageio writer
-        mock_writer = Mock()
-        mock_get_writer.return_value.__enter__.return_value = mock_writer
-        
-        result = create_video_from_images(image_buffers, fps=4)
-        
+
+        with patch('numpy.array', return_value=np.zeros((4, 4, 3), np.uint8)):
+            mock_writer = Mock()
+            mock_get_writer.return_value.__enter__.return_value = mock_writer
+
+            result = create_video_from_images(image_buffers, fps=4)
+
         assert isinstance(result, BytesIO)
         assert mock_writer.append_data.call_count == 2
     
@@ -265,284 +419,213 @@ class TestCreateVideoFromImages:
 
 class TestCreateSingleSnapshot:
     """Test single snapshot creation"""
-    
+
     @patch('server.snapshot.create_snapshot_image')
     @patch('server.snapshot.upload_to_minio')
     @patch('server.snapshot.generate_composite_object_name')
     def test_create_single_snapshot_success(self, mock_find_object, mock_upload, mock_create_image):
         mock_client = Mock()
-        mock_client.stat_object.return_value = True  # COG exists
         mock_client.presigned_get_object.return_value = 'http://mock-url'
-        
+
         mock_find_object.return_value = 'test-object.tif'
         mock_create_image.return_value = BytesIO(b'mock_image')
-        
+
         timestamp = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
         bbox = [100, 20, 140, 50]
-        
+
         result = create_single_snapshot(mock_client, 'ir_clouds', timestamp, bbox)
-        
+
         assert result['status'] == 'completed'
         assert 'object_name' in result
-        assert 'filename' in result
+        # The caller builds download_url from object_name; no filename field.
+        assert set(result) == {'status', 'object_name'}
         mock_upload.assert_called_once()
-    
-    @patch('server.snapshot.generate_composite_object_name')
-    def test_create_single_snapshot_cog_not_found_with_task_manager(self, mock_find_object):
-        mock_client = Mock()
-        mock_client.stat_object.side_effect = Exception("COG not found")
-        
-        mock_task_manager = Mock()
-        mock_task = Mock()
-        mock_task.task_id = 'test-task-id'
-        mock_task_manager.create_task.return_value = mock_task
-        
-        mock_find_object.return_value = 'test-object.tif'
-        
-        timestamp = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
-        bbox = [100, 20, 140, 50]
-        
-        result = create_single_snapshot(mock_client, 'ir_clouds', timestamp, bbox, mock_task_manager)
-        
-        assert result['status'] == 'pending'
-        assert result['task_id'] == 'test-task-id'
-        mock_task_manager.create_task.assert_called_once_with('ir_clouds', timestamp, 'low')
-    
-    @patch('server.snapshot.generate_composite_object_name')
-    def test_create_single_snapshot_cog_not_found_without_task_manager(self, mock_find_object):
-        mock_client = Mock()
-        mock_client.stat_object.side_effect = Exception("COG not found")
-        
-        mock_find_object.return_value = 'test-object.tif'
-        
-        timestamp = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
-        bbox = [100, 20, 140, 50]
-        
-        result = create_single_snapshot(mock_client, 'ir_clouds', timestamp, bbox)
-        
-        assert result['status'] == 'error'
-        assert 'COG file not found' in result['message']
-    
+
     @patch('server.snapshot.create_snapshot_image')
     @patch('server.snapshot.upload_to_minio')
     @patch('server.snapshot.generate_composite_object_name')
-    def test_create_single_snapshot_error_handling(self, mock_find_object, mock_upload, mock_create_image):
+    def test_create_single_snapshot_forwards_requested_size(
+        self, mock_find_object, mock_upload, mock_create_image
+    ):
         mock_client = Mock()
-        mock_client.stat_object.return_value = True  # COG exists
         mock_client.presigned_get_object.return_value = 'http://mock-url'
-        
+        mock_find_object.return_value = 'test-object.tif'
+        mock_create_image.return_value = BytesIO(b'mock_image')
+
+        timestamp = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
+
+        create_single_snapshot(
+            mock_client, 'ir_clouds', timestamp, [100, 20, 140, 50],
+            width=1821, height=1707,
+        )
+
+        assert mock_create_image.call_args.kwargs == {
+            'width': 1821, 'height': 1707
+        }
+
+    @patch('server.snapshot.create_snapshot_image')
+    @patch('server.snapshot.generate_composite_object_name')
+    def test_create_single_snapshot_error_handling(self, mock_find_object, mock_create_image):
+        mock_client = Mock()
+        mock_client.presigned_get_object.return_value = 'http://mock-url'
+
         mock_find_object.return_value = 'test-object.tif'
         mock_create_image.side_effect = Exception("Image creation failed")
-        
+
         timestamp = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
         bbox = [100, 20, 140, 50]
-        
+
         result = create_single_snapshot(mock_client, 'ir_clouds', timestamp, bbox)
-        
-        assert result['status'] == 'error'
+
+        assert result['status'] == 'failed'
         assert 'Error creating snapshot' in result['message']
 
 
 class TestCreateSeriesSnapshot:
-    """Test series snapshot creation"""
-    
+    """Test timelapse rendering"""
+
     @patch('server.snapshot.create_video_from_images')
     @patch('server.snapshot.upload_to_minio')
-    @patch('server.snapshot.create_single_snapshot')
-    @patch('server.snapshot.generate_time_range')
-    @patch('server.snapshot.generate_composite_object_name')
-    def test_create_series_snapshot_success(self, mock_find_object, mock_time_range, 
-                                          mock_create_single, mock_upload, mock_create_video):
+    @patch('server.snapshot.create_snapshot_image')
+    def test_create_series_snapshot_success(
+        self, mock_create_image, mock_upload, mock_make_video
+    ):
         mock_client = Mock()
-        mock_client.stat_object.return_value = True  # All COGs exist
-        
-        # Mock time range
-        timestamps = [
-            datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc),
-            datetime.datetime(2025, 1, 15, 12, 10, 0, tzinfo=datetime.timezone.utc)
-        ]
-        mock_time_range.return_value = timestamps
-        
-        # Mock single snapshot creation
-        mock_create_single.return_value = {
-            'status': 'completed',
-            'object_name': 'test-image.png'
-        }
-        
-        # Mock MinIO get_object for images
-        mock_response = Mock()
-        mock_response.read.return_value = b'mock_image_data'
-        mock_client.get_object.return_value = mock_response
-        
-        # Mock video creation
-        mock_create_video.return_value = BytesIO(b'mock_video_data')
-        
-        start_time = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
-        end_time = datetime.datetime(2025, 1, 15, 12, 10, 0, tzinfo=datetime.timezone.utc)
-        bbox = [100, 20, 140, 50]
-        
-        result = create_series_snapshot(mock_client, 'ir_clouds', start_time, end_time, bbox)
-        
+        mock_client.presigned_get_object.return_value = 'http://mock-url'
+        mock_create_image.return_value = BytesIO(b'frame')
+        mock_make_video.return_value = BytesIO(b'mp4')
+
+        start = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        end = datetime.datetime(2025, 1, 15, 13, 0, 0, tzinfo=datetime.timezone.utc)
+
+        result = create_series_snapshot(
+            mock_client, 'true_color', start, end, [100, 20, 140, 50]
+        )
+
         assert result['status'] == 'completed'
-        assert 'object_name' in result
-        assert 'filename' in result
-        assert result['frame_count'] == 2
+        assert result['object_name'].startswith('video/')
+        # 7 frames rendered, one video uploaded
+        assert mock_create_image.call_count == 7
         mock_upload.assert_called_once()
-    
-    @patch('server.snapshot.generate_time_range')
-    @patch('server.snapshot.generate_composite_object_name')
-    def test_create_series_snapshot_missing_cogs_with_task_manager(self, mock_find_object, mock_time_range):
+
+    @patch('server.snapshot.upload_to_minio')
+    @patch('server.snapshot.create_snapshot_image')
+    def test_frames_are_never_uploaded_individually(
+        self, mock_create_image, mock_upload
+    ):
+        # The old flow wrote every frame to MinIO and leaked them; frames now
+        # stay in memory and only the encoded video is stored.
         mock_client = Mock()
-        # First COG exists, second doesn't
-        mock_client.stat_object.side_effect = [True, Exception("COG not found")]
-        
-        mock_task_manager = Mock()
-        mock_task = Mock()
-        mock_task.task_id = 'test-task-id'
-        mock_task_manager.create_task.return_value = mock_task
-        
-        timestamps = [
-            datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc),
-            datetime.datetime(2025, 1, 15, 12, 10, 0, tzinfo=datetime.timezone.utc)
-        ]
-        mock_time_range.return_value = timestamps
-        
-        start_time = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
-        end_time = datetime.datetime(2025, 1, 15, 12, 10, 0, tzinfo=datetime.timezone.utc)
-        bbox = [100, 20, 140, 50]
-        
-        result = create_series_snapshot(mock_client, 'ir_clouds', start_time, end_time, bbox, mock_task_manager)
-        
-        assert result['status'] == 'pending'
-        assert result['missing_count'] == 1
-        assert result['total_count'] == 2
-        assert 'test-task-id' in result['task_ids']
-    
-    @patch('server.snapshot.generate_time_range')
-    def test_create_series_snapshot_no_time_intervals(self, mock_time_range):
+        mock_client.presigned_get_object.return_value = 'http://mock-url'
+        mock_create_image.return_value = BytesIO(b'frame')
+
+        with patch('server.snapshot.create_video_from_images',
+                   return_value=BytesIO(b'mp4')):
+            start = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
+            end = datetime.datetime(2025, 1, 15, 13, 0, 0, tzinfo=datetime.timezone.utc)
+            create_series_snapshot(
+                mock_client, 'true_color', start, end, [100, 20, 140, 50]
+            )
+
+        # upload_to_minio(client, data, filename): only the video is written
+        uploaded = [c.args[2] for c in mock_upload.call_args_list]
+        assert len(uploaded) == 1
+        assert uploaded[0].startswith('video/')
+        assert not any(name.startswith('image/') for name in uploaded)
+
+    @patch('server.snapshot.create_snapshot_image')
+    def test_frames_use_the_requested_size(self, mock_create_image):
         mock_client = Mock()
-        mock_time_range.return_value = []
-        
-        start_time = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
-        end_time = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
-        bbox = [100, 20, 140, 50]
-        
-        result = create_series_snapshot(mock_client, 'ir_clouds', start_time, end_time, bbox)
-        
-        assert result['status'] == 'error'
+        mock_client.presigned_get_object.return_value = 'http://mock-url'
+        mock_create_image.return_value = BytesIO(b'frame')
+
+        with patch('server.snapshot.create_video_from_images',
+                   return_value=BytesIO(b'mp4')), \
+             patch('server.snapshot.upload_to_minio'):
+            start = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
+            end = datetime.datetime(2025, 1, 15, 13, 0, 0, tzinfo=datetime.timezone.utc)
+            create_series_snapshot(
+                mock_client, 'true_color', start, end, [100, 20, 140, 50],
+                width=800, height=600,
+            )
+
+        assert mock_create_image.call_args.kwargs == {'width': 800, 'height': 600}
+
+    def test_create_series_snapshot_no_time_intervals(self):
+        mock_client = Mock()
+        start = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
+
+        with patch('server.snapshot.generate_time_range', return_value=[]):
+            result = create_series_snapshot(
+                mock_client, 'true_color', start, start, [100, 20, 140, 50]
+            )
+
+        assert result['status'] == 'failed'
         assert 'No valid time intervals' in result['message']
-    
-    @patch('server.snapshot.create_single_snapshot')
-    @patch('server.snapshot.generate_time_range')
-    @patch('server.snapshot.generate_composite_object_name')
-    def test_create_series_snapshot_failed_single_snapshot(self, mock_find_object, mock_time_range, mock_create_single):
+
+    @patch('server.snapshot.create_snapshot_image')
+    def test_create_series_snapshot_frame_error(self, mock_create_image):
         mock_client = Mock()
-        mock_client.stat_object.return_value = True  # All COGs exist
-        
-        # Mock time range
-        timestamps = [
-            datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
-        ]
-        mock_time_range.return_value = timestamps
-        
-        # Mock failed single snapshot creation
-        mock_create_single.return_value = {
-            'status': 'error',
-            'message': 'Failed to create snapshot'
-        }
-        
-        start_time = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
-        end_time = datetime.datetime(2025, 1, 15, 12, 10, 0, tzinfo=datetime.timezone.utc)
-        bbox = [100, 20, 140, 50]
-        
-        result = create_series_snapshot(mock_client, 'ir_clouds', start_time, end_time, bbox)
-        
-        assert result['status'] == 'error'
-        assert 'Failed to create snapshot' in result['message']
-    
-    @patch('server.snapshot.create_single_snapshot')
-    @patch('server.snapshot.generate_time_range')
-    @patch('server.snapshot.generate_composite_object_name')
-    def test_create_series_snapshot_minio_get_error(self, mock_find_object, mock_time_range, mock_create_single):
+        mock_client.presigned_get_object.side_effect = Exception("COG vanished")
+
+        start = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        end = datetime.datetime(2025, 1, 15, 13, 0, 0, tzinfo=datetime.timezone.utc)
+
+        result = create_series_snapshot(
+            mock_client, 'true_color', start, end, [100, 20, 140, 50]
+        )
+
+        assert result['status'] == 'failed'
+        assert 'Failed to render' in result['message']
+
+    @patch('server.snapshot.create_snapshot_image')
+    @patch('server.snapshot.upload_to_minio')
+    def test_create_series_snapshot_video_creation_failed(
+        self, mock_upload, mock_create_image
+    ):
         mock_client = Mock()
-        mock_client.stat_object.return_value = True  # All COGs exist
-        
-        # Mock time range
-        timestamps = [
-            datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
-        ]
-        mock_time_range.return_value = timestamps
-        
-        # Mock successful single snapshot creation
-        mock_create_single.return_value = {
-            'status': 'completed',
-            'object_name': 'test-image.png'
-        }
-        
-        # Mock MinIO get_object error
-        mock_client.get_object.side_effect = Exception("MinIO error")
-        
-        start_time = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
-        end_time = datetime.datetime(2025, 1, 15, 12, 10, 0, tzinfo=datetime.timezone.utc)
-        bbox = [100, 20, 140, 50]
-        
-        result = create_series_snapshot(mock_client, 'ir_clouds', start_time, end_time, bbox)
-        
-        assert result['status'] == 'error'
-        assert 'Failed to get image' in result['message']
-    
-    @patch('server.snapshot.create_video_from_images')
-    @patch('server.snapshot.create_single_snapshot')
-    @patch('server.snapshot.generate_time_range')
-    @patch('server.snapshot.generate_composite_object_name')
-    def test_create_series_snapshot_video_creation_failed(self, mock_find_object, mock_time_range, 
-                                                         mock_create_single, mock_create_video):
-        mock_client = Mock()
-        mock_client.stat_object.return_value = True  # All COGs exist
-        
-        # Mock time range
-        timestamps = [
-            datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
-        ]
-        mock_time_range.return_value = timestamps
-        
-        # Mock successful single snapshot creation
-        mock_create_single.return_value = {
-            'status': 'completed',
-            'object_name': 'test-image.png'
-        }
-        
-        # Mock MinIO get_object for images
-        mock_response = Mock()
-        mock_response.read.return_value = b'mock_image_data'
-        mock_client.get_object.return_value = mock_response
-        
-        # Mock video creation failure
-        mock_create_video.return_value = None
-        
-        start_time = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
-        end_time = datetime.datetime(2025, 1, 15, 12, 10, 0, tzinfo=datetime.timezone.utc)
-        bbox = [100, 20, 140, 50]
-        
-        result = create_series_snapshot(mock_client, 'ir_clouds', start_time, end_time, bbox)
-        
-        assert result['status'] == 'error'
-        assert 'Failed to create video' in result['message']
-    
-    @patch('server.snapshot.generate_time_range')
-    def test_create_series_snapshot_general_error(self, mock_time_range):
-        mock_client = Mock()
-        # Mock exception in generate_time_range
-        mock_time_range.side_effect = Exception("General error")
-        
-        start_time = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
-        end_time = datetime.datetime(2025, 1, 15, 12, 10, 0, tzinfo=datetime.timezone.utc)
-        bbox = [100, 20, 140, 50]
-        
-        result = create_series_snapshot(mock_client, 'ir_clouds', start_time, end_time, bbox)
-        
-        assert result['status'] == 'error'
-        assert 'Error creating video' in result['message']
+        mock_client.presigned_get_object.return_value = 'http://mock-url'
+        mock_create_image.return_value = BytesIO(b'frame')
+
+        start = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        end = datetime.datetime(2025, 1, 15, 13, 0, 0, tzinfo=datetime.timezone.utc)
+
+        with patch('server.snapshot.create_video_from_images', return_value=None):
+            result = create_series_snapshot(
+                mock_client, 'true_color', start, end, [100, 20, 140, 50]
+            )
+
+        assert result['status'] == 'failed'
+        assert 'imageio' in result['message']
+        mock_upload.assert_not_called()
+
+
+class TestMissingCogs:
+    """COG presence checks used for the up-front 404"""
+
+    def test_cog_exists_true(self):
+        client = Mock()
+        assert cog_exists(client, 'ir_clouds', datetime.datetime(2025, 1, 15, 12, tzinfo=datetime.timezone.utc))
+
+    def test_cog_exists_false(self):
+        client = Mock()
+        client.stat_object.side_effect = Exception("missing")
+        assert not cog_exists(client, 'ir_clouds', datetime.datetime(2025, 1, 15, 12, tzinfo=datetime.timezone.utc))
+
+    def test_missing_cogs_reports_every_gap(self):
+        client = Mock()
+        start = datetime.datetime(2025, 1, 15, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        end = datetime.datetime(2025, 1, 15, 12, 30, 0, tzinfo=datetime.timezone.utc)
+
+        # 12:00 ok, 12:10 missing, 12:20 ok, 12:30 missing
+        def stat_object(bucket, name):
+            if name.endswith('1210.tif') or name.endswith('1230.tif'):
+                raise Exception("missing")
+
+        client.stat_object.side_effect = stat_object
+        result = missing_cogs(client, 'ir_clouds', start, end)
+
+        assert [ts.strftime('%H%M') for ts in result] == ['1210', '1230']
 
 
 class TestSnapshotUtilityFunctions:

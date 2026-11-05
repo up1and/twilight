@@ -1,7 +1,10 @@
 """
 Tests for API views
 """
+import datetime
 import json
+
+from unittest.mock import Mock
 
 
 class TestCreateTask:
@@ -398,138 +401,91 @@ class TestGetSyncs:
 
 class TestCreateSnapshot:
     """Test POST /api/snapshots endpoint"""
-    
+
+    @staticmethod
+    def _payload(**overrides):
+        data = {
+            "bbox": [100, 20, 140, 50],
+            "timestamp": "2025-01-15T12:00:00Z",
+            "composite": "ir_clouds",
+            "zoom": 6,
+        }
+        data.update(overrides)
+        for key, value in list(data.items()):
+            if value is None:
+                del data[key]
+        return data
+
     def test_create_snapshot_missing_fields(self, client):
-        data = {"bbox": [100, 20, 140, 50]}
-        
-        response = client.post("/api/snapshots",
-                             data=json.dumps(data),
-                             content_type="application/json")
-        
+        response = client.post(
+            "/api/snapshots",
+            data=json.dumps({"bbox": [100, 20, 140, 50]}),
+            content_type="application/json",
+        )
+
         assert response.status_code == 400
-        result = json.loads(response.data)
-        assert "Missing required field" in result["message"]
-    
+        assert "Missing required field" in json.loads(response.data)["message"]
+
+    def test_create_snapshot_requires_zoom(self, client):
+        response = client.post(
+            "/api/snapshots",
+            data=json.dumps(self._payload(zoom=None)),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 400
+        assert "zoom" in json.loads(response.data)["message"]
+
     def test_create_snapshot_invalid_bbox(self, client):
-        data = {
-            "bbox": [100, 20, 140],  # Invalid bbox - only 3 values
-            "timestamp": "2025-01-15T12:00:00Z",
-            "composite": "ir_clouds"
-        }
-        
-        response = client.post("/api/snapshots",
-                             data=json.dumps(data),
-                             content_type="application/json")
-        
+        response = client.post(
+            "/api/snapshots",
+            data=json.dumps(self._payload(bbox=[100, 20, 140])),
+            content_type="application/json",
+        )
+
         assert response.status_code == 400
-        result = json.loads(response.data)
-        assert "bbox must be an array of 4 numbers" in result["message"]
-    
+        assert "bbox must be an array of 4 numbers" in json.loads(response.data)["message"]
+
     def test_create_snapshot_invalid_composite(self, client):
-        data = {
-            "bbox": [100, 20, 140, 50],
-            "timestamp": "2025-01-15T12:00:00Z",
-            "composite": "invalid_composite"
-        }
-        
-        response = client.post("/api/snapshots",
-                             data=json.dumps(data),
-                             content_type="application/json")
-        
+        response = client.post(
+            "/api/snapshots",
+            data=json.dumps(self._payload(composite="invalid_composite")),
+            content_type="application/json",
+        )
+
         assert response.status_code == 400
-        result = json.loads(response.data)
-        assert "Invalid composite" in result["message"]
-    
+        assert "Invalid composite" in json.loads(response.data)["message"]
+
     def test_create_snapshot_invalid_timestamp(self, client):
-        data = {
-            "bbox": [100, 20, 140, 50],
-            "timestamp": "invalid-timestamp",
-            "composite": "ir_clouds"
-        }
-        
-        response = client.post("/api/snapshots",
-                             data=json.dumps(data),
-                             content_type="application/json")
-        
+        response = client.post(
+            "/api/snapshots",
+            data=json.dumps(self._payload(timestamp="invalid-timestamp")),
+            content_type="application/json",
+        )
+
         assert response.status_code == 400
-        result = json.loads(response.data)
-        assert 'Invalid timestamp format' in result['message']
-    
+        assert "Invalid timestamp format" in json.loads(response.data)["message"]
+
     def test_create_snapshot_invalid_timedelta(self, client):
-        data = {
-            'bbox': [100, 20, 140, 50],
-            'timestamp': '2025-01-15T12:00:00Z',
-            'composite': 'ir_clouds',
-            'timedelta': -10  # Invalid negative timedelta
-        }
-        
-        response = client.post('/api/snapshots',
-                             data=json.dumps(data),
-                             content_type='application/json')
-        
+        response = client.post(
+            "/api/snapshots",
+            data=json.dumps(self._payload(timedelta=-10)),
+            content_type="application/json",
+        )
+
         assert response.status_code == 400
-        result = json.loads(response.data)
-        assert 'timedelta must be a positive number' in result['message']
-    
+        assert "timedelta must be a positive number" in json.loads(response.data)["message"]
+
     def test_create_snapshot_timedelta_too_large(self, client):
-        data = {
-            'bbox': [100, 20, 140, 50],
-            'timestamp': '2025-01-15T12:00:00Z',
-            'composite': 'ir_clouds',
-            'timedelta': 2000  # Too large - over 24 hours
-        }
-        
-        response = client.post('/api/snapshots',
-                             data=json.dumps(data),
-                             content_type='application/json')
-        
+        response = client.post(
+            "/api/snapshots",
+            data=json.dumps(self._payload(timedelta=2000)),
+            content_type="application/json",
+        )
+
         assert response.status_code == 400
-        result = json.loads(response.data)
-        assert 'Time range cannot exceed 24 hours' in result['message']
-    
-    def test_create_snapshot_integration_basic(self, client):
-        # Test basic integration - should return pending or error, not crash
-        data = {
-            'bbox': [100, 20, 140, 50],
-            'timestamp': '2025-01-15T12:00:00Z',
-            'composite': 'ir_clouds'
-        }
-        
-        response = client.post('/api/snapshots',
-                             data=json.dumps(data),
-                             content_type='application/json')
-        
-        # Should return a valid response (pending, error, or success)
-        assert response.status_code in [201, 202, 500]
-        result = json.loads(response.data)
-        assert 'status' in result
-    
-    def test_create_snapshot_with_timedelta_integration(self, client):
-        # Test series snapshot creation - should return pending or error, not crash
-        data = {
-            'bbox': [100, 20, 140, 50],
-            'timestamp': '2025-01-15T12:00:00Z',
-            'composite': 'ir_clouds',
-            'timedelta': 60  # 1 hour
-        }
-        
-        response = client.post('/api/snapshots',
-                             data=json.dumps(data),
-                             content_type='application/json')
-        
-        # Should return a valid response (pending, error, or success)
-        assert response.status_code in [201, 202, 500]
-        result = json.loads(response.data)
-        assert 'status' in result
-    
+        assert "Time range cannot exceed 24 hours" in json.loads(response.data)["message"]
 
-    
-
-    
-
-    
-
-    
 
 class TestAPIErrorHandling:
     """Test error handling in API endpoints"""
@@ -654,99 +610,189 @@ class TestSyncExtended:
 
 class TestSnapshotAPIExtended:
     """Extended tests for snapshot API"""
-    
-    def test_create_snapshot_edge_cases(self, client):
-        # Test with edge case values
-        edge_cases = [
-            {
-                'bbox': [0, 0, 1, 1],  # Very small bbox
-                'timestamp': '2025-01-15T12:00:00Z',
-                'composite': 'ir_clouds'
-            },
-            {
-                'bbox': [-180, -90, 180, 90],  # World bbox
-                'timestamp': '2025-01-15T12:00:00Z',
-                'composite': 'ir_clouds'
-            },
-            {
-                'bbox': [100, 20, 140, 50],
-                'timestamp': '2025-01-15T12:00:00Z',
-                'composite': 'ir_clouds',
-                'timedelta': 10  # Very short time range
-            },
-            {
-                'bbox': [100, 20, 140, 50],
-                'timestamp': '2025-01-15T12:00:00Z',
-                'composite': 'ir_clouds',
-                'timedelta': 1440  # Maximum time range (24 hours)
-            }
-        ]
-        
-        for data in edge_cases:
-            response = client.post('/api/snapshots',
-                                 data=json.dumps(data),
-                                 content_type='application/json')
-            
-            # Should return valid response (not 400 for valid input)
-            assert response.status_code in [201, 202, 500]
-            result = json.loads(response.data)
-            assert 'status' in result
-    
+
+    @staticmethod
+    def _payload(**overrides):
+        data = {
+            "bbox": [100, 20, 140, 50],
+            "timestamp": "2025-01-15T12:00:00Z",
+            "composite": "ir_clouds",
+            "zoom": 6,
+        }
+        data.update(overrides)
+        for key, value in list(data.items()):
+            if value is None:
+                del data[key]
+        return data
+
+    def post(self, client, **overrides):
+        return client.post(
+            "/api/snapshots",
+            data=json.dumps(self._payload(**overrides)),
+            content_type="application/json",
+        )
+
+    # --- bbox validation ---
+
     def test_create_snapshot_bbox_validation(self, client):
-        # Test various invalid bbox formats
         invalid_bboxes = [
-            [100],  # Too few values
-            [100, 20],  # Too few values
-            [100, 20, 140],  # Too few values
-            [100, 20, 140, 50, 60],  # Too many values
-            "100,20,140,50",  # String instead of array
-            None,  # None value
+            [100],
+            [100, 20],
+            [100, 20, 140],
+            [100, 20, 140, 50, 60],
+            "100,20,140,50",
+            None,
         ]
-        
+
         for bbox in invalid_bboxes:
-            data = {
-                'bbox': bbox,
-                'timestamp': '2025-01-15T12:00:00Z',
-                'composite': 'ir_clouds'
-            }
-            
-            response = client.post('/api/snapshots',
-                                 data=json.dumps(data),
-                                 content_type='application/json')
-            
+            response = self.post(client, bbox=bbox)
             assert response.status_code == 400
-            result = json.loads(response.data)
-            assert 'bbox' in result['message']
-    
-    def test_create_snapshot_timedelta_validation(self, client):
-        # Test various invalid timedelta values
-        invalid_timedeltas = [
-            0,      # Zero
-            -10,    # Negative
-            -1,     # Negative
-            1441,   # Over 24 hours
-            2000,   # Way over limit
+            assert "bbox" in json.loads(response.data)["message"]
+
+    def test_create_snapshot_bbox_out_of_range(self, client):
+        for bbox in [
+            [-181, 20, 140, 50],
+            [100, 20, 181, 50],
+            [100, -91, 140, 50],
+            [100, 20, 140, 91],
+            [-180.5, -90, 180, 90],
+        ]:
+            response = self.post(client, bbox=bbox)
+            assert response.status_code == 400
+            message = json.loads(response.data)["message"]
+            assert "bbox" in message
+
+    def test_create_snapshot_bbox_inverted(self, client):
+        for bbox in [
+            [140, 20, 100, 50],
+            [100, 50, 140, 20],
+            [100, 20, 100, 50],
+            [100, 20, 140, 20],
+        ]:
+            response = self.post(client, bbox=bbox)
+            assert response.status_code == 400
+            assert "bbox" in json.loads(response.data)["message"]
+
+    def test_create_snapshot_bbox_limits_axes(self, client):
+        lng = self.post(client, bbox=[-200, 20, 140, 50])
+        lat = self.post(client, bbox=[100, -95, 140, 50])
+
+        assert "longitude" in json.loads(lng.data)["message"]
+        assert "latitude" in json.loads(lat.data)["message"]
+
+    # --- zoom validation ---
+
+    def test_create_snapshot_zoom_must_be_integer(self, client):
+        for zoom in [6.5, "6", [6], True]:
+            response = self.post(client, zoom=zoom)
+            assert response.status_code == 400
+            assert "zoom" in json.loads(response.data)["message"]
+
+    def test_create_snapshot_zoom_out_of_range(self, client):
+        for zoom in [-1, 23, 100]:
+            response = self.post(client, zoom=zoom)
+            assert response.status_code == 400
+            assert "zoom must be between" in json.loads(response.data)["message"]
+
+    # --- size guard ---
+
+    def test_create_snapshot_bbox_too_many_pixels(self, client):
+        response = self.post(client, bbox=[-180, -90, 180, 90], zoom=10)
+
+        assert response.status_code == 400
+        assert "too large" in json.loads(response.data)["message"]
+
+    def test_viewport_sized_bbox_is_accepted(self, client, mock_snapshot_jobs):
+        # A realistic viewport export must not trip the pixel guard.
+        response = self.post(client, bbox=[100, 20, 110, 25], zoom=6)
+        assert response.status_code == 202
+
+    # --- queueing ---
+
+    def test_create_snapshot_returns_202_with_job_id(self, client, mock_snapshot_jobs):
+        response = self.post(client)
+
+        assert response.status_code == 202
+        result = json.loads(response.data)
+        assert result == {"job_id": "test-job-id", "status": "pending"}
+
+        args = mock_snapshot_jobs["enqueue"].call_args[0]
+        assert args[0] == "ir_clouds"
+        assert args[1] == "2025-01-15T12:00:00Z"
+        assert args[2] == [100.0, 20.0, 140.0, 50.0]
+        assert args[3] == 6
+        assert args[4] is None
+
+    def test_create_snapshot_forwards_timedelta(self, client, mock_snapshot_jobs):
+        response = self.post(client, timedelta=60)
+
+        assert response.status_code == 202
+        assert mock_snapshot_jobs["enqueue"].call_args[0][4] == 60
+
+    def test_create_snapshot_enqueue_failure(self, client, mock_snapshot_jobs):
+        mock_snapshot_jobs["enqueue"].side_effect = RuntimeError("redis down")
+
+        response = self.post(client)
+
+        assert response.status_code == 500
+        assert "queue" in json.loads(response.data)["message"].lower()
+
+    # --- missing composites ---
+
+    def test_missing_composite_returns_404(self, client, mock_missing_composites):
+        mock_missing_composites.return_value = [
+            datetime.datetime(2025, 1, 15, 12, 0, tzinfo=datetime.timezone.utc)
         ]
-        
-        for timedelta in invalid_timedeltas:
-            data = {
-                'bbox': [100, 20, 140, 50],
-                'timestamp': '2025-01-15T12:00:00Z',
-                'composite': 'ir_clouds',
-                'timedelta': timedelta
-            }
-            
-            response = client.post('/api/snapshots',
-                                 data=json.dumps(data),
-                                 content_type='application/json')
-            
-            # Should return 400 for validation errors
-            if response.status_code == 400:
-                result = json.loads(response.data)
-                assert 'timedelta' in result['message'] or 'Time range' in result['message']
-            else:
-                # Some validation might be handled differently, accept other error codes
-                assert response.status_code in [400, 202, 500]
+
+        response = self.post(client)
+
+        assert response.status_code == 404
+        result = json.loads(response.data)
+        assert result["error"] == "Not Found"
+        assert result["missing"] == ["2025-01-15T12:00:00+00:00"]
+
+    def test_missing_composites_lists_every_gap(self, client, mock_missing_composites):
+        mock_missing_composites.return_value = [
+            datetime.datetime(2025, 1, 15, 12, 10, tzinfo=datetime.timezone.utc),
+            datetime.datetime(2025, 1, 15, 12, 30, tzinfo=datetime.timezone.utc),
+        ]
+
+        response = self.post(client, timedelta=30)
+
+        assert response.status_code == 404
+        result = json.loads(response.data)
+        assert len(result["missing"]) == 2
+        assert "2 composite(s)" in result["message"]
+
+    def test_nothing_is_queued_when_composites_are_missing(
+        self, client, mock_snapshot_jobs, mock_missing_composites
+    ):
+        mock_missing_composites.return_value = [
+            datetime.datetime(2025, 1, 15, 12, 0, tzinfo=datetime.timezone.utc)
+        ]
+
+        self.post(client)
+
+        mock_snapshot_jobs["enqueue"].assert_not_called()
+
+    # --- polling ---
+
+    def test_get_snapshot_job_not_found(self, client):
+        response = client.get("/api/snapshots/unknown")
+
+        assert response.status_code == 404
+        assert "not found" in json.loads(response.data)["message"]
+
+    def test_get_snapshot_job_returns_status(self, client, mock_snapshot_jobs):
+        mock_call = Mock()
+        mock_call.get_status.return_value = "started"
+        mock_call.id = "job-1"
+        mock_snapshot_jobs["fetch"].return_value = mock_call
+
+        response = client.get("/api/snapshots/job-1")
+
+        assert response.status_code == 200
+        assert json.loads(response.data) == {"job_id": "job-1", "status": "running"}
 
 
 class TestAPIResponseFormats:

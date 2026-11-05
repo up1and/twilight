@@ -71,7 +71,8 @@ Endpoint                                                                 Descrip
 ``GET /tiles/{composite}/legend.json``                                   Returns the color legend for the composite
 ``GET /tiles/{map_type}/{z}/{x}/{y}.pbf``                                Returns vector tiles for map overlays
 ``GET /api/composites``                                                  Returns the latest timestamp for each composite with data
-``POST /api/snapshots``                                                  Generates an image or MP4 snapshot from tiles
+``POST /api/snapshots``                                                  Queues an image or MP4 snapshot render, returns ``202`` + ``job_id``
+``GET /api/snapshots/{job_id}``                                          Returns the status and result of a snapshot job
 ``GET /snapshots/{object_name}``                                         Serves a generated snapshot file
 =======================================================================  =========================================================================
 
@@ -113,13 +114,20 @@ Composite worker (``--worker``)
 
 Peeks at the next available task with ``GET /api/tasks/next``, waits if the sync for that timestamp is still running, claims the task atomically, runs SatPy to generate a composite, converts it to a COG, and uploads it to MinIO.
 
+Snapshot rendering (RQ)
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Snapshot renders run outside the request cycle. ``POST /api/snapshots`` checks that the requested composites already exist, enqueues a ``render_snapshot`` job on the ``snapshots`` RQ queue, and returns ``202`` with a ``job_id``; the client polls ``GET /api/snapshots/{job_id}``, which reports ``pending``, ``running``, ``completed``, or ``failed``. A missing composite is rejected with ``404`` before anything is queued, so a render never waits on composite processing. The ``flask rq worker`` process consumes the ``snapshots`` queue ahead of ``default`` and ``maintenance``, so an interactive render is not stuck behind a prune backlog. Scale snapshot throughput by adding more RQ worker processes.
+
+All worker-side jobs live in ``server/tasks.py``: the cron-driven prune jobs and the snapshot render job.
+
 Infrastructure Services
 -----------------------
 
 Redis
 ~~~~~
 
-Redis serves as both the task queue and the state store for composite availability. The server writes task records and sync state to Redis; workers interact with that state through the server's ``/api/tasks`` and ``/api/syncs`` endpoints rather than connecting to Redis directly. The default connection is ``redis://127.0.0.1:6379/0``, configurable via ``REDIS_URL``. The response cache uses a separate URL, configurable via ``CACHE_REDIS_URL``.
+Redis serves as the task queue, the RQ broker, and the state store for composite availability. The server writes task records and sync state to Redis; workers interact with that state through the server's ``/api/tasks`` and ``/api/syncs`` endpoints rather than connecting to Redis directly. The default connection is ``redis://127.0.0.1:6379/0``, configurable via ``REDIS_URL``. The response cache uses a separate URL, configurable via ``CACHE_REDIS_URL``.
 
 MinIO
 ~~~~~

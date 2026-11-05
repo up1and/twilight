@@ -1,13 +1,17 @@
 """
 API views for the application
 """
-import datetime
-
 from flask import Blueprint, request, jsonify, current_app
 
 from auth import auth_required
 from utils import parse_iso_timestamp, delete_minio_objects
-from snapshot import create_single_snapshot, create_series_snapshot
+from snapshot import validate_bbox, validate_snapshot_limits, validate_zoom
+from tasks import (
+    enqueue_snapshot_job,
+    find_missing_composites,
+    get_snapshot_job,
+    serialize_job_status,
+)
 
 # Create blueprint
 api = Blueprint("api", __name__, url_prefix="/api")
@@ -486,13 +490,17 @@ def composites():
 
 @api.route("/snapshots", methods=["POST"])
 def create_snapshot():
-    """Create a snapshot image or video with geographic bounds and coastlines"""
-    from extensions import client
-    
-    data = request.get_json()
+    """Queue a snapshot image or video render and return the job id"""
+    data = request.get_json(silent=True)
+
+    if not isinstance(data, dict):
+        return jsonify({
+            "error": "Bad Request",
+            "message": "Request body must be a JSON object"
+        }), 400
 
     # Validate required fields
-    required_fields = ["bbox", "timestamp", "composite"]
+    required_fields = ["bbox", "timestamp", "composite", "zoom"]
     for field in required_fields:
         if field not in data:
             return jsonify({
@@ -503,13 +511,33 @@ def create_snapshot():
     bbox = data["bbox"]
     timestamp = data["timestamp"]
     composite = data["composite"]
+    zoom = data["zoom"]
     timedelta_minutes = data.get("timedelta")  # Optional time delta in minutes
 
-    # Validate bbox format
-    if not isinstance(bbox, list) or len(bbox) != 4:
+    # Validate bbox format and geographic range
+    bbox_error = validate_bbox(bbox)
+    if bbox_error:
         return jsonify({
             "error": "Bad Request",
-            "message": "bbox must be an array of 4 numbers [min_lng, min_lat, max_lng, max_lat]"
+            "message": bbox_error
+        }), 400
+
+    bbox = [float(value) for value in bbox]
+
+    # Validate zoom
+    zoom_error = validate_zoom(zoom)
+    if zoom_error:
+        return jsonify({
+            "error": "Bad Request",
+            "message": zoom_error
+        }), 400
+
+    # Validate render size so a single request cannot exhaust worker memory
+    limits_error = validate_snapshot_limits(bbox, zoom)
+    if limits_error:
+        return jsonify({
+            "error": "Bad Request",
+            "message": limits_error
         }), 400
 
     # Validate composite
@@ -522,15 +550,16 @@ def create_snapshot():
     # Parse timestamps
     try:
         start_time = parse_iso_timestamp(timestamp)
-    except ValueError:
+    except (ValueError, TypeError):
         return jsonify({
             "error": "Bad Request",
             "message": "Invalid timestamp format. Use ISO 8601 format"
         }), 400
 
-    if timedelta_minutes:
+    if timedelta_minutes is not None:
         # Validate timedelta
-        if not isinstance(timedelta_minutes, (int, float)) or timedelta_minutes <= 0:
+        if isinstance(timedelta_minutes, bool) or not isinstance(timedelta_minutes, (int, float)) \
+                or timedelta_minutes <= 0:
             return jsonify({
                 "error": "Bad Request",
                 "message": "timedelta must be a positive number (minutes)"
@@ -543,23 +572,45 @@ def create_snapshot():
                 "message": "Time range cannot exceed 24 hours (1440 minutes)"
             }), 400
 
-        # Calculate end time
-        end_time = start_time + datetime.timedelta(minutes=timedelta_minutes)
+    # Only snapshots of already-processed data are supported. A render never
+    # waits on composite processing, so missing frames are reported up front.
+    missing = find_missing_composites(
+        current_app.client, composite, start_time, timedelta_minutes
+    )
+    if missing:
+        return jsonify({
+            "error": "Not Found",
+            "message": (
+                f"{len(missing)} composite(s) in the requested range have not "
+                "been processed yet; only existing ones can be exported."
+            ),
+            "missing": [ts.isoformat() for ts in missing],
+        }), 404
 
-    # Create video from time range
-    if timedelta_minutes:
-        result = create_series_snapshot(client, composite, start_time, end_time, bbox, current_app.task_manager)
-    else:
-        # Create single snapshot
-        result = create_single_snapshot(client, composite, start_time, bbox, current_app.task_manager)
+    try:
+        job = enqueue_snapshot_job(composite, timestamp, bbox, zoom, timedelta_minutes)
+    except Exception as e:
+        current_app.logger.exception(f"Failed to enqueue snapshot job: {e}")
+        return jsonify({
+            "error": "Internal Server Error",
+            "message": "Failed to queue the snapshot job"
+        }), 500
 
-    # Only add download_url if object_name exists (successful completion)
-    if "object_name" in result:
-        object_name = result.pop("object_name")
-        result["download_url"] = f"/snapshots/{object_name}"
-    if result["status"] == "pending":
-        return jsonify(result), 202
-    elif result["status"] == "error":
-        return jsonify(result), 500
-    else:
-        return jsonify(result), 201
+    return jsonify({
+        "job_id": job.id,
+        "status": "pending",
+    }), 202
+
+
+@api.route("/snapshots/<job_id>", methods=["GET"])
+def get_snapshot_job_status(job_id):
+    """Return the status (and result, once finished) of a snapshot job"""
+    job = get_snapshot_job(job_id)
+
+    if job is None:
+        return jsonify({
+            "error": "Not Found",
+            "message": f"Snapshot job {job_id} not found"
+        }), 404
+
+    return jsonify(serialize_job_status(job))

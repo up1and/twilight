@@ -25,13 +25,21 @@ class RQ:
 
     def get_worker(self, *queues, **kwargs):
         """Return a worker for the given queues with the correct connection and context."""
-        from rq import Worker
+        import os
+
         from flask import current_app
 
-        class FlaskWorker(Worker):
-            def perform_job(self, job, queue, heartbeat_ttl=None):
+        # RQ's default Worker forks a work horse per job, which Windows lacks.
+        # SimpleWorker runs jobs in-process, so fall back to it there.
+        if hasattr(os, "fork"):
+            from rq import Worker as BaseWorker
+        else:
+            from rq import SimpleWorker as BaseWorker
+
+        class FlaskWorker(BaseWorker):
+            def perform_job(self, job, queue, **kwargs):
                 with current_app.app_context():
-                    return super().perform_job(job, queue, heartbeat_ttl=heartbeat_ttl)
+                    return super().perform_job(job, queue, **kwargs)
 
         return FlaskWorker(list(queues) or ['default'], connection=self.connection, **kwargs)
 
