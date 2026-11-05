@@ -2,13 +2,12 @@
 Data models for the application
 """
 import json
-import uuid
 import datetime
 
 
 class TaskModel:
     def __init__(self, composite, timestamp, priority="normal"):
-        self.task_id = f"{composite}_{timestamp.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        self.task_id = f"{composite}_{timestamp.strftime('%Y%m%d_%H%M')}"
         self.composite = composite
         self.timestamp = timestamp
         self.priority = priority

@@ -61,6 +61,14 @@ def mock_redis():
     redis_mock.expire.return_value = True
     redis_mock.lock.return_value.__enter__ = Mock(return_value=Mock())
     redis_mock.lock.return_value.__exit__ = Mock(return_value=None)
+
+    # pipeline() is used to batch reads and writes. Commands issued on the
+    # pipeline are recorded so tests can inspect them, and execute() returns
+    # one entry per command, mirroring what redis-py does.
+    pipeline = Mock()
+    pipeline.hget.return_value = None
+    pipeline.execute.return_value = []
+    redis_mock.pipeline.return_value = pipeline
     return redis_mock
 
 

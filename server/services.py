@@ -8,6 +8,7 @@ from models import TaskModel, SyncModel
 
 
 class TaskManager:
+
     def __init__(self, redis_client, expire_days=7):
         self.redis = redis_client
         # Redis keys
@@ -29,30 +30,27 @@ class TaskManager:
         return priority_weight + timestamp_score
 
     def create_task(self, composite, timestamp, priority="normal"):
-        """Create a new task with deduplication and optional priority promotion"""
-        with self.lock:
-            # Create a temporary task for comparison
-            temp_task = TaskModel(composite, timestamp, priority)
+        """Create a task, or return the existing one for the same time slot.
 
-            # Check for existing task using __eq__ method
-            existing_tasks = self._get_all_tasks()
-            for existing_task in existing_tasks:
-                if (existing_task == temp_task and
-                    existing_task.status in ["pending", "running"]):
-                    # Task already exists, return existing task
-                    return existing_task
+        The task id is derived from (composite, timestamp), so the lookup is a
+        single HGET instead of a scan over every task ever created. Only
+        pending and running tasks count as duplicates: a finished slot can be
+        rebuilt, which overwrites its previous record.
+        """
+        task = TaskModel(composite, timestamp, priority)
 
-            # Create new task if no duplicate found
-            task = temp_task
+        existing_json = self.redis.hget(self.tasks_key, task.task_id)
+        if existing_json:
+            existing = TaskModel.from_json(existing_json)
+            if existing.status in ("pending", "running"):
+                return existing
 
-            # Store task in Redis
-            self.redis.hset(self.tasks_key, task.task_id, task.to_json())
+        pipe = self.redis.pipeline()
+        pipe.hset(self.tasks_key, task.task_id, task.to_json())
+        pipe.zadd(self.queue_key, {task.task_id: self._calculate_score(task)})
+        pipe.execute()
 
-            # Add to sorted set with calculated score
-            score = self._calculate_score(task)
-            self.redis.zadd(self.queue_key, {task.task_id: score})
-
-            return task
+        return task
 
     def _get_all_tasks(self):
         """Get all tasks from Redis"""

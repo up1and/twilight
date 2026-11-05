@@ -39,8 +39,8 @@ class TestTaskManager:
     def test_create_task_new(self, mock_redis, sample_timestamp):
         manager = TaskManager(mock_redis)
         
-        # Mock no existing tasks
-        mock_redis.hgetall.return_value = {}
+        # Mock no existing task for this slot
+        mock_redis.hget.return_value = None
         
         task = manager.create_task("ir_clouds", sample_timestamp, "normal")
         
@@ -49,29 +49,51 @@ class TestTaskManager:
         assert task.priority == "normal"
         assert task.status == "pending"
         
-        # Verify Redis calls
-        mock_redis.hset.assert_called()
-        mock_redis.zadd.assert_called()
-        mock_redis.expire.assert_called()
+        # Verify the write went through the batched pipeline
+        pipeline = mock_redis.pipeline.return_value
+        pipeline.hset.assert_called_with("tasks", task.task_id, task.to_json())
+        pipeline.zadd.assert_called()
+        pipeline.execute.assert_called_once()
     
     def test_create_task_duplicate(self, mock_redis, sample_timestamp):
         manager = TaskManager(mock_redis)
         
-        # Create existing task
         existing_task = TaskModel("ir_clouds", sample_timestamp, "normal")
         existing_task.status = "pending"
+        mock_redis.hget.return_value = existing_task.to_json()
         
-        # Mock existing task in Redis
-        mock_redis.hgetall.return_value = {
-            existing_task.task_id: existing_task.to_json()
-        }
-        
-        # Try to create duplicate
         result = manager.create_task("ir_clouds", sample_timestamp, "high")
         
-        # Should return existing task
         assert result.task_id == existing_task.task_id
         assert result.status == "pending"
+        # A duplicate is detected by one HGET, never a full table scan
+        mock_redis.hgetall.assert_not_called()
+        mock_redis.pipeline.return_value.execute.assert_not_called()
+    
+    def test_create_task_rebuilds_after_terminal_status(self, mock_redis, sample_timestamp):
+        """A finished slot is not a duplicate: it can be rendered again"""
+        manager = TaskManager(mock_redis)
+        
+        finished = TaskModel("ir_clouds", sample_timestamp, "normal")
+        finished.status = "completed"
+        mock_redis.hget.return_value = finished.to_json()
+        
+        result = manager.create_task("ir_clouds", sample_timestamp, "normal")
+        
+        assert result.status == "pending"
+        mock_redis.pipeline.return_value.execute.assert_called_once()
+    
+    def test_create_task_dedups_running(self, mock_redis, sample_timestamp):
+        manager = TaskManager(mock_redis)
+        
+        running = TaskModel("ir_clouds", sample_timestamp, "normal")
+        running.status = "running"
+        mock_redis.hget.return_value = running.to_json()
+        
+        result = manager.create_task("ir_clouds", sample_timestamp, "normal")
+        
+        assert result.status == "running"
+        mock_redis.pipeline.return_value.execute.assert_not_called()
     
     def test_get_task_exists(self, mock_redis, sample_task):
         manager = TaskManager(mock_redis)

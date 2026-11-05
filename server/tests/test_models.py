@@ -20,7 +20,19 @@ class TestTaskModel:
         assert task.started is None
         assert task.ended is None
         assert isinstance(task.created, datetime.datetime)
-        assert task.task_id.startswith("ir_clouds_20250115_120000_")
+        # Deterministic id: same composite and time slot always collide, which
+        # is what makes the dedup lookup a single HGET.
+        assert task.task_id == "ir_clouds_20250115_1200"
+
+    def test_task_id_is_stable_across_instances(self, sample_timestamp):
+        first = TaskModel("ir_clouds", sample_timestamp, "normal")
+        second = TaskModel("ir_clouds", sample_timestamp, "high")
+
+        assert first.task_id == second.task_id
+
+    def test_task_id_differs_by_composite(self, sample_timestamp):
+        assert (TaskModel("ir_clouds", sample_timestamp).task_id
+                != TaskModel("true_color", sample_timestamp).task_id)
     
     def test_task_equality(self, sample_timestamp):
         task1 = TaskModel("ir_clouds", sample_timestamp, "normal")
