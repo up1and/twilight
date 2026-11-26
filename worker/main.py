@@ -4,12 +4,17 @@ import argparse
 import threading
 import requests
 
-from himawari_processor import cache_dir, resampler_cache_dir
+from himawari_processor import cache_dir, resampler_cache_dir, composite_bands, composite_mapping
 from task import TaskClient, TaskProcessor
 from sync import SyncClient, SyncProcessor
 from utils import logger, _available_latest_time, generate_worker_id, CacheManager
 from config import server_url, auth_key, cache_size_limit, priorities, composites, \
     max_resolution, bbox, resampler, mem_per_worker, system_margin
+
+# A filtered composite without a band table would load every AHI file, warn loudly instead
+unknown_composites = {composite_mapping.get(c, c) for c in composites} - set(composite_bands)
+if unknown_composites:
+    raise RuntimeError(f"COMPOSITES entries missing from composite_bands: {sorted(unknown_composites)}")
 
 
 def resolve_data_source(server_url, timestamp, auth_key=None):

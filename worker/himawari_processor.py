@@ -1,7 +1,9 @@
 import os
 import gc
+import re
 
 import dask
+import s3fs
 import psutil
 import numpy as np
 
@@ -147,6 +149,23 @@ composite_mapping = {
     "convection": "convection"
 }
 
+# Bands each satpy composite needs, keyed by composite_mapping value
+composite_bands = {
+    "true_color_with_night_ir": ("B01", "B02", "B03", "B04", "B07", "B13", "B15"),
+    "night_microphysics": ("B07", "B13", "B14", "B15"),
+    "day_microphysics_ahi": ("B04", "B06", "B13"),
+    "B13": ("B13",),
+    "ash": ("B11", "B13", "B14", "B15"),
+    "airmass": ("B08", "B10", "B12", "B14"),
+    "fog_ahi": ("B07", "B13", "B16"),
+    "water_vapors1": ("B08", "B10", "B13"),
+    "mid_vapor": ("B08", "B10"),
+    "geo_color": ("B01", "B02", "B03", "B04", "B07", "B13"),
+    "natural_color": ("B03", "B04", "B05"),
+    "dust": ("B11", "B13", "B14", "B15"),
+    "convection": ("B03", "B05", "B07", "B09", "B10", "B13"),
+}
+
 def get_reader_kwargs(data_source, cache=True):
     """
     Get reader kwargs based on data source
@@ -192,28 +211,40 @@ def get_reader_kwargs(data_source, cache=True):
     return reader_kwargs
 
 
-def ahi_s3_files(time, data_source="remote", cache=True):
+def ahi_s3_files(time, composite, data_source="remote", cache=True):
     """
-    Get AHI data files based on data source preference
+    Get AHI data files needed by a composite
     
     Args:
         time: target datetime
+        composite: composite name, mapped through composite_mapping
         data_source: "local" or "remote"
         cache: whether to use simplecache
     
     Returns:
         list: file paths for satpy scene
     """
-    if data_source == "remote":
-        # Server has already checked data availability, use local first
-        base_path = "s3://noaa-himawari9/AHI-L1b-FLDK/{}/*".format(time.strftime("%Y/%m/%d/%H%M"))
+    bucket = "noaa-himawari9" if data_source == "remote" else "raw"
+    prefix = "{}/AHI-L1b-FLDK/{}".format(bucket, time.strftime("%Y/%m/%d/%H%M"))
+
+    satpy_name = composite_mapping.get(composite, composite)
+    bands = composite_bands.get(satpy_name)
+    if bands is None:
+        logger.warning(f"No band list for composite '{satpy_name}', reading all AHI files")
+        paths = ["s3://{}/*".format(prefix)]
     else:
-        base_path = "s3://raw/AHI-L1b-FLDK/{}/*".format(time.strftime("%Y/%m/%d/%H%M"))
-    
+        storage_options = get_reader_kwargs(data_source, cache=False)["storage_options"]["s3"]
+        fs = s3fs.S3FileSystem(**storage_options)
+        paths = []
+        for key in fs.ls(prefix):
+            band = re.search(r"_(B\d{2})_", key)
+            if band and band.group(1) in bands:
+                paths.append("s3://{}".format(key))
+
     if cache:
-        base_path = "simplecache::" + base_path
-    
-    return [base_path]
+        paths = ["simplecache::" + path for path in paths]
+
+    return paths
 
 def get_custom_area(bbox, res_meters):
     """
@@ -278,7 +309,7 @@ def process_composite(composite_name, target_time, data_source="remote", max_res
 
         # Get the actual satpy composite name
         satpy_composite_name = composite_mapping.get(composite_name, composite_name)      
-        files = ahi_s3_files(time=target_time, data_source=data_source, cache=True)
+        files = ahi_s3_files(time=target_time, composite=composite_name, data_source=data_source, cache=True)
         reader_kwargs = get_reader_kwargs(data_source, cache=True)
 
         scn = Scene(filenames=files, reader="ahi_hsd", reader_kwargs=reader_kwargs)
