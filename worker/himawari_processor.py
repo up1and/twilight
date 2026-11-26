@@ -7,7 +7,7 @@ import numpy as np
 
 from satpy import Scene, config
 from pyresample import create_area_def
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 
 from dask.diagnostics import Profiler, ResourceProfiler
 from dask.distributed import Client, LocalCluster
@@ -21,10 +21,16 @@ config.set(config_path=[recipes_dir])
 
 # Set cache directory based on OS
 cache_dir = (
-    os.path.join(os.environ["TEMP"], "satpy_cache")
+    os.path.join(os.environ["TEMP"], "twilight_cache")
     if os.name == "nt"
-    else "/tmp/satpy_cache"
+    else "/tmp/twilight_cache"
 )
+# Resampler indices live under cache_dir but are excluded from the CacheManager LRU sweep
+resampler_cache_dir = os.path.join(cache_dir, "resampler")
+# COG temp files, deleted after upload
+output_dir = os.path.join(cache_dir, "output")
+os.makedirs(resampler_cache_dir, exist_ok=True)
+os.makedirs(output_dir, exist_ok=True)
 
 def compute_worker_allocation(mem_per_worker=7.0, system_margin=4.0):
     """
@@ -295,21 +301,30 @@ def process_composite(composite_name, target_time, data_source="remote", max_res
 
         # Resample with chunking for memory efficiency
         chunks = {"y": 1024, "x": 1024}
-        scn_resampled = scn.resample(area, resampler=resampler, chunks=chunks)
-        filename = os.path.join(cache_dir, name)
-
-        scn_resampled.save_dataset(
-            satpy_composite_name,
-            filename=filename,
-            driver="COG",
-            tiled=True,
-            blockxsize=512,
-            blockysize=512,
-            compress="deflate",
-            predictor=2
+        scn_resampled = scn.resample(
+            area,
+            resampler=resampler,
+            chunks=chunks,
+            cache_dir=resampler_cache_dir,
         )
+        filename = os.path.join(output_dir, name)
 
-        upload("himawari", object_name, filename, composite_name)
+        try:
+            scn_resampled.save_dataset(
+                satpy_composite_name,
+                filename=filename,
+                driver="COG",
+                tiled=True,
+                blockxsize=512,
+                blockysize=512,
+                compress="deflate",
+                predictor=2
+            )
+
+            upload("himawari", object_name, filename, composite_name)
+        finally:
+            with suppress(FileNotFoundError):
+                os.remove(filename)
         logger.info(f"Successfully processed and uploaded composite '{composite_name}' for time {target_time.strftime('%Y-%m-%d %H:%M')} UTC")
 
         del scn

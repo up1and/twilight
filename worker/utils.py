@@ -69,14 +69,23 @@ logger = createLogger(debug=True)
 class CacheManager:
     """Simple cache manager with size limit functionality"""
     
-    def __init__(self, cache_dir, max_size=10):
+    def __init__(self, cache_dir, max_size=10, preserve=()):
         self.cache_dir = cache_dir
         self.max_size_bytes = int(max_size * 1024**3)
-    
+        self.preserve = {os.path.normpath(p) for p in preserve}
+
+    def prune(self, dirpath, dirnames):
+        """Drop preserved subtrees from os.walk."""
+        dirnames[:] = [
+            d for d in dirnames
+            if os.path.normpath(os.path.join(dirpath, d)) not in self.preserve
+        ]
+
     def get_cache_size(self):
         """Get the size of cache directory in bytes"""
         total_size = 0
-        for dirpath, _, filenames in os.walk(self.cache_dir):
+        for dirpath, dirnames, filenames in os.walk(self.cache_dir):
+            self.prune(dirpath, dirnames)
             for filename in filenames:
                 filepath = os.path.join(dirpath, filename)
                 try:
@@ -94,7 +103,8 @@ class CacheManager:
 
         # Get all files with their modification time
         files_with_mtime = []
-        for dirpath, _, filenames in os.walk(self.cache_dir):
+        for dirpath, dirnames, filenames in os.walk(self.cache_dir):
+            self.prune(dirpath, dirnames)
             for filename in filenames:
                 filepath = os.path.join(dirpath, filename)
                 try:

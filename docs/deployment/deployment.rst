@@ -119,7 +119,7 @@ Worker Environment Variables
 ==================  =========  ====================================================================================
 Variable            Default    Description
 ==================  =========  ====================================================================================
-CACHE_SIZE_LIMIT    200        Maximum size of the local satellite data cache in GB, mounted at /tmp/satpy_cache
+CACHE_SIZE_LIMIT    200        Maximum size of the local satellite data cache in GB, mounted at /tmp/twilight_cache
 ==================  =========  ====================================================================================
 
 Tune ``CACHE_SIZE_LIMIT`` based on the available disk space on your Docker host. Each 10-minute Himawari observation set is approximately 1–2 GB of raw HSD data before processing.

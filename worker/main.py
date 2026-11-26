@@ -4,7 +4,7 @@ import argparse
 import threading
 import requests
 
-from himawari_processor import cache_dir
+from himawari_processor import cache_dir, resampler_cache_dir
 from task import TaskClient, TaskProcessor
 from sync import SyncClient, SyncProcessor
 from utils import logger, _available_latest_time, generate_worker_id, CacheManager
@@ -132,7 +132,7 @@ def run_task_manager(server_url, auth_key=None, worker_id=None, poll_interval=10
     """
     # Initialize components
     task_client = TaskClient(server_url, auth_key, worker_id)
-    cache_manager = CacheManager(cache_dir, cache_size_limit)
+    cache_manager = CacheManager(cache_dir, cache_size_limit, preserve=[resampler_cache_dir])
     task_processor = TaskProcessor(
         task_client, 
         cache_manager, 

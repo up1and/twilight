@@ -18,7 +18,7 @@ services:
     image: twilight-worker:latest
     command: python main.py --worker
     volumes:
-      - worker_cache:/tmp/satpy_cache
+      - worker_cache:/tmp/twilight_cache
     environment:
       - SERVER_URL=${SERVER_URL:-http://server:5000}
       - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:9000}
