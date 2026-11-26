@@ -5,7 +5,9 @@ import socket
 import logging
 import datetime
 
+import numpy as np
 from functools import wraps
+from pyproj import CRS, Transformer
 
 
 def _replace_minute(time):
@@ -16,6 +18,55 @@ def _available_latest_time():
     utc = datetime.datetime.now(datetime.timezone.utc)
     time = _replace_minute(utc)
     return time - datetime.timedelta(minutes=20)
+
+
+# Himawari-9 fixed 2 km full-disk grid: segment boundaries follow the curved
+# scan lines, so a bbox is projected onto this grid instead of using latitude bands
+ahi_full_disk = {
+    "h": 35785863.0,
+    "lon_0": 140.7,
+    "a": 6378137.0,
+    "b": 6356752.31,
+    "extent": 5499999.901174725,
+    "rows": 5500,
+    "pixel_size": 2000.0,
+    "segment_rows": 550,
+}
+
+to_ahi_geos = Transformer.from_crs(
+    "EPSG:4326",
+    CRS.from_dict({
+        "proj": "geos",
+        "h": ahi_full_disk["h"],
+        "lon_0": ahi_full_disk["lon_0"],
+        "a": ahi_full_disk["a"],
+        "b": ahi_full_disk["b"],
+    }),
+    always_xy=True,
+)
+
+
+def bbox_segments(bbox):
+    """AHI segment labels (e.g. "S01") whose 2 km scan lines cover bbox"""
+    min_lon, min_lat, max_lon, max_lat = bbox
+    lons = np.concatenate([
+        np.linspace(min_lon, max_lon, 21), np.linspace(min_lon, max_lon, 21),
+        np.full(9, min_lon), np.full(9, max_lon),
+    ])
+    lats = np.concatenate([
+        np.full(21, min_lat), np.full(21, max_lat),
+        np.linspace(min_lat, max_lat, 9), np.linspace(min_lat, max_lat, 9),
+    ])
+    _, y = to_ahi_geos.transform(lons, lats)
+    # Points off the disk project to infinity; clipping saturates them at the
+    # grid edges, which is exactly what the row extremes need
+    rows = np.floor((ahi_full_disk["extent"] - y) / ahi_full_disk["pixel_size"])
+    rows = np.clip(rows, 0, ahi_full_disk["rows"] - 1)
+    first = int(rows.min() // ahi_full_disk["segment_rows"])
+    last = int(rows.max() // ahi_full_disk["segment_rows"])
+    segments = tuple("S{:02d}".format(i + 1) for i in range(first, last + 1))
+    logger.debug(f"BBOX {bbox} maps to AHI segments {segments[0]}-{segments[-1]}")
+    return segments
 
 def get_local_ip():
     """Get local IP address"""

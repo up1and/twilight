@@ -15,7 +15,7 @@ from dask.diagnostics import Profiler, ResourceProfiler
 from dask.distributed import Client, LocalCluster
 
 from client import upload, check_object_exists
-from utils import logger, timing
+from utils import logger, timing, bbox_segments
 
 # Define recipes config path
 recipes_dir = os.path.join(os.path.dirname(__file__), 'recipes')
@@ -211,13 +211,14 @@ def get_reader_kwargs(data_source, cache=True):
     return reader_kwargs
 
 
-def ahi_s3_files(time, composite, data_source="remote", cache=True):
+def ahi_s3_files(time, composite, bbox, data_source="remote", cache=True):
     """
     Get AHI data files needed by a composite
     
     Args:
         time: target datetime
         composite: composite name, mapped through composite_mapping
+        bbox: [min_lon, min_lat, max_lon, max_lat] selecting the segments to read
         data_source: "local" or "remote"
         cache: whether to use simplecache
     
@@ -234,11 +235,13 @@ def ahi_s3_files(time, composite, data_source="remote", cache=True):
         paths = ["s3://{}/*".format(prefix)]
     else:
         storage_options = get_reader_kwargs(data_source, cache=False)["storage_options"]["s3"]
-        fs = s3fs.S3FileSystem(**storage_options)
+        keys = s3fs.S3FileSystem(**storage_options).ls(prefix)
+        segments = bbox_segments(bbox)
         paths = []
-        for key in fs.ls(prefix):
+        for key in keys:
             band = re.search(r"_(B\d{2})_", key)
-            if band and band.group(1) in bands:
+            segment = re.search(r"_(S\d{2})\d{2}\.DAT", key)
+            if band and band.group(1) in bands and segment and segment.group(1) in segments:
                 paths.append("s3://{}".format(key))
 
     if cache:
@@ -309,11 +312,12 @@ def process_composite(composite_name, target_time, data_source="remote", max_res
 
         # Get the actual satpy composite name
         satpy_composite_name = composite_mapping.get(composite_name, composite_name)      
-        files = ahi_s3_files(time=target_time, composite=composite_name, data_source=data_source, cache=True)
+        files = ahi_s3_files(time=target_time, composite=composite_name, bbox=bbox,
+                             data_source=data_source, cache=True)
         reader_kwargs = get_reader_kwargs(data_source, cache=True)
 
         scn = Scene(filenames=files, reader="ahi_hsd", reader_kwargs=reader_kwargs)
-        scn.load([satpy_composite_name])
+        scn.load([satpy_composite_name], pad_data=False)
 
         # Determine target resolution
         loaded_res = [
